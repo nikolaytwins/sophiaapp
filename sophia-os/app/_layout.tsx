@@ -8,12 +8,12 @@ if (typeof global.Buffer === 'undefined') {
 
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { AppProviders } from '@/providers/AppProviders';
+import { ThemedStatusBar } from '@/shared/ui/ThemedStatusBar';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -26,7 +26,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" />
+      <ThemedStatusBar />
       <AppProviders>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />

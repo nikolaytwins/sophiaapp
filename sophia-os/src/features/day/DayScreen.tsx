@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
@@ -16,7 +17,9 @@ import { useAppTheme } from '@/theme';
 import { TaskRow } from './TaskRow';
 
 const BG_GRADIENT = ['#1A0F28', '#0D0814', '#07060B'] as const;
+const BG_GRADIENT_LIGHT = ['#EDE8FF', '#E8EAFF', '#F5F6FA'] as const;
 const HERO_INNER_GRAD = ['rgba(212,184,122,0.14)', 'rgba(74,45,92,0.2)', 'rgba(7,6,11,0.92)'] as const;
+const HERO_INNER_LIGHT = ['rgba(91,75,255,0.1)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.98)'] as const;
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -31,7 +34,7 @@ function todayRu() {
 }
 
 export function DayScreen() {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, isLight, toggle } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const filter = useDayFilterStore((s) => s.filter);
@@ -57,6 +60,9 @@ export function DayScreen() {
   const onToggle = (id: string, done: boolean) => {
     toggleTask.mutate({ id, done });
   };
+
+  const bgGradient = useMemo(() => (isLight ? BG_GRADIENT_LIGHT : BG_GRADIENT), [isLight]);
+  const heroInnerGrad = useMemo(() => (isLight ? HERO_INNER_LIGHT : HERO_INNER_GRAD), [isLight]);
 
   const styles = useMemo(
     () =>
@@ -90,6 +96,17 @@ export function DayScreen() {
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           marginBottom: spacing.lg,
+        },
+        topActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+        themeBtn: {
+          width: 44,
+          height: 44,
+          borderRadius: radius.md,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: colors.borderStrong,
+          backgroundColor: colors.accentSoft,
         },
         planBtn: {
           paddingHorizontal: spacing.md,
@@ -130,7 +147,7 @@ export function DayScreen() {
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.xs,
           borderRadius: radius.full,
-          backgroundColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: isLight ? 'rgba(91,75,255,0.08)' : 'rgba(255,255,255,0.06)',
           borderWidth: 1,
           borderColor: colors.border,
         },
@@ -150,7 +167,7 @@ export function DayScreen() {
           overflow: 'hidden',
           borderWidth: 1,
           borderColor: colors.border,
-          backgroundColor: 'rgba(7,6,11,0.35)',
+          backgroundColor: isLight ? 'rgba(255,255,255,0.72)' : 'rgba(7,6,11,0.35)',
         },
         tasksInner: {
           padding: spacing.lg,
@@ -182,12 +199,12 @@ export function DayScreen() {
           marginRight: spacing.sm,
         },
       }),
-    [colors, radius, spacing, typography]
+    [colors, isLight, radius, spacing, typography]
   );
 
   return (
     <View style={styles.flex1}>
-      <LinearGradient colors={[...BG_GRADIENT]} style={styles.gradientBg} />
+      <LinearGradient colors={bgGradient} style={styles.gradientBg} />
       <ScrollView
         style={[styles.screen, { paddingTop: insets.top + spacing.md }]}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
@@ -199,9 +216,22 @@ export function DayScreen() {
             <Text style={styles.heroTitle}>{weekday}</Text>
             <Text style={styles.heroSub}>{date}</Text>
           </View>
-          <Pressable onPress={() => router.push('/(tabs)/plan')} style={styles.planBtn}>
-            <Text style={styles.planBtnTxt}>План</Text>
-          </Pressable>
+          <View style={styles.topActions}>
+            <Pressable
+              onPress={toggle}
+              style={styles.themeBtn}
+              accessibilityLabel={isLight ? 'Тёмная тема' : 'Светлая тема'}
+            >
+              <Ionicons
+                name={isLight ? 'moon-outline' : 'sunny-outline'}
+                size={22}
+                color={colors.accent}
+              />
+            </Pressable>
+            <Pressable onPress={() => router.push('/(tabs)/plan')} style={styles.planBtn}>
+              <Text style={styles.planBtnTxt}>План</Text>
+            </Pressable>
+          </View>
         </View>
 
         {isLoading ? (
@@ -210,7 +240,7 @@ export function DayScreen() {
           <>
             {dailyScore ? (
               <View style={styles.heroCardOuter}>
-                <LinearGradient colors={[...HERO_INNER_GRAD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                <LinearGradient colors={heroInnerGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                   <View style={styles.heroInner}>
                     <Text style={[typography.caption, { color: colors.accent, letterSpacing: 1.2 }]}>
                       ОБЗОР ДНЯ
