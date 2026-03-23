@@ -1,0 +1,171 @@
+# EAS Build: iOS → TestFlight / установка «как приложение»
+
+Цель: **своя иконка на экране**, запуск **без Expo Go** и **без открытого порта 8081** для пользователей.
+
+---
+
+## Что нужно заранее
+
+1. **Apple Developer Program** (платно, см. блок ниже) — для установки на **реальный iPhone** через TestFlight или App Store.
+2. **Аккаунт Expo** (бесплатно): [expo.dev](https://expo.dev) → регистрация.
+3. **Mac не обязателен** для сборки: EAS собирает в облаке Expo.
+
+`bundleIdentifier` в проекте: **`com.sophia.os`**. Если Apple скажет, что идентификатор занят — поменяй в `app.json` → `expo.ios.bundleIdentifier` на уникальный (например `com.twinlabs.sophiaos`).
+
+---
+
+## Apple Developer Program — подробнее
+
+### Что это
+
+Официальная **платная подписка Apple** для тех, кто **публикует приложения** в App Store или **ставит свои сборки на реальные iPhone/iPad** (в т.ч. через TestFlight и ad hoc). Обычный Apple ID для покупок в Store **не подходит** как замена — нужна именно **запись в программе** на [developer.apple.com](https://developer.apple.com).
+
+### Сколько стоит
+
+- **Около $99 (USD) в год** за аккаунт **Individual** (физлицо) или **Organization** (компания). Точную сумму и валюту смотри на сайте Apple — иногда есть региональные отличия.
+- Продление **каждый год**. Если не продлишь — новые билды / распространение через TestFlight для этого Team могут стать недоступны, пока не оплатишь снова.
+
+### Зачем тебе это для Sophia OS
+
+| Цель | Нужен ли платный Developer |
+|------|----------------------------|
+| Разработка в **Expo Go** с телефона | **Нет** (но нужен живой Metro / tunnel и т.д.) |
+| **Своя иконка**, приложение **без Expo Go**, **TestFlight** или App Store | **Да** |
+| Установка **internal / ad hoc** билда EAS на свой iPhone | **Да** (подпись приложения идёт через твою команду в Developer) |
+| Только **симулятор** на Mac | Можно без подписки для локальной разработки, но это не «настоящий телефон с иконкой» |
+
+Apple **не разрешает** ставить на чужие телефоны произвольные подписанные `.ipa` без участия их экосистемы (сертификаты, профили) — для этого как раз и нужна программа.
+
+### Что входит (по сути для тебя)
+
+- **App Store Connect** — завести приложение, загрузить билды, **TestFlight** (внутренние/внешние тестеры).
+- **Сертификаты и профили** — EAS может создать их сам, если ты авторизуешься Apple ID с активной подпиской.
+- Публикация в **App Store** (если дойдёшь до релиза) — модерация Apple, метаданные, скриншоты и т.д.
+
+### Как оформить
+
+1. Зайди на [developer.apple.com](https://developer.apple.com) → **Account** → **Enroll**.
+2. Войди **Apple ID** (лучше тот, которым будешь пользоваться долго).
+3. Выбери **Individual** или **Organization**, заполни данные, оплата картой.
+4. После активации в **Membership** видно статус **Active**.
+
+Для **Organization** Apple иногда проверяет компанию дольше.
+
+### Бесплатно вообще никак на свой iPhone?
+
+- **Expo Go** — да, но это не «твоё приложение с иконкой», а контейнер Expo.
+- **Свой .ipa на своё устройство** без платной программы официально — **нет** (для сценария «как нормальное приложение»).
+
+### Итог одной фразой
+
+**~$99/год** — это **плата Apple** за право **подписывать** iOS-приложения и **раздавать** их хотя бы себе через TestFlight; без этого путь «иконка → открылось моё приложение» на реальном iPhone через EAS обычно **закрыт**.
+
+---
+
+## Шаг 1. Установить EAS CLI и войти
+
+```bash
+cd /root/.openclaw/workspace/sophia-os
+npm install
+npx eas-cli login
+```
+
+(или глобально: `npm i -g eas-cli`)
+
+---
+
+## Шаг 2. Привязать проект к Expo (один раз)
+
+```bash
+npx eas-cli init
+```
+
+Ответь на вопросы в терминале. Команда добавит в **`app.json`** блок `expo.extra.eas.projectId`.  
+У нас корень конфига — **`app.config.js`**, он подмешивает `app.json`, так что **`projectId` попадёт в бандл автоматически**, если он записан в `app.json`.
+
+Если `init` предложит создать проект — согласись.
+
+---
+
+## Шаг 3. Сборки: два профиля в `eas.json`
+
+| Профиль        | Назначение |
+|----------------|------------|
+| **`production`** | Сборка под **App Store / TestFlight** (распространение `store`). |
+| **`preview`**    | **Внутреннее** распределение Expo (ad hoc): до **100 устройств**, нужно зарегистрировать UDID в кабинете Expo / при сборке. Без публикации в App Store. |
+
+### TestFlight (рекомендуется для «как нормальное приложение»)
+
+```bash
+npx eas-cli build --platform ios --profile production
+```
+
+Дождись окончания билда в облаке. Затем либо:
+
+```bash
+npx eas-cli submit --platform ios --latest
+```
+
+и следуй шагам (Apple ID, App-Specific Password при необходимости, выбор приложения в App Store Connect),
+
+либо скачай **.ipa** с страницы билда и загрузи через **Transporter** на Mac.
+
+В **App Store Connect** включи **TestFlight**, добавь себя как тестера → на iPhone установишь **TestFlight**, потом **Sophia OS** — появится **иконка**, запуск как у обычного приложения.
+
+### Внутреннее распределение без TestFlight (`preview`)
+
+```bash
+npx eas-cli build --platform ios --profile preview
+```
+
+Нужно **зарегистрировать UDID** устройств (Expo подскажет в процессе). Подходит для быстрой проверки командой, но не заменяет удобство TestFlight для личного «один тап — открылось».
+
+---
+
+## Шаг 4. Apple: сертификаты и профили
+
+Первый раз EAS спросит: **создать credentials автоматически?**  
+Обычно выбирают **да** — Expo заведёт сертификаты и provisioning profile. Нужен логин **Apple Developer**.
+
+---
+
+## After Dark / astro API на устройстве
+
+В **production** билде `EAS_BUILD=true`, в `app.config.js` не подставляется дефолт `127.0.0.1:8765` для astro.  
+Задай **`EXPO_PUBLIC_ASTRO_API_URL`** в **EAS Secrets** или в **Environment variables** для билда:
+
+```bash
+npx eas-cli secret:create --name EXPO_PUBLIC_ASTRO_API_URL --value "https://твой-домен-или-ip:8765" --type string
+```
+
+И добавь в `eas.json` для нужного профиля `env` или используй **EAS Environment variables** в веб-кабинете Expo. Иначе модуль After Dark на устройстве не найдёт API.
+
+---
+
+## Полезные команды
+
+```bash
+# Статус последних билдов
+npx eas-cli build:list --platform ios --limit 5
+
+# Версия для Store / TestFlight (marketing version) — в app.json expo.version
+# Номер билда (buildNumber) — автоинкремент включён для production в eas.json
+```
+
+---
+
+## Кратко
+
+| Вопрос | Ответ |
+|--------|--------|
+| Можно «сразу так»? | Да: `eas init` → `eas build --platform ios --profile production` → `eas submit` → TestFlight. |
+| Нужен ли открытый 8081? | **Нет** для установленного приложения. 8081 — только для разработки через Metro. |
+| Бесплатно? | Expo — да; **Apple Developer** — платно для реального устройства и TestFlight. |
+
+---
+
+## Ссылки
+
+- [EAS Build — iOS](https://docs.expo.dev/build/setup/)
+- [Submit to App Store](https://docs.expo.dev/submit/ios/)
+- [Internal distribution](https://docs.expo.dev/build/internal-distribution/)
