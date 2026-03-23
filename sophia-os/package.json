@@ -18,7 +18,8 @@
     "eas:ios:preview": "eas build --platform ios --profile preview",
     "eas:ios:production": "eas build --platform ios --profile production",
     "eas:submit:ios": "eas submit --platform ios --latest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "build:web": "expo export --platform web"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
