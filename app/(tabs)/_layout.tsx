@@ -8,12 +8,9 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
+      <Tabs.Screen name="final" options={{ title: 'Финал' }} />
       <Tabs.Screen name="day" options={{ title: 'День' }} />
       <Tabs.Screen name="plan" options={{ title: 'План' }} />
-      <Tabs.Screen name="sophia" options={{ title: 'София' }} />
-      <Tabs.Screen name="habits" options={{ title: 'Ритм' }} />
-      <Tabs.Screen name="finance" options={{ title: 'Финансы' }} />
-      <Tabs.Screen name="esoterica" options={{ title: 'Эзо' }} />
     </Tabs>
   );
 }

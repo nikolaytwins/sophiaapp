@@ -30,7 +30,6 @@ export default function RootLayout() {
       <AppProviders>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(private)" />
           <Stack.Screen name="create-event" options={{ presentation: 'modal' }} />
         </Stack>
       </AppProviders>

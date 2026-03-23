@@ -26,7 +26,8 @@ export interface CalendarEvent {
   category: EventCategory;
   note?: string;
   location?: string;
-  source: 'local' | 'apple' | 'web';
+  /** local — из моков; device — expo-calendar; ics — подписка .ics; apple/web — legacy */
+  source: 'local' | 'apple' | 'web' | 'device' | 'ics';
 }
 
 export interface DailyScoreFactor {
@@ -51,12 +52,17 @@ export interface Goal {
   updatedAt: string;
 }
 
+export type HabitCadence = 'daily' | 'weekly';
+
 export interface Habit {
   id: string;
   name: string;
   streak: number;
   icon: string;
   todayDone: boolean;
+  cadence?: HabitCadence;
+  weeklyTarget?: number;
+  weeklyCompleted?: number;
 }
 
 export interface HealthSnapshot {
@@ -67,29 +73,6 @@ export interface HealthSnapshot {
   proteinGoal: number;
   calories: number;
   waterMl?: number;
-}
-
-export interface FinanceCategorySlice {
-  id: string;
-  label: string;
-  amount: number;
-  pct: number;
-}
-
-export interface FinanceSummary {
-  balance: number;
-  monthlyIncome: number;
-  monthlyExpense: number;
-  savingsGoal: number;
-  savingsProgress01: number;
-  categories: FinanceCategorySlice[];
-}
-
-export interface EsotericPreview {
-  id: string;
-  title: string;
-  subtitle: string;
-  accent: 'astro' | 'tarot' | 'moon' | 'self';
 }
 
 export type ChatRole = 'user' | 'assistant';

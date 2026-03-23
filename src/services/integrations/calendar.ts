@@ -1,8 +1,5 @@
 import type { CalendarEvent } from '@/entities/models';
 
-/**
- * Future: Apple EventKit / CalDAV / your web calendar.
- */
 export interface ExternalCalendarSource {
   id: string;
   label: string;
@@ -18,8 +15,17 @@ export interface CalendarWriteAdapter {
 }
 
 export const calendarIntegration = {
-  /** Replace with native module when ready */
-  async listExternal(_range: { startISO: string; endISO: string }): Promise<CalendarEvent[]> {
-    return [];
+  async listExternal(range: { startISO: string; endISO: string }): Promise<CalendarEvent[]> {
+    const [{ listDeviceCalendarEvents }, { listIcsCalendarEvents }] = await Promise.all([
+      import('./expoCalendarNative'),
+      import('./icsCalendar'),
+    ]);
+    const [device, ics] = await Promise.all([
+      listDeviceCalendarEvents(range),
+      listIcsCalendarEvents(range),
+    ]);
+    return [...device, ...ics].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
   },
 };

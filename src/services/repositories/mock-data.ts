@@ -2,8 +2,6 @@ import type {
   CalendarEvent,
   ChatMessage,
   DailyScore,
-  EsotericPreview,
-  FinanceSummary,
   Goal,
   Habit,
   HealthSnapshot,
@@ -159,47 +157,6 @@ export const mockHealth: HealthSnapshot = {
   waterMl: 1400,
 };
 
-export const mockFinance: FinanceSummary = {
-  balance: 428_500,
-  monthlyIncome: 980_000,
-  monthlyExpense: 640_000,
-  savingsGoal: 1_200_000,
-  savingsProgress01: 0.58,
-  categories: [
-    { id: 'c1', label: 'Команда', amount: 280_000, pct: 0.32 },
-    { id: 'c2', label: 'Инфра', amount: 120_000, pct: 0.18 },
-    { id: 'c3', label: 'Жизнь', amount: 140_000, pct: 0.22 },
-    { id: 'c4', label: 'Налоги', amount: 100_000, pct: 0.16 },
-  ],
-};
-
-export const mockEsoteric: EsotericPreview[] = [
-  {
-    id: 'x1',
-    title: 'Астро · день',
-    subtitle: 'Луна в Близнецах — ясность формулировок',
-    accent: 'astro',
-  },
-  {
-    id: 'x2',
-    title: 'Периоды',
-    subtitle: 'Неделя: связь · деньги · смысл',
-    accent: 'moon',
-  },
-  {
-    id: 'x3',
-    title: 'Таро',
-    subtitle: 'Расклад «Сегодня» — Император / Звезда',
-    accent: 'tarot',
-  },
-  {
-    id: 'x4',
-    title: 'Портрет',
-    subtitle: 'Твой стиль решений и ритм дня',
-    accent: 'self',
-  },
-];
-
 export const mockChat: ChatMessage[] = [
   {
     id: 'm1',
@@ -213,7 +170,7 @@ export const mockChat: ChatMessage[] = [
 export const mockPrompts: QuickPrompt[] = [
   { id: 'p1', title: 'Спланировать вечер', subtitle: '3 шага без перегруза' },
   { id: 'p2', title: 'Разобрать питание', subtitle: 'КБЖУ из текста' },
-  { id: 'p3', title: 'Астро-обзор', subtitle: 'коротко по сегодня' },
+  { id: 'p3', title: 'Фокус дня', subtitle: 'одна главная задача' },
   { id: 'p4', title: 'Рефлексия', subtitle: 'что сработало' },
 ];
 

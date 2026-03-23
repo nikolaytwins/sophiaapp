@@ -2,8 +2,6 @@ import type {
   CalendarEvent,
   ChatMessage,
   DailyScore,
-  EsotericPreview,
-  FinanceSummary,
   Goal,
   Habit,
   HealthSnapshot,
@@ -37,14 +35,6 @@ export interface HabitsRepository {
 
 export interface HealthRepository {
   getSnapshot(date: string): Promise<HealthSnapshot>;
-}
-
-export interface FinanceRepository {
-  getSummary(): Promise<FinanceSummary>;
-}
-
-export interface EsotericRepository {
-  getHub(): Promise<EsotericPreview[]>;
 }
 
 export interface UserRepository {

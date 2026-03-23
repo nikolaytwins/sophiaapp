@@ -129,19 +129,6 @@ npx eas-cli build --platform ios --profile preview
 
 ---
 
-## After Dark / astro API на устройстве
-
-В **production** билде `EAS_BUILD=true`, в `app.config.js` не подставляется дефолт `127.0.0.1:8765` для astro.  
-Задай **`EXPO_PUBLIC_ASTRO_API_URL`** в **EAS Secrets** или в **Environment variables** для билда:
-
-```bash
-npx eas-cli secret:create --name EXPO_PUBLIC_ASTRO_API_URL --value "https://твой-домен-или-ip:8765" --type string
-```
-
-И добавь в `eas.json` для нужного профиля `env` или используй **EAS Environment variables** в веб-кабинете Expo. Иначе модуль After Dark на устройстве не найдёт API.
-
----
-
 ## Полезные команды
 
 ```bash

@@ -9,21 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/theme';
 
 const LABELS: Record<string, string> = {
+  final: 'Финал',
   day: 'День',
   plan: 'План',
-  sophia: 'София',
-  habits: 'Ритм',
-  finance: 'Финансы',
-  esoterica: 'Эзо',
 };
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  final: 'flag-outline',
   day: 'sunny-outline',
   plan: 'calendar-outline',
-  sophia: 'sparkles',
-  habits: 'fitness-outline',
-  finance: 'wallet-outline',
-  esoterica: 'planet-outline',
 };
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -72,23 +66,6 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           minHeight: 48,
           paddingVertical: 4,
         },
-        tabSophia: {
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginTop: -18,
-        },
-        sophiaOrb: {
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.accent,
-          borderWidth: 3,
-          borderColor: isLight ? colors.surface : colors.bg,
-          ...shadows.card,
-        },
         label: {
           ...typography.caption,
           fontSize: 10,
@@ -122,29 +99,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           navigation.emit({ type: 'tabLongPress', target: route.key });
         };
 
-        const isSophia = route.name === 'sophia';
         const tint = focused ? colors.accent : colors.textMuted;
         const iconName = ICONS[route.name] ?? 'ellipse-outline';
-
-        if (isSophia) {
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarButtonTestID}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              style={styles.tabSophia}
-            >
-              <View style={styles.sophiaOrb}>
-                <Ionicons name={iconName} size={26} color="#FFFFFF" />
-              </View>
-              <Text style={[styles.label, { color: tint }]}>{label}</Text>
-            </Pressable>
-          );
-        }
 
         return (
           <Pressable
