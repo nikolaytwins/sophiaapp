@@ -6,9 +6,12 @@ if (typeof global.Buffer === 'undefined') {
   global.Buffer = Buffer;
 }
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -20,9 +23,17 @@ export { ErrorBoundary } from 'expo-router';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
+
   useEffect(() => {
-    void SplashScreen.hideAsync();
-  }, []);
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync();
+    }
+  }, [fontError, fontsLoaded]);
+
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -30,7 +41,23 @@ export default function RootLayout() {
       <AppProviders>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(private)" />
           <Stack.Screen name="create-event" options={{ presentation: 'modal' }} />
+          <Stack.Screen
+            name="habit-new"
+            options={{
+              /** Web: modal часто перехватывает hit-testing поверх формы. */
+              presentation: Platform.OS === 'web' ? 'card' : 'modal',
+              /**
+               * Web: контент стека должен быть выше любых «утекших» слоёв (например таббар с большим z-index
+               * у родительского (tabs)), иначе клики не доходят до Pressable внутри экрана.
+               */
+              contentStyle:
+                Platform.OS === 'web'
+                  ? { flex: 1, zIndex: 10000, position: 'relative' as const }
+                  : undefined,
+            }}
+          />
         </Stack>
       </AppProviders>
     </GestureHandlerRootView>

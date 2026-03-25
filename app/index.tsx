@@ -1,8 +1,8 @@
 import { Redirect } from 'expo-router';
 
 /**
- * Корень сайта / → сразу вкладка «День» (иначе web показывал +not-found).
+ * Корень / → основной экран трекера привычек.
  */
 export default function Index() {
-  return <Redirect href="/(tabs)/day" />;
+  return <Redirect href="/habits" />;
 }

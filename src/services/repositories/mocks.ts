@@ -1,11 +1,11 @@
 import type { CalendarEvent } from '@/entities/models';
-import { calendarIntegration } from '@/services/integrations/calendar';
 import type {
   ChatRepository,
   DailyScoreRepository,
+  EsotericRepository,
   EventRepository,
+  FinanceRepository,
   GoalsRepository,
-  HabitsRepository,
   HealthRepository,
   QuickPromptsRepository,
   TaskRepository,
@@ -15,8 +15,9 @@ import {
   getChatMessages,
   getTasksState,
   mockDailyScore,
+  mockEsoteric,
+  mockFinance,
   mockGoals,
-  mockHabits,
   mockHealth,
   mockEvents,
   mockPrompts,
@@ -59,26 +60,15 @@ export const mockTaskRepository: TaskRepository = {
   },
 };
 
-function mockEventsInRange(startISO: string, endISO: string): CalendarEvent[] {
-  const start = new Date(startISO).getTime();
-  const end = new Date(endISO).getTime();
-  return mockEvents.filter((e) => {
-    const t = new Date(e.start).getTime();
-    return t >= start && t <= end;
-  });
-}
-
-/** Включить демо-события из mock-data: EXPO_PUBLIC_INCLUDE_MOCK_EVENTS=true */
-const includeMockEvents = process.env.EXPO_PUBLIC_INCLUDE_MOCK_EVENTS === 'true';
-
 export const mockEventRepository: EventRepository = {
   async listForRange(startISO: string, endISO: string) {
-    const fromDevice = await calendarIntegration.listExternal({ startISO, endISO });
-    const fromMocks = includeMockEvents ? mockEventsInRange(startISO, endISO) : [];
-    const merged = [...fromDevice, ...fromMocks].sort(
-      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-    );
-    return delay(merged);
+    const start = new Date(startISO).getTime();
+    const end = new Date(endISO).getTime();
+    const filtered = mockEvents.filter((e) => {
+      const t = new Date(e.start).getTime();
+      return t >= start && t <= end;
+    });
+    return delay(filtered);
   },
   async create(input: Omit<CalendarEvent, 'id' | 'source'>) {
     const ev: CalendarEvent = {
@@ -103,15 +93,21 @@ export const mockGoalsRepository: GoalsRepository = {
   },
 };
 
-export const mockHabitsRepository: HabitsRepository = {
-  async list() {
-    return delay([...mockHabits]);
-  },
-};
-
 export const mockHealthRepository: HealthRepository = {
   async getSnapshot(date: string) {
     return delay({ ...mockHealth, date });
+  },
+};
+
+export const mockFinanceRepository: FinanceRepository = {
+  async getSummary() {
+    return delay({ ...mockFinance });
+  },
+};
+
+export const mockEsotericRepository: EsotericRepository = {
+  async getHub() {
+    return delay([...mockEsoteric]);
   },
 };
 

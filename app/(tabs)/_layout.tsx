@@ -8,9 +8,10 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="final" options={{ title: 'Финал' }} />
-      <Tabs.Screen name="day" options={{ title: 'День' }} />
-      <Tabs.Screen name="plan" options={{ title: 'План' }} />
+      {/** Экраны остаются в дереве маршрутов; из таббара скрыты (`href: null`). */}
+      <Tabs.Screen name="day" options={{ title: 'День', href: null }} />
+      <Tabs.Screen name="finance" options={{ title: 'Финансы', href: null }} />
+      <Tabs.Screen name="habits" options={{ title: 'Привычки' }} />
     </Tabs>
   );
 }

@@ -32,4 +32,15 @@ const responsiveBackground = `
 body {
   background-color: #07060B;
 }
+/* Страховка: иногда цепочка height:100% на web не даёт высоту корню RN. */
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+/* RN-web: явный курсор на интерактивах (иначе «мёртвые» клики). */
+#root [role="button"],
+#root [data-focusable="true"],
+#root a[href] {
+  cursor: pointer;
+}
 `;

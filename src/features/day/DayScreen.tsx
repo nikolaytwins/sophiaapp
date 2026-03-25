@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,7 +35,6 @@ function todayRu() {
 export function DayScreen() {
   const { colors, typography, spacing, radius, isLight, toggle } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const filter = useDayFilterStore((s) => s.filter);
   const setFilter = useDayFilterStore((s) => s.setFilter);
 
@@ -107,19 +105,6 @@ export function DayScreen() {
           borderWidth: 1,
           borderColor: colors.borderStrong,
           backgroundColor: colors.accentSoft,
-        },
-        planBtn: {
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: colors.borderStrong,
-          backgroundColor: colors.accentSoft,
-        },
-        planBtnTxt: {
-          ...typography.caption,
-          color: colors.accent,
-          fontWeight: '700',
         },
         heroCardOuter: {
           borderRadius: radius.xl,
@@ -227,9 +212,6 @@ export function DayScreen() {
                 size={22}
                 color={colors.accent}
               />
-            </Pressable>
-            <Pressable onPress={() => router.push('/(tabs)/plan')} style={styles.planBtn}>
-              <Text style={styles.planBtnTxt}>План</Text>
             </Pressable>
           </View>
         </View>

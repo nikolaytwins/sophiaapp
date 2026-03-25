@@ -2,23 +2,34 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useMemo } from 'react';
+import { Link, type Href } from 'expo-router';
+import { Fragment, useMemo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/theme';
 
+const TAB_HREF: Record<string, Href> = {
+  habits: '/habits',
+};
+
 const LABELS: Record<string, string> = {
-  final: 'Финал',
-  day: 'День',
-  plan: 'План',
+  habits: 'Привычки',
 };
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  final: 'flag-outline',
-  day: 'sunny-outline',
-  plan: 'calendar-outline',
+  /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
+  habits: 'repeat-outline',
 };
+
+/** `href: null` в Tabs.Screen скрывает таб из навигации; custom tab bar должен то же фильтровать. */
+function tabHrefFromDescriptor(
+  descriptor: BottomTabBarProps['descriptors'][string]
+): string | null | undefined {
+  const o = descriptor.options;
+  if (typeof o === 'function') return undefined;
+  return (o as { href?: string | null }).href;
+}
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -34,6 +45,12 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           bottom: 0,
           alignItems: 'center',
           paddingHorizontal: 12,
+          /**
+           * На web экраны root Stack (habit-new и т.д.) должны оставаться выше таббара по z-index.
+           * Слишком большой z-index здесь приводил к тому, что таббар перехватывал клики поверх карточных экранов.
+           */
+          zIndex: Platform.OS === 'web' ? 20 : 1000,
+          elevation: Platform.OS === 'web' ? 0 : 24,
         },
         barOuter: {
           maxWidth: 520,
@@ -41,14 +58,14 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           borderRadius: 28,
           overflow: 'hidden',
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: isLight ? colors.border : 'rgba(255,255,255,0.08)',
           ...shadows.card,
         },
         blurFill: {
           width: '100%',
           ...(Platform.OS === 'web'
             ? {
-                backgroundColor: isLight ? 'rgba(255,255,255,0.94)' : 'rgba(22,20,28,0.92)',
+                backgroundColor: isLight ? 'rgba(255,255,255,0.94)' : 'rgba(10,10,14,0.94)',
               }
             : {}),
         },
@@ -76,15 +93,21 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     [colors, isLight, shadows, typography]
   );
 
+  const visibleRoutes = state.routes.filter((route) => tabHrefFromDescriptor(descriptors[route.key]) !== null);
+
   const row = (
     <View style={styles.row}>
-      {state.routes.map((route, index) => {
-        const focused = state.index === index;
+      {visibleRoutes.map((route) => {
+        const indexInState = state.routes.findIndex((r) => r.key === route.key);
+        const focused = state.index === indexInState;
         const { options } = descriptors[route.key];
         const label = (options.title as string) ?? LABELS[route.name] ?? route.name;
 
+        const href = TAB_HREF[route.name] ?? (`/${route.name}` as Href);
+
         const onPress = () => {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          if (Platform.OS === 'web') return;
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
@@ -99,12 +122,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           navigation.emit({ type: 'tabLongPress', target: route.key });
         };
 
-        const tint = focused ? colors.accent : colors.textMuted;
+        const tint = focused ? (isLight ? colors.accent : '#A855F7') : colors.textMuted;
         const iconName = ICONS[route.name] ?? 'ellipse-outline';
 
-        return (
+        const normalBtn = (
           <Pressable
-            key={route.key}
             accessibilityRole="button"
             accessibilityState={focused ? { selected: true } : {}}
             accessibilityLabel={options.tabBarAccessibilityLabel}
@@ -119,6 +141,16 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             </Text>
           </Pressable>
         );
+
+        if (Platform.OS === 'web') {
+          return (
+            <Link key={route.key} href={href} replace asChild>
+              {normalBtn}
+            </Link>
+          );
+        }
+
+        return <Fragment key={route.key}>{normalBtn}</Fragment>;
       })}
     </View>
   );

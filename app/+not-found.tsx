@@ -37,8 +37,8 @@ export default function NotFoundScreen() {
       <Stack.Screen options={{ title: 'Не найдено' }} />
       <View style={styles.container}>
         <Text style={[typography.title1, styles.title]}>Экран не существует.</Text>
-        <Link href="/(tabs)/day" style={styles.link}>
-          <Text style={styles.linkText}>На главный экран</Text>
+        <Link href="/habits" style={styles.link}>
+          <Text style={styles.linkText}>К привычкам</Text>
         </Link>
       </View>
     </>
