@@ -31,18 +31,9 @@
       "favicon": "./assets/images/favicon.png",
       "backgroundColor": "#07060B"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-calendar",
-        {
-          "calendarPermission": "Доступ к календарю нужен, чтобы показать рабочие блоки и созвоны на экране «Финал»."
-        }
-      ]
-    ],
+    "plugins": ["expo-router", "expo-calendar"],
     "experiments": {
-      "typedRoutes": true,
-      "baseUrl": "/sophia"
+      "typedRoutes": true
     }
   }
 }
