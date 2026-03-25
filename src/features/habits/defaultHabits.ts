@@ -1,0 +1,116 @@
+import type { HabitPersisted } from '@/entities/models';
+
+const now = () => new Date().toISOString();
+
+/** Одноразовый сид при первом пустом списке (после rehydrate). */
+export const DEFAULT_HABIT_SEEDS: HabitPersisted[] = [
+  // —— Ежедневные ——
+  {
+    id: 'seed_steps_10k',
+    name: '10 000 шагов',
+    icon: 'walk-outline',
+    cadence: 'daily',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_protein_140',
+    name: '140 белка',
+    icon: 'nutrition-outline',
+    cadence: 'daily',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_sleep_0100',
+    name: 'Сон до 01:00',
+    icon: 'moon-outline',
+    cadence: 'daily',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_no_comps',
+    name: 'Без компов',
+    icon: 'laptop-outline',
+    cadence: 'daily',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_no_tarot_astro',
+    name: 'Без таро и астрологии',
+    icon: 'eye-off-outline',
+    cadence: 'daily',
+    createdAt: now(),
+    completionDates: [],
+  },
+  // —— Еженедельные ——
+  {
+    id: 'seed_workouts_3',
+    name: '3 тренировки в неделю',
+    icon: 'barbell-outline',
+    cadence: 'weekly',
+    weeklyTarget: 3,
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_bright_event_1',
+    name: '1 яркое событие в неделю',
+    icon: 'sparkles-outline',
+    cadence: 'weekly',
+    weeklyTarget: 1,
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_full_day_off_1',
+    name: '1 полный выходной в неделю',
+    icon: 'cafe-outline',
+    cadence: 'weekly',
+    weeklyTarget: 1,
+    createdAt: now(),
+    completionDates: [],
+  },
+  // —— Медийка и работа ——
+  {
+    id: 'seed_agency_sprint_5',
+    name: 'Спринт по агентству (5 дн./нед.)',
+    icon: 'rocket-outline',
+    cadence: 'weekly',
+    weeklyTarget: 5,
+    section: 'media',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_reels_daily',
+    name: 'Выложить рилс',
+    icon: 'videocam-outline',
+    cadence: 'daily',
+    section: 'media',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_tg_threads_3',
+    name: '3 поста в ТГ + тредс в неделю',
+    icon: 'chatbubbles-outline',
+    cadence: 'weekly',
+    weeklyTarget: 3,
+    section: 'media',
+    createdAt: now(),
+    completionDates: [],
+  },
+  {
+    id: 'seed_youtube_1',
+    name: '1 YouTube в неделю',
+    icon: 'play-circle-outline',
+    cadence: 'weekly',
+    weeklyTarget: 1,
+    section: 'media',
+    createdAt: now(),
+    completionDates: [],
+  },
+];

@@ -26,8 +26,7 @@ export interface CalendarEvent {
   category: EventCategory;
   note?: string;
   location?: string;
-  /** local — из моков; device — expo-calendar; ics — подписка .ics; apple/web — legacy */
-  source: 'local' | 'apple' | 'web' | 'device' | 'ics';
+  source: 'local' | 'apple' | 'web';
 }
 
 export interface DailyScoreFactor {
@@ -54,15 +53,43 @@ export interface Goal {
 
 export type HabitCadence = 'daily' | 'weekly';
 
+/** Только `media` выносит привычку в блок «Медийка и работа»; иначе — основной ритм. */
+export type HabitListSection = 'media';
+
+/** Persisted shape — completions are local YYYY-MM-DD; weekly allows duplicate days. */
+export interface HabitPersisted {
+  id: string;
+  name: string;
+  icon: string;
+  cadence: HabitCadence;
+  /** 1–7 when cadence === 'weekly' */
+  weeklyTarget?: number;
+  /** Опционально: отдельная секция на экране привычек. */
+  section?: HabitListSection;
+  createdAt: string;
+  completionDates: string[];
+}
+
+/** Enriched for UI — computed from HabitPersisted + today. */
 export interface Habit {
   id: string;
   name: string;
   streak: number;
   icon: string;
+  section?: HabitListSection;
+  /** Daily: completed today. Weekly: at least one check-in today. */
   todayDone: boolean;
-  cadence?: HabitCadence;
+  cadence: HabitCadence;
   weeklyTarget?: number;
+  /** Current ISO week (Mon–Sun), weekly habits only */
   weeklyCompleted?: number;
+  /** Weekly: weekly target reached (for progress / “done for the week”). */
+  weekQuotaMet?: boolean;
+  /** Weekly: сколько отметок сегодня (для undo). */
+  todaySessionCount?: number;
+  createdAt: string;
+  /** YYYY-MM-DD — для сетки месяца / истории недель (из persisted). */
+  completionDates?: string[];
 }
 
 export interface HealthSnapshot {
@@ -73,6 +100,29 @@ export interface HealthSnapshot {
   proteinGoal: number;
   calories: number;
   waterMl?: number;
+}
+
+export interface FinanceCategorySlice {
+  id: string;
+  label: string;
+  amount: number;
+  pct: number;
+}
+
+export interface FinanceSummary {
+  balance: number;
+  monthlyIncome: number;
+  monthlyExpense: number;
+  savingsGoal: number;
+  savingsProgress01: number;
+  categories: FinanceCategorySlice[];
+}
+
+export interface EsotericPreview {
+  id: string;
+  title: string;
+  subtitle: string;
+  accent: 'astro' | 'tarot' | 'moon' | 'self';
 }
 
 export type ChatRole = 'user' | 'assistant';
