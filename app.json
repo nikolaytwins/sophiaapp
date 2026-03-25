@@ -33,7 +33,8 @@
     },
     "plugins": ["expo-router", "expo-calendar"],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/sophia"
     }
   }
 }
