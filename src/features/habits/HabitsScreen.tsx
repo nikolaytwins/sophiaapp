@@ -9,7 +9,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -42,12 +41,15 @@ import {
   ymToIndex,
   type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
-import { formatHabitsAnalyticsForGpt } from '@/features/habits/habitsExportFormat';
+import { useSupabaseConfigured } from '@/config/env';
 import { addDays, localDateKey, startOfWeekMondayKey } from '@/features/habits/habitLogic';
+import { monthHabitQuota } from '@/features/habits/monthCompletionQuota';
+import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -1118,24 +1120,35 @@ export function HabitsScreen() {
   const todayKey = localDateKey();
   const heroScore = useMemo(() => heroScoreForDayView(data, todayKey), [data, todayKey]);
 
-  const onExportAnalytics = useCallback(async () => {
-    try {
-      void Haptics.selectionAsync();
-      const payload = await repos.habits.exportAnalytics();
-      const text = formatHabitsAnalyticsForGpt(payload);
-      if (
-        Platform.OS === 'web' &&
-        typeof navigator !== 'undefined' &&
-        typeof navigator.clipboard?.writeText === 'function'
-      ) {
-        await navigator.clipboard.writeText(text);
-        Alert.alert('Готово', 'Текст скопирован — вставь в чат с GPT.');
-        return;
-      }
-      await Share.share({ message: text, title: 'Sophia — привычки' });
-    } catch (e) {
-      Alert.alert('Выгрузка', e instanceof Error ? e.message : 'Не удалось собрать данные');
+  const monthStats = useMemo(() => {
+    const [y, m] = todayKey.split('-').map(Number);
+    return monthHabitQuota(data, y, m);
+  }, [data, todayKey]);
+
+  const monthTitleShort = useMemo(() => {
+    const [y, m] = todayKey.split('-').map(Number);
+    const s = new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, [todayKey]);
+
+  const supabaseOn = useSupabaseConfigured;
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) {
+      setAccountEmail(null);
+      return undefined;
     }
+    void sb.auth.getSession().then(({ data: { session } }) => {
+      setAccountEmail(session?.user?.email ?? null);
+    });
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      setAccountEmail(session?.user?.email ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   return (
@@ -1172,53 +1185,82 @@ export function HabitsScreen() {
             <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, opacity: 0.9 }]}>
               {headlineDate()}
             </Text>
+            {supabaseOn ? (
+              <Link href={'/cloud' as Href} asChild>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Аккаунт и синхронизация"
+                  style={{ marginTop: spacing.sm, alignSelf: 'flex-start', paddingVertical: 4 }}
+                >
+                  <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>
+                    {accountEmail ? `Облако · ${accountEmail}` : 'Войти в облако · синхронизация'}
+                  </Text>
+                </Pressable>
+              </Link>
+            ) : null}
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Link href={'/cloud' as Href} asChild>
-              <Pressable
-                accessibilityLabel="Облако и вход"
-                style={({ pressed }) => ({
-                  paddingHorizontal: 12,
-                  paddingVertical: 12,
-                  borderRadius: 20,
-                  backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
-                  borderWidth: 1,
-                  borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
-                })}
-              >
-                <Ionicons name="cloud-outline" size={22} color={ACCENT} />
-              </Pressable>
-            </Link>
+          <Link href="/habit-new" asChild>
             <Pressable
-              accessibilityLabel="Выгрузить привычки для анализа"
-              onPress={() => void onExportAnalytics()}
               style={({ pressed }) => ({
-                paddingHorizontal: 12,
+                paddingHorizontal: 16,
                 paddingVertical: 12,
                 borderRadius: 20,
-                backgroundColor: pressed ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
+                borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
               })}
             >
-              <Ionicons name="document-text-outline" size={22} color="rgba(255,255,255,0.85)" />
+              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 14 }}>+ Новая</Text>
             </Pressable>
-            <Link href="/habit-new" asChild>
-              <Pressable
-                style={({ pressed }) => ({
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderRadius: 20,
-                  backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
-                  borderWidth: 1,
-                  borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
-                })}
-              >
-                <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 14 }}>+ Новая</Text>
-              </Pressable>
-            </Link>
-          </View>
+          </Link>
         </View>
+
+        {data.length > 0 && monthStats.max > 0 ? (
+          <View
+            style={{
+              marginTop: spacing.lg,
+              borderRadius: radius.xl,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: 'rgba(201,168,108,0.28)',
+              backgroundColor: 'rgba(7,6,11,0.55)',
+            }}
+          >
+            <LinearGradient
+              colors={['rgba(212,184,122,0.12)', 'rgba(74,45,92,0.15)', 'rgba(7,6,11,0.85)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ padding: spacing.lg }}
+            >
+              <Text
+                style={[
+                  typography.caption,
+                  { color: 'rgba(212,184,122,0.95)', letterSpacing: 1.2, marginBottom: spacing.sm },
+                ]}
+              >
+                МЕСЯЦ · {monthTitleShort}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+                <ProgressRing
+                  value01={monthStats.progress01}
+                  size={128}
+                  stroke={10}
+                  label={`${monthStats.percent}`}
+                  sublabel="%"
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.body, { color: colors.text, lineHeight: 22 }]}>
+                    Выполнено {monthStats.filled} из {monthStats.max} возможных отметок за месяц по всем
+                    привычкам.
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
+                    Ежедневные считаются по дням, еженедельные — по числу отметок в пределах месяца.
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+        ) : null}
 
         <HabitHero totalHabits={heroScore.total} doneToday={heroScore.done} />
 
