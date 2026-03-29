@@ -7,11 +7,19 @@ import type {
   Goal,
   Habit,
   HabitCadence,
+  HabitPersisted,
   HealthSnapshot,
   QuickPrompt,
   Task,
   UserProfile,
 } from '@/entities/models';
+
+/** Полный срез для аналитики и выгрузки в GPT. */
+export type HabitsAnalyticsExport = {
+  exportedAt: string;
+  habits: HabitPersisted[];
+  heroHistory: Record<string, { done: number; total: number }>;
+};
 
 export interface TaskRepository {
   listForDate(date: string): Promise<Task[]>;
@@ -49,6 +57,8 @@ export interface HabitsRepository {
   /** Удаляет последнюю отметку за dateKey (по умолчанию — сегодня). */
   undoWeekly(id: string, dateKey?: string): Promise<Habit[]>;
   remove(id: string): Promise<Habit[]>;
+  /** Все отметки + hero для выгрузки / GPT. */
+  exportAnalytics(): Promise<HabitsAnalyticsExport>;
 }
 
 export interface HealthRepository {

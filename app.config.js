@@ -15,6 +15,12 @@ try {
 } catch {
   /* optional */
 }
+/** Видимый в списке файлов: скопируй `sophia.env.template` → `sophia.env` и заполни (файл в .gitignore). */
+try {
+  require('dotenv').config({ path: path.resolve(__dirname, 'sophia.env'), override: true });
+} catch {
+  /* optional */
+}
 
 if (!process.env.EXPO_PUBLIC_ASTRO_API_URL) {
   const prodLike =
@@ -28,6 +34,11 @@ if (!process.env.EXPO_PUBLIC_ASTRO_API_URL) {
 
 const astroUrl = process.env.EXPO_PUBLIC_ASTRO_API_URL || 'http://127.0.0.1:8765';
 
+const sophiaHabitsUrl = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_URL || '').trim();
+const sophiaHabitsSyncKey = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_SYNC_KEY || '').trim();
+const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || '').trim();
+const supabaseAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+
 module.exports = {
   ...appJson,
   expo: {
@@ -35,6 +46,10 @@ module.exports = {
     extra: {
       ...(appJson.expo.extra || {}),
       astroApiUrl: astroUrl,
+      ...(sophiaHabitsUrl ? { sophiaHabitsUrl } : {}),
+      ...(sophiaHabitsSyncKey ? { sophiaHabitsSyncKey } : {}),
+      ...(supabaseUrl ? { supabaseUrl } : {}),
+      ...(supabaseAnonKey ? { supabaseAnonKey } : {}),
     },
   },
 };

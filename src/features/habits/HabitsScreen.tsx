@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
+import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -41,6 +42,8 @@ import {
   ymToIndex,
   type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
+import { useSupabaseConfigured as supabaseConfigured } from '@/config/env';
+import { formatHabitsAnalyticsForGpt } from '@/features/habits/habitsExportFormat';
 import { addDays, localDateKey, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import { repos } from '@/services/repositories';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
@@ -1116,6 +1119,26 @@ export function HabitsScreen() {
   const todayKey = localDateKey();
   const heroScore = useMemo(() => heroScoreForDayView(data, todayKey), [data, todayKey]);
 
+  const onExportAnalytics = useCallback(async () => {
+    try {
+      void Haptics.selectionAsync();
+      const payload = await repos.habits.exportAnalytics();
+      const text = formatHabitsAnalyticsForGpt(payload);
+      if (
+        Platform.OS === 'web' &&
+        typeof navigator !== 'undefined' &&
+        typeof navigator.clipboard?.writeText === 'function'
+      ) {
+        await navigator.clipboard.writeText(text);
+        Alert.alert('Готово', 'Текст скопирован — вставь в чат с GPT.');
+        return;
+      }
+      await Share.share({ message: text, title: 'Sophia — привычки' });
+    } catch (e) {
+      Alert.alert('Выгрузка', e instanceof Error ? e.message : 'Не удалось собрать данные');
+    }
+  }, []);
+
   return (
     <View style={{ flex: 1, backgroundColor: '#030304' }}>
       <LinearGradient pointerEvents="none" colors={[...CANVAS_GRAD]} style={StyleSheet.absoluteFillObject} />
@@ -1151,20 +1174,53 @@ export function HabitsScreen() {
               {headlineDate()}
             </Text>
           </View>
-          <Link href="/habit-new" asChild>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {supabaseConfigured ? (
+              <Link href={'/cloud' as Href} asChild>
+                <Pressable
+                  accessibilityLabel="Облако и вход"
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                    borderRadius: 20,
+                    backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
+                    borderWidth: 1,
+                    borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
+                  })}
+                >
+                  <Ionicons name="cloud-outline" size={22} color={ACCENT} />
+                </Pressable>
+              </Link>
+            ) : null}
             <Pressable
+              accessibilityLabel="Выгрузить привычки для анализа"
+              onPress={() => void onExportAnalytics()}
               style={({ pressed }) => ({
-                paddingHorizontal: 16,
+                paddingHorizontal: 12,
                 paddingVertical: 12,
                 borderRadius: 20,
-                backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: pressed ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
                 borderWidth: 1,
-                borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
+                borderColor: 'rgba(255,255,255,0.1)',
               })}
             >
-              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 14 }}>+ Новая</Text>
+              <Ionicons name="document-text-outline" size={22} color="rgba(255,255,255,0.85)" />
             </Pressable>
-          </Link>
+            <Link href="/habit-new" asChild>
+              <Pressable
+                style={({ pressed }) => ({
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 20,
+                  backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
+                  borderWidth: 1,
+                  borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
+                })}
+              >
+                <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 14 }}>+ Новая</Text>
+              </Pressable>
+            </Link>
+          </View>
         </View>
 
         <HabitHero totalHabits={heroScore.total} doneToday={heroScore.done} />

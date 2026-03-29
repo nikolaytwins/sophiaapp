@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { SupabaseAuthListener } from '@/providers/SupabaseAuthListener';
+
 type Props = { children: ReactNode };
 
 export function AppProviders({ children }: Props) {
@@ -20,6 +22,7 @@ export function AppProviders({ children }: Props) {
 
   return (
     <QueryClientProvider client={client}>
+      <SupabaseAuthListener />
       <SafeAreaProvider>{children}</SafeAreaProvider>
     </QueryClientProvider>
   );

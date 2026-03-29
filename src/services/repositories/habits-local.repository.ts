@@ -1,14 +1,14 @@
 import type { Habit } from '@/entities/models';
-import { useHabitsStore } from '@/stores/habits.store';
+import { getHabitsPersistSlice, useHabitsStore } from '@/stores/habits.store';
 
-import type { HabitsRepository } from './types';
+import type { HabitsAnalyticsExport, HabitsRepository } from './types';
 
 function delay<T>(value: T, ms = 24): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
 /** Rehydrate из AsyncStorage должен завершиться до чтения/записи — иначе сид и create затираются. */
-function ensureStoreHydrated(): Promise<void> {
+export function ensureHabitsStoreHydrated(): Promise<void> {
   if (useHabitsStore.persist.hasHydrated()) {
     return Promise.resolve();
   }
@@ -22,33 +22,43 @@ function ensureStoreHydrated(): Promise<void> {
 
 export const localHabitsRepository: HabitsRepository = {
   async list() {
-    await ensureStoreHydrated();
+    await ensureHabitsStoreHydrated();
     useHabitsStore.getState().ensureDefaultHabits();
     return delay(useHabitsStore.getState().listView());
   },
 
   async create(input) {
-    await ensureStoreHydrated();
+    await ensureHabitsStoreHydrated();
     useHabitsStore.getState().create(input);
     return delay(useHabitsStore.getState().listView());
   },
 
   async checkIn(id: string, dateKey?: string) {
-    await ensureStoreHydrated();
+    await ensureHabitsStoreHydrated();
     useHabitsStore.getState().checkIn(id, dateKey);
     return delay(useHabitsStore.getState().listView());
   },
 
   async undoWeekly(id: string, dateKey?: string) {
-    await ensureStoreHydrated();
+    await ensureHabitsStoreHydrated();
     useHabitsStore.getState().undoWeekly(id, dateKey);
     return delay(useHabitsStore.getState().listView());
   },
 
   async remove(id: string) {
-    await ensureStoreHydrated();
+    await ensureHabitsStoreHydrated();
     useHabitsStore.getState().remove(id);
     return delay(useHabitsStore.getState().listView());
+  },
+
+  async exportAnalytics(): Promise<HabitsAnalyticsExport> {
+    await ensureHabitsStoreHydrated();
+    const slice = getHabitsPersistSlice();
+    return {
+      exportedAt: new Date().toISOString(),
+      habits: slice.habits.map((h) => ({ ...h, completionDates: [...h.completionDates] })),
+      heroHistory: { ...slice.heroHistory },
+    };
   },
 };
 

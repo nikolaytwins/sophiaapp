@@ -38,3 +38,71 @@ export const astroApiBaseUrl = (() => {
 
   return '';
 })();
+
+/**
+ * Сервер синхронизации привычек (см. `server/habits-sync.mjs`).
+ * Нужны оба: URL и длинный секрет в Bearer — одинаковые на всех устройствах.
+ */
+export const sophiaHabitsApiBaseUrl = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_SOPHIA_HABITS_URL
+      ? String(process.env.EXPO_PUBLIC_SOPHIA_HABITS_URL).trim()
+      : '';
+  if (fromEnv) return trimBase(fromEnv);
+
+  const extra = Constants.expoConfig?.extra as { sophiaHabitsUrl?: string } | undefined;
+  if (extra?.sophiaHabitsUrl && String(extra.sophiaHabitsUrl).trim()) {
+    return trimBase(String(extra.sophiaHabitsUrl).trim());
+  }
+
+  return '';
+})();
+
+/** Секрет синка (попадает в клиентский бандл — для личного использования; в проде лучше свой домен + HTTPS). */
+export const sophiaHabitsSyncKey = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_SOPHIA_HABITS_SYNC_KEY
+      ? String(process.env.EXPO_PUBLIC_SOPHIA_HABITS_SYNC_KEY).trim()
+      : '';
+  if (fromEnv) return fromEnv;
+
+  const extra = Constants.expoConfig?.extra as { sophiaHabitsSyncKey?: string } | undefined;
+  if (extra?.sophiaHabitsSyncKey && String(extra.sophiaHabitsSyncKey).trim()) {
+    return String(extra.sophiaHabitsSyncKey).trim();
+  }
+
+  return '';
+})();
+
+export const useRemoteHabitsSync = Boolean(sophiaHabitsApiBaseUrl && sophiaHabitsSyncKey);
+
+/** Supabase: Project URL и anon key из Dashboard → Settings → API */
+export const supabaseUrl = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_SUPABASE_URL
+      ? String(process.env.EXPO_PUBLIC_SUPABASE_URL).trim()
+      : '';
+  if (fromEnv) return trimBase(fromEnv);
+
+  const extra = Constants.expoConfig?.extra as { supabaseUrl?: string } | undefined;
+  if (extra?.supabaseUrl && String(extra.supabaseUrl).trim()) {
+    return trimBase(String(extra.supabaseUrl).trim());
+  }
+  return '';
+})();
+
+export const supabaseAnonKey = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+      ? String(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY).trim()
+      : '';
+  if (fromEnv) return fromEnv;
+
+  const extra = Constants.expoConfig?.extra as { supabaseAnonKey?: string } | undefined;
+  if (extra?.supabaseAnonKey && String(extra.supabaseAnonKey).trim()) {
+    return String(extra.supabaseAnonKey).trim();
+  }
+  return '';
+})();
+
+export const useSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

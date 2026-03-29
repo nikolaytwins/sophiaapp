@@ -41,8 +41,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (секреты не коммитить)
+.env
 .env*.local
+sophia.env
+
+# Sophia habits sync server (local JSON)
+data/habits-sync/
 
 # typescript
 *.tsbuildinfo

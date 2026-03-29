@@ -43,6 +43,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(private)" />
           <Stack.Screen name="create-event" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="cloud" />
+          <Stack.Screen name="auth/callback" />
           <Stack.Screen
             name="habit-new"
             options={{
