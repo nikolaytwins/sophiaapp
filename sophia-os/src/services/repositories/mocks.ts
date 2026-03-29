@@ -14,17 +14,18 @@ import type {
 } from './types';
 import {
   getChatMessages,
+  getHabitsState,
   getTasksState,
   mockDailyScore,
   mockEsoteric,
   mockFinance,
   mockGoals,
-  mockHabits,
   mockHealth,
   mockEvents,
   mockPrompts,
   mockUser,
   pushUserChatMessage,
+  setHabitsState,
   setTasksState,
 } from './mock-data';
 
@@ -96,8 +97,21 @@ export const mockGoalsRepository: GoalsRepository = {
 };
 
 export const mockHabitsRepository: HabitsRepository = {
-  async list() {
-    return delay([...mockHabits]);
+  async list(_dateKey?: string) {
+    return delay([...getHabitsState()]);
+  },
+  async toggle(habitId: string, _dateKey?: string) {
+    const next = getHabitsState().map((h) => {
+      if (h.id !== habitId) return h;
+      const on = !h.todayDone;
+      return {
+        ...h,
+        todayDone: on,
+        streak: on ? h.streak + 1 : Math.max(0, h.streak - 1),
+      };
+    });
+    setHabitsState(next);
+    return delay([...next]);
   },
 };
 

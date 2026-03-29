@@ -149,6 +149,16 @@ export const mockHabits: Habit[] = [
   { id: 'h4', name: 'Силовая 45 мин', streak: 2, icon: 'barbell-outline', todayDone: false },
 ];
 
+let habitsState: Habit[] = mockHabits.map((h) => ({ ...h }));
+
+export function getHabitsState() {
+  return habitsState;
+}
+
+export function setHabitsState(next: Habit[]) {
+  habitsState = next;
+}
+
 export const mockHealth: HealthSnapshot = {
   date: now.slice(0, 10),
   steps: 8420,

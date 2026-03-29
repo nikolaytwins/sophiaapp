@@ -35,6 +35,19 @@
 
 Без этого подставятся значения по умолчанию из `app.config.js` / `.env` (если закоммичены — не для секретов).
 
+### Привычки (Twinworks API)
+
+Чтобы веб-София ходила в базу привычек на том же домене, что и Next (Twinworks):
+
+| Переменная | Описание |
+|------------|----------|
+| `EXPO_PUBLIC_SOPHIA_HABITS_API_BASE` | Origin без слэша, например `https://app.twinlabs.ru` — к нему дописываются пути `/api/sophia/habits/...`. |
+| `EXPO_PUBLIC_SOPHIA_HABITS_BEARER_TOKEN` | Опционально: то же значение, что `TW_SITE_AUTH_TOKEN` на сервере Twinworks, если нет общей cookie-сессии (кросс-домен). **Попадает в клиентский бандл** — только для личного приложения. |
+
+На стороне Twinworks: применить миграции Prisma (`habit_check_ins`, поле `icon`), выставить при необходимости `SOPHIA_HABITS_CORS_ORIGIN=https://app.twinlabs.ru` если статика и API на разных origin. Выгрузка всех чекинов: `GET /api/sophia/habits/export` (тот же auth).
+
+Workflow **Deploy Sophia OS web** передаёт эти секреты в шаг `build:web`, если они заданы в GitHub Actions.
+
 ## Если репозиторий только `sophia-os` (без монорепо)
 
 Перенеси файл в **`sophia-os/.github/workflows/expo-web.yml`**, убери префикс `sophia-os/` из путей (`working-directory: .`, `path: dist`, `cache-dependency-path: package-lock.json`).

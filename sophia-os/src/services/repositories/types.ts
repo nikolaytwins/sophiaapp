@@ -32,7 +32,9 @@ export interface GoalsRepository {
 }
 
 export interface HabitsRepository {
-  list(): Promise<Habit[]>;
+  /** Календарный день пользователя YYYY-MM-DD (локальная дата устройства). */
+  list(dateKey?: string): Promise<Habit[]>;
+  toggle(habitId: string, dateKey?: string): Promise<Habit[]>;
 }
 
 export interface HealthRepository {

@@ -1,17 +1,11 @@
-# Статическая веб-сборка Sophia OS (Expo) на раннере GitHub — без нагрузки на VPS.
-# Артефакт: папка dist, её можно скачать из вкладки Actions или отдать на nginx.
+# Статическая веб-сборка Sophia OS (Expo) — только артефакт dist для скачивания.
+# Автодеплой на VPS: workflow deploy-sophia-web.yml (push в sophia-os).
+# Этот workflow намеренно только вручную, чтобы не дублировать сборку при push.
 
 name: Sophia OS — web export
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'sophia-os/**'
-      - '.github/workflows/expo-web.yml'
 
 defaults:
   run:
@@ -40,6 +34,8 @@ jobs:
         run: npm run build:web
         env:
           CI: true
+          EXPO_PUBLIC_SOPHIA_HABITS_API_BASE: ${{ secrets.EXPO_PUBLIC_SOPHIA_HABITS_API_BASE }}
+          EXPO_PUBLIC_SOPHIA_HABITS_BEARER_TOKEN: ${{ secrets.EXPO_PUBLIC_SOPHIA_HABITS_BEARER_TOKEN }}
 
       - name: Upload dist as artifact
         uses: actions/upload-artifact@v4

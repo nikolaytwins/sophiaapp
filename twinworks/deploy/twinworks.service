@@ -1,0 +1,18 @@
+[Unit]
+Description=Twinworks Next.js app (Selectel)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/.openclaw/workspace/twinworks
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=DATABASE_URL=file:./prisma/dev.db
+Environment=PM_BOARD_URL=http://127.0.0.1:3003
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

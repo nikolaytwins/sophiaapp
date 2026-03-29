@@ -30,13 +30,14 @@ import {
   mockTaskRepository,
   mockUserRepository,
 } from './mocks';
+import { isRemoteHabitsConfigured, remoteHabitsRepository } from './remote-habits-repository';
 
 export const repos = {
   tasks: mockTaskRepository as TaskRepository,
   events: mockEventRepository as EventRepository,
   dailyScore: mockDailyScoreRepository as DailyScoreRepository,
   goals: mockGoalsRepository as GoalsRepository,
-  habits: mockHabitsRepository as HabitsRepository,
+  habits: (isRemoteHabitsConfigured() ? remoteHabitsRepository : mockHabitsRepository) as HabitsRepository,
   health: mockHealthRepository as HealthRepository,
   finance: mockFinanceRepository as FinanceRepository,
   esoteric: mockEsotericRepository as EsotericRepository,

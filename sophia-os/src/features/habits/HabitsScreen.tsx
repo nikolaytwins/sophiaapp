@@ -1,22 +1,39 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { repos } from '@/services/repositories';
+import { isRemoteHabitsConfigured } from '@/services/repositories/remote-habits-repository';
 import { GlassCard } from '@/shared/ui/GlassCard';
 import { MetricTile } from '@/shared/ui/MetricTile';
 import { SectionHeader } from '@/shared/ui/SectionHeader';
 import { useAppTheme } from '@/theme';
+import { localCalendarDateKey } from '@/utils/calendar-date';
 
 export function HabitsScreen() {
   const { colors, typography, spacing, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const habits = useQuery({ queryKey: ['habits'], queryFn: () => repos.habits.list() });
+  const qc = useQueryClient();
+  const dateKey = localCalendarDateKey();
+
+  const habits = useQuery({
+    queryKey: ['habits', dateKey],
+    queryFn: () => repos.habits.list(dateKey),
+  });
+
+  const toggleHabit = useMutation({
+    mutationFn: (habitId: string) => repos.habits.toggle(habitId, dateKey),
+    onSuccess: (next) => {
+      qc.setQueryData(['habits', dateKey], next);
+    },
+  });
+
   const health = useQuery({
     queryKey: ['health', 'today'],
-    queryFn: () => repos.health.getSnapshot(new Date().toISOString().slice(0, 10)),
+    queryFn: () => repos.health.getSnapshot(localCalendarDateKey()),
   });
 
   const styles = useMemo(
@@ -49,9 +66,15 @@ export function HabitsScreen() {
           backgroundColor: colors.success,
           borderColor: colors.success,
         },
+        errorText: { marginTop: spacing.sm, color: colors.danger },
       }),
     [colors, spacing]
   );
+
+  const onToggle = (habitId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    toggleHabit.mutate(habitId);
+  };
 
   return (
     <ScrollView
@@ -62,7 +85,9 @@ export function HabitsScreen() {
       <Text style={typography.caption}>Ритм</Text>
       <Text style={typography.hero}>Привычки</Text>
       <Text style={[typography.body, { marginTop: spacing.sm }]}>
-        Ручной ввод, AI и Health — подключим к одному слою данных.
+        {isRemoteHabitsConfigured()
+          ? 'Чекины сохраняются на сервере (Twinworks API).'
+          : 'Локальный режим: данные в памяти до перезагрузки. Задай EXPO_PUBLIC_SOPHIA_HABITS_API_BASE для продакшена.'}
       </Text>
 
       <View style={{ marginTop: spacing.xl, flexDirection: 'row', gap: spacing.md }}>
@@ -81,12 +106,22 @@ export function HabitsScreen() {
         </View>
       </View>
 
+      {habits.isError ? (
+        <Text style={styles.errorText}>
+          Не удалось загрузить привычки. Проверь API и авторизацию (cookie Twinworks или Bearer).
+        </Text>
+      ) : null}
+
       <View style={{ marginTop: spacing.xl }}>
         <SectionHeader title="Сегодня" />
         <View style={{ gap: spacing.sm }}>
           {(habits.data ?? []).map((h) => (
             <GlassCard key={h.id}>
-              <View style={styles.habitRow}>
+              <Pressable
+                onPress={() => onToggle(h.id)}
+                disabled={toggleHabit.isPending}
+                style={styles.habitRow}
+              >
                 <View style={styles.icon}>
                   <Ionicons
                     name={h.icon as keyof typeof Ionicons.glyphMap}
@@ -105,7 +140,7 @@ export function HabitsScreen() {
                     color={h.todayDone ? (isLight ? '#FFFFFF' : '#0A0B0F') : colors.textMuted}
                   />
                 </View>
-              </View>
+              </Pressable>
             </GlassCard>
           ))}
         </View>

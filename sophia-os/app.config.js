@@ -28,6 +28,9 @@ if (!process.env.EXPO_PUBLIC_ASTRO_API_URL) {
 
 const astroUrl = process.env.EXPO_PUBLIC_ASTRO_API_URL || 'http://127.0.0.1:8765';
 
+const sophiaHabitsApiBase = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_API_BASE || '').trim();
+const sophiaHabitsBearerToken = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_BEARER_TOKEN || '').trim();
+
 module.exports = {
   ...appJson,
   expo: {
@@ -35,6 +38,8 @@ module.exports = {
     extra: {
       ...(appJson.expo.extra || {}),
       astroApiUrl: astroUrl,
+      sophiaHabitsApiBase,
+      sophiaHabitsBearerToken,
     },
   },
 };
