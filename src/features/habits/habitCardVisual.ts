@@ -1,4 +1,4 @@
-import { addDays, countCompletionsInWeekRange, startOfWeekMondayKey } from '@/features/habits/habitLogic';
+import { addDays, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 
 export type MonthGridCell = { dateKey: string | null };
 
@@ -87,35 +87,6 @@ export function monthGridCells(anchorKey: string): MonthGridCell[] {
     cells.push({ dateKey: null });
   }
   return cells;
-}
-
-export type WeekSnapshot = {
-  weekStart: string;
-  done: number;
-  target: number;
-  met: boolean;
-};
-
-/** Слева направо: от более старой недели к текущей (count недель). */
-export function recentWeekSnapshots(
-  completionDates: string[],
-  target: number,
-  todayKey: string,
-  count = 4
-): WeekSnapshot[] {
-  const snaps: WeekSnapshot[] = [];
-  let ws = startOfWeekMondayKey(todayKey);
-  for (let i = 0; i < count; i++) {
-    const done = countCompletionsInWeekRange(completionDates, ws);
-    snaps.push({
-      weekStart: ws,
-      done,
-      target,
-      met: done >= target,
-    });
-    ws = addDays(ws, -7);
-  }
-  return snaps.reverse();
 }
 
 /**

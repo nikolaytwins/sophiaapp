@@ -35,7 +35,6 @@ import {
   monthGridCells,
   monthGridTitleRu,
   parseYearMonthFromKey,
-  recentWeekSnapshots,
   WEEKDAY_LABELS_SHORT,
   weekdayIndexMondayFirst,
   ymToIndex,
@@ -298,10 +297,12 @@ function DailyContributionCell({
   cell,
   todayKey,
   completedSet,
+  variant = 'daily',
 }: {
   cell: MonthGridCell;
   todayKey: string;
   completedSet: Set<string>;
+  variant?: 'daily' | 'weekly';
 }) {
   if (!cell.dateKey) {
     return <View style={{ flex: 1, aspectRatio: 1, minWidth: 0 }} />;
@@ -309,6 +310,11 @@ function DailyContributionCell({
   const isFuture = cell.dateKey > todayKey;
   const done = !isFuture && completedSet.has(cell.dateKey);
   const isToday = cell.dateKey === todayKey;
+  const isWeekly = variant === 'weekly';
+  const fillDone = isWeekly ? '#B794F6' : '#9D4EDD';
+  const fillToday = isWeekly ? 'rgba(196,181,253,0.14)' : 'rgba(168,85,247,0.11)';
+  const shadowDone = isWeekly ? '#C4B5FD' : '#9D4EDD';
+  const shadowRing = isWeekly ? WEEKLY : ACCENT;
 
   return (
     <View
@@ -324,16 +330,16 @@ function DailyContributionCell({
           backgroundColor: isFuture
             ? 'rgba(255,255,255,0.02)'
             : done
-              ? '#9D4EDD'
+              ? fillDone
               : isToday
-                ? 'rgba(168,85,247,0.11)'
+                ? fillToday
                 : 'rgba(255,255,255,0.055)',
           opacity: isFuture ? 0.32 : 1,
           ...(Platform.OS === 'web'
             ? {}
             : done && !isFuture
               ? {
-                  shadowColor: '#9D4EDD',
+                  shadowColor: shadowDone,
                   shadowOffset: { width: 0, height: 0 },
                   shadowOpacity: isToday ? 0.55 : 0.5,
                   shadowRadius: isToday ? 12 : 10,
@@ -341,7 +347,7 @@ function DailyContributionCell({
                 }
               : isToday && !done && !isFuture
                 ? {
-                    shadowColor: ACCENT,
+                    shadowColor: shadowRing,
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.45,
                     shadowRadius: 10,
@@ -379,15 +385,17 @@ function HabitCard({
     return new Set(habit.completionDates ?? []);
   }, [habit.completionDates, isDaily]);
 
+  const completedWeeklySet = useMemo(() => {
+    if (isDaily) return new Set<string>();
+    return new Set(habit.completionDates ?? []);
+  }, [habit.completionDates, isDaily]);
+
   const [viewYm, setViewYm] = useState(() => parseYearMonthFromKey(todayKey));
   const gridAnchorKey = useMemo(() => monthAnchorKey(viewYm.y, viewYm.m), [viewYm]);
   const todayYm = useMemo(() => parseYearMonthFromKey(todayKey), [todayKey]);
   const isViewingCurrentMonth = viewYm.y === todayYm.y && viewYm.m === todayYm.m;
 
-  const monthCells = useMemo(() => {
-    if (!isDaily) return [] as MonthGridCell[];
-    return monthGridCells(gridAnchorKey);
-  }, [isDaily, gridAnchorKey]);
+  const monthCells = useMemo(() => monthGridCells(gridAnchorKey), [gridAnchorKey]);
   const monthWeekRows = useMemo(() => chunkMonthIntoWeekRows(monthCells), [monthCells]);
   const monthGridTitle = useMemo(() => monthGridTitleRu(gridAnchorKey), [gridAnchorKey]);
   const todayWeekdayIdx = useMemo(() => weekdayIndexMondayFirst(todayKey), [todayKey]);
@@ -413,11 +421,6 @@ function HabitCard({
     [viewYm, todayYm]
   );
   const canGoPrevMonth = useMemo(() => ymToIndex(viewYm.y, viewYm.m) > ymToIndex(2000, 1), [viewYm]);
-
-  const weekSnapshots = useMemo(() => {
-    if (isDaily || !habit.weeklyTarget) return [];
-    return recentWeekSnapshots(habit.completionDates ?? [], habit.weeklyTarget, todayKey, 4);
-  }, [habit.completionDates, habit.weeklyTarget, isDaily, todayKey]);
 
   const statusLine = useMemo(() => {
     if (!isDaily) return '';
@@ -983,7 +986,7 @@ function HabitCard({
                 </View>
                 <View
                   style={{
-                    height: 7,
+                    height: 12,
                     borderRadius: radius.full,
                     backgroundColor: 'rgba(255,255,255,0.06)',
                     overflow: 'hidden',
@@ -1000,45 +1003,73 @@ function HabitCard({
                   />
                 </View>
 
-                <Text
-                  style={[typography.caption, { marginTop: spacing.md, color: 'rgba(255,255,255,0.38)', letterSpacing: 1.2 }]}
+                <View
+                  style={{
+                    marginTop: spacing.md,
+                    width: '100%',
+                    borderRadius: radius.xl,
+                    padding: spacing.sm,
+                    backgroundColor: 'rgba(0,0,0,0.35)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.08)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
                 >
-                  ПОСЛЕДНИЕ 4 НЕДЕЛИ
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.sm, alignItems: 'stretch' }}>
-                  {weekSnapshots.map((w) => {
-                    const h = Math.min(100, (w.done / Math.max(1, w.target)) * 100);
-                    const currentWeek = w.weekStart === startOfWeekMondayKey(todayKey);
-                    return (
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={['rgba(196,181,253,0.08)', 'transparent']}
+                    style={{ ...StyleSheet.absoluteFillObject, opacity: 0.9 }}
+                  />
+                  <View style={{ width: '100%', zIndex: 1 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        width: '100%',
+                        gap: GRID_COL_GAP,
+                        marginBottom: GRID_ROW_GAP,
+                      }}
+                    >
+                      {WEEKDAY_LABELS_SHORT.map((label, i) => {
+                        const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+                        return (
+                          <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: isTodayCol ? '700' : '500',
+                                letterSpacing: 0.35,
+                                color: isTodayCol ? accent : 'rgba(255,255,255,0.32)',
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {monthWeekRows.map((row, ri) => (
                       <View
-                        key={w.weekStart}
+                        key={`ww-${ri}`}
                         style={{
-                          flex: 1,
-                          height: 40,
-                          borderRadius: 10,
-                          backgroundColor: 'rgba(255,255,255,0.05)',
-                          overflow: 'hidden',
-                          position: 'relative',
-                          borderWidth: currentWeek ? 1 : 0,
-                          borderColor: 'rgba(168,85,247,0.35)',
+                          flexDirection: 'row',
+                          width: '100%',
+                          marginBottom: ri < monthWeekRows.length - 1 ? GRID_ROW_GAP : 0,
+                          gap: GRID_COL_GAP,
                         }}
                       >
-                        <View
-                          style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: `${h}%`,
-                            minHeight: w.done > 0 ? 3 : 0,
-                            borderBottomLeftRadius: 10,
-                            borderBottomRightRadius: 10,
-                            backgroundColor: w.met ? ACCENT : 'rgba(168,85,247,0.42)',
-                          }}
-                        />
+                        {row.map((cell, ci) => (
+                          <DailyContributionCell
+                            key={cell.dateKey ?? `wpad-${ri}-${ci}`}
+                            cell={cell}
+                            todayKey={todayKey}
+                            completedSet={completedWeeklySet}
+                            variant="weekly"
+                          />
+                        ))}
                       </View>
-                    );
-                  })}
+                    ))}
+                  </View>
                 </View>
                 {rhythmHint ? (
                   <Text style={[typography.caption, { marginTop: spacing.sm, color: 'rgba(255,255,255,0.42)' }]}>
