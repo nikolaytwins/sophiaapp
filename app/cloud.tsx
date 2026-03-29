@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured } from '@/config/env';
+import { getEmailAuthRedirectUri } from '@/lib/authRedirectUri';
 import { getSupabase } from '@/lib/supabase';
 import { useAppTheme } from '@/theme';
 
@@ -52,7 +52,7 @@ export default function CloudScreen() {
     }
     setBusy(true);
     try {
-      const redirectTo = Linking.createURL('auth/callback');
+      const redirectTo = getEmailAuthRedirectUri();
       const { error } = await sb.auth.signInWithOtp({
         email: trimmed,
         options: { emailRedirectTo: redirectTo },
@@ -246,8 +246,9 @@ export default function CloudScreen() {
                   color: 'rgba(255,255,255,0.38)',
                 }}
               >
-                Добавь в Supabase → Authentication → URL Configuration → Redirect URLs:{'\n'}
-                {Linking.createURL('auth/callback')}
+                Добавь в Supabase → Authentication → URL Configuration → Redirect URLs (и Site URL =
+                корень приложения, например …/sophia):{'\n'}
+                {getEmailAuthRedirectUri()}
               </Text>
             </>
           )}
