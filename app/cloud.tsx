@@ -20,11 +20,25 @@ import { getEmailAuthRedirectUri } from '@/lib/authRedirectUri';
 import { getSupabase } from '@/lib/supabase';
 import { useAppTheme } from '@/theme';
 
+type AuthPanel = 'login' | 'register' | 'magic';
+
+const inputOutline = {
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.12)',
+  borderRadius: 14,
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+  fontSize: 16,
+} as const;
+
 export default function CloudScreen() {
   const { colors, typography, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [panel, setPanel] = useState<AuthPanel>('login');
   const [busy, setBusy] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
 
@@ -42,20 +56,81 @@ export default function CloudScreen() {
     void refreshSession();
   }, [refreshSession]);
 
-  const onSendMagicLink = async () => {
-    const sb = getSupabase();
-    if (!sb) return;
+  const validateEmail = () => {
     const trimmed = email.trim();
     if (!trimmed.includes('@')) {
       Alert.alert('Email', 'Введи корректный email');
+      return null;
+    }
+    return trimmed;
+  };
+
+  const onSignInPassword = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const trimmed = validateEmail();
+    if (!trimmed) return;
+    if (password.length < 6) {
+      Alert.alert('Пароль', 'Минимум 6 символов');
       return;
     }
     setBusy(true);
     try {
-      const redirectTo = getEmailAuthRedirectUri();
+      const { error } = await sb.auth.signInWithPassword({ email: trimmed, password });
+      if (error) {
+        Alert.alert('Не вышло', error.message);
+        return;
+      }
+      await refreshSession();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSignUp = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const trimmed = validateEmail();
+    if (!trimmed) return;
+    if (password.length < 6) {
+      Alert.alert('Пароль', 'Минимум 6 символов');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Пароли', 'Не совпадают');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await sb.auth.signUp({
+        email: trimmed,
+        password,
+        options: { emailRedirectTo: getEmailAuthRedirectUri() },
+      });
+      if (error) {
+        Alert.alert('Регистрация', error.message);
+        return;
+      }
+      Alert.alert(
+        'Проверь почту',
+        'Если в проекте включено подтверждение email, открой письмо от Supabase. Потом войди с паролем здесь.'
+      );
+      setPanel('login');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSendMagicLink = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const trimmed = validateEmail();
+    if (!trimmed) return;
+    setBusy(true);
+    try {
       const { error } = await sb.auth.signInWithOtp({
         email: trimmed,
-        options: { emailRedirectTo: redirectTo },
+        options: { emailRedirectTo: getEmailAuthRedirectUri() },
       });
       if (error) {
         Alert.alert('Не отправилось', error.message);
@@ -65,6 +140,26 @@ export default function CloudScreen() {
         'Проверь почту',
         'Открой письмо от Supabase и нажми ссылку — приложение подхватит вход.'
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onForgotPassword = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const trimmed = validateEmail();
+    if (!trimmed) return;
+    setBusy(true);
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: getEmailAuthRedirectUri(),
+      });
+      if (error) {
+        Alert.alert('Сброс', error.message);
+        return;
+      }
+      Alert.alert('Почта', 'Если такой email есть в системе, придёт письмо со ссылкой для нового пароля.');
     } finally {
       setBusy(false);
     }
@@ -198,6 +293,43 @@ export default function CloudScreen() {
             </View>
           ) : (
             <>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: spacing.lg }}>
+                {(
+                  [
+                    { key: 'login' as const, label: 'Пароль' },
+                    { key: 'register' as const, label: 'Регистрация' },
+                    { key: 'magic' as const, label: 'Ссылка' },
+                  ] as const
+                ).map(({ key, label }) => {
+                  const active = panel === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      onPress={() => setPanel(key)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: radius.md,
+                        backgroundColor: active ? 'rgba(168,85,247,0.25)' : 'rgba(255,255,255,0.05)',
+                        borderWidth: 1,
+                        borderColor: active ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.08)',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: active ? '800' : '600',
+                          color: active ? '#E9D5FF' : 'rgba(255,255,255,0.55)',
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
               <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>
                 Email
               </Text>
@@ -209,47 +341,123 @@ export default function CloudScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={{
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.12)',
-                  borderRadius: radius.md,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  color: colors.text,
-                  fontSize: 16,
-                  marginBottom: spacing.lg,
-                }}
+                style={{ ...inputOutline, color: colors.text, marginBottom: spacing.md }}
               />
-              <Pressable
-                onPress={() => void onSendMagicLink()}
-                disabled={busy}
-                style={({ pressed }) => ({
-                  paddingVertical: 14,
-                  borderRadius: radius.lg,
-                  alignItems: 'center',
-                  backgroundColor: pressed ? 'rgba(168,85,247,0.35)' : '#A855F7',
-                  opacity: busy ? 0.6 : 1,
-                })}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Выслать ссылку</Text>
-                )}
-              </Pressable>
-              <Text
-                selectable
-                style={{
-                  marginTop: spacing.lg,
-                  fontSize: 11,
-                  lineHeight: 15,
-                  color: 'rgba(255,255,255,0.38)',
-                }}
-              >
-                Добавь в Supabase → Authentication → URL Configuration → Redirect URLs (и Site URL =
-                корень приложения, например …/sophia):{'\n'}
-                {getEmailAuthRedirectUri()}
-              </Text>
+
+              {panel !== 'magic' ? (
+                <>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>
+                    Пароль
+                  </Text>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    secureTextEntry
+                    style={{ ...inputOutline, color: colors.text, marginBottom: panel === 'register' ? spacing.md : spacing.lg }}
+                  />
+                </>
+              ) : null}
+
+              {panel === 'register' ? (
+                <>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>
+                    Пароль ещё раз
+                  </Text>
+                  <TextInput
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    secureTextEntry
+                    style={{ ...inputOutline, color: colors.text, marginBottom: spacing.lg }}
+                  />
+                </>
+              ) : null}
+
+              {panel === 'login' ? (
+                <>
+                  <Pressable
+                    onPress={() => void onSignInPassword()}
+                    disabled={busy}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      borderRadius: radius.lg,
+                      alignItems: 'center',
+                      backgroundColor: pressed ? 'rgba(168,85,247,0.35)' : '#A855F7',
+                      opacity: busy ? 0.6 : 1,
+                      marginBottom: spacing.md,
+                    })}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Войти</Text>
+                    )}
+                  </Pressable>
+                  <Pressable onPress={() => void onForgotPassword()} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, textDecorationLine: 'underline' }}>
+                      Забыли пароль?
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {panel === 'register' ? (
+                <Pressable
+                  onPress={() => void onSignUp()}
+                  disabled={busy}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: radius.lg,
+                    alignItems: 'center',
+                    backgroundColor: pressed ? 'rgba(168,85,247,0.35)' : '#A855F7',
+                    opacity: busy ? 0.6 : 1,
+                    marginBottom: spacing.lg,
+                  })}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Создать аккаунт</Text>
+                  )}
+                </Pressable>
+              ) : null}
+
+              {panel === 'magic' ? (
+                <>
+                  <Pressable
+                    onPress={() => void onSendMagicLink()}
+                    disabled={busy}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      borderRadius: radius.lg,
+                      alignItems: 'center',
+                      backgroundColor: pressed ? 'rgba(168,85,247,0.35)' : '#A855F7',
+                      opacity: busy ? 0.6 : 1,
+                      marginBottom: spacing.md,
+                    })}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Выслать ссылку</Text>
+                    )}
+                  </Pressable>
+                  <Text
+                    selectable
+                    style={{
+                      fontSize: 11,
+                      lineHeight: 15,
+                      color: 'rgba(255,255,255,0.38)',
+                    }}
+                  >
+                    Redirect URL в Supabase:{'\n'}
+                    {getEmailAuthRedirectUri()}
+                  </Text>
+                </>
+              ) : null}
             </>
           )}
         </ScrollView>
