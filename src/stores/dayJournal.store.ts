@@ -82,6 +82,19 @@ export function getAllDayJournalEntriesSorted(): DayJournalEntry[] {
   return Object.values(entries).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 }
 
+/** До гидрации из AsyncStorage `entries` может быть пустым — экспорт ждёт это. */
+export function ensureDayJournalHydrated(): Promise<void> {
+  if (useDayJournalStore.persist.hasHydrated()) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const unsub = useDayJournalStore.persist.onFinishHydration(() => {
+      unsub();
+      resolve();
+    });
+  });
+}
+
 export type DayJournalExportDoc = {
   schema: 'sophia.dayJournal.v1';
   exportedAt: string;

@@ -2,7 +2,7 @@
 
 Экраны **Привычки** (`/sophia/habits`) и **День** (`/sophia/day`) используют один визуальный язык: тёмный холст `#030304`, градиент холста как в `HabitsScreen`, фиолетовый акцент, те же карточки и типографика шапки («Ритм» + заголовок + дата).
 
-Данные **дневника состояния** (утро / вечер / заметка) хранятся в `useDayJournalStore`, экспорт — JSON через `buildDayJournalExportDoc()` (`schema: sophia.dayJournal.v1`).
+Данные **дневника состояния** (утро / вечер / заметка) хранятся локально в `useDayJournalStore` (AsyncStorage), **в облако не синхронизируются**. Экспорт — JSON через `buildDayJournalExportDoc()` (`schema: sophia.dayJournal.v1`), копирование через `expo-clipboard` после гидрации стора.
 
 ## База
 

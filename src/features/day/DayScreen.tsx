@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
@@ -24,25 +25,53 @@ import {
   EVENING_ENERGY_OPTIONS,
   MORNING_STATE_OPTIONS,
   RECOVERY_OPTIONS,
+  type DayJournalEntry,
   type DayTypeId,
   type EveningEnergyId,
   type MorningStateId,
   type RecoveryId,
 } from '@/features/day/dayJournal.types';
-import { localDateKey } from '@/features/habits/habitLogic';
+import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
-import { HabitHero } from '@/features/habits/HabitHero';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
-import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { repos } from '@/services/repositories';
-import { buildDayJournalExportDoc, useDayJournalStore } from '@/stores/dayJournal.store';
+import {
+  buildDayJournalExportDoc,
+  ensureDayJournalHydrated,
+  useDayJournalStore,
+} from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
 
 const ACCENT = '#A855F7';
 const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
-/** Кольцо прогресса: нейтральный трек + фиолетовая дуга (без золотистого accent темы). */
-const RING_TRACK = 'rgba(255,255,255,0.09)';
-const RING_SUB = 'rgba(196,181,253,0.78)';
+
+function entryHasContent(e: DayJournalEntry | undefined): boolean {
+  if (!e) return false;
+  return Boolean(
+    e.morningState ||
+      e.eveningEnergy ||
+      e.dayType ||
+      (e.recoveryIds?.length ?? 0) > 0 ||
+      (e.note?.trim().length ?? 0) > 0
+  );
+}
+
+function formatDayHeading(dateKey: string, todayKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(dateKey !== todayKey ? { year: 'numeric' as const } : {}),
+  });
+}
+
+function shortDayLabel(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
 
 function splitEmojiTitle(label: string): { emoji: string; title: string } {
   const i = label.indexOf(' ');
@@ -59,11 +88,6 @@ const DAY_TYPE_TITLE: Record<DayTypeId, string> = {
   dropped: 'Выпал',
   rest: 'Отдых',
 };
-
-function headlineDate(): string {
-  const d = new Date();
-  return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-}
 
 function SurfaceCard({
   children,
@@ -99,32 +123,37 @@ export function DayScreen() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const habits = useHabitsQuery();
-  const dateKey = useMemo(() => localDateKey(), []);
+  const todayKey = localDateKey();
+  const [viewDateKey, setViewDateKey] = useState(todayKey);
   const [dayPhase, setDayPhase] = useState<'morning' | 'evening'>('morning');
+  const [exportHint, setExportHint] = useState<string | null>(null);
 
   const updateEntry = useDayJournalStore((s) => s.updateEntry);
   const toggleRecovery = useDayJournalStore((s) => s.toggleRecovery);
-  const entry = useDayJournalStore((s) => s.entries[dateKey]);
+  const allJournalEntries = useDayJournalStore((s) => s.entries);
+  const entry = allJournalEntries[viewDateKey];
 
   const journal = useMemo(() => {
     if (!entry) {
       return {
-        dateKey,
+        dateKey: viewDateKey,
         recoveryIds: [] as RecoveryId[],
         note: '',
         updatedAt: '',
       };
     }
     return entry;
-  }, [entry, dateKey]);
+  }, [entry, viewDateKey]);
+
+  const historyDayKeys = useMemo(() => {
+    return Object.keys(allJournalEntries)
+      .filter((k) => entryHasContent(allJournalEntries[k]))
+      .sort()
+      .reverse()
+      .slice(0, 40);
+  }, [allJournalEntries]);
 
   const data = habits.data ?? [];
-  /** Как на «Привычки»: только отмеченные звёздочкой «в ритме». */
-  const ritualHabits = useMemo(() => data.filter((h) => h.required !== false), [data]);
-  const doneCount = useMemo(() => ritualHabits.filter((h) => h.todayDone).length, [ritualHabits]);
-  const totalHabits = ritualHabits.length;
-  const score01 = totalHabits === 0 ? 0 : doneCount / totalHabits;
-  const score100 = Math.round(score01 * 100);
 
   const checkIn = useMutation({
     mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.checkIn(id, dk),
@@ -146,30 +175,60 @@ export function DayScreen() {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       if (h.cadence === 'daily') {
-        checkIn.mutate({ id: h.id, dateKey });
+        checkIn.mutate({ id: h.id, dateKey: todayKey });
         return;
       }
       if (h.todayDone) {
-        undoWeekly.mutate({ id: h.id, dateKey });
+        undoWeekly.mutate({ id: h.id, dateKey: todayKey });
       } else {
-        checkIn.mutate({ id: h.id, dateKey });
+        checkIn.mutate({ id: h.id, dateKey: todayKey });
       }
     },
-    [checkIn, dateKey, undoWeekly]
+    [checkIn, todayKey, undoWeekly]
   );
 
+  const goPrevDay = useCallback(() => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setViewDateKey((k) => addDays(k, -1));
+  }, []);
+
+  const goNextDay = useCallback(() => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setViewDateKey((k) => {
+      const n = addDays(k, 1);
+      return n > todayKey ? k : n;
+    });
+  }, [todayKey]);
+
+  const isViewingToday = viewDateKey === todayKey;
+
   const exportJournal = useCallback(async () => {
-    const doc = buildDayJournalExportDoc();
-    const text = JSON.stringify(doc, null, 2);
+    if (Platform.OS !== 'web') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     try {
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        Alert.alert('Готово', 'JSON дневника скопирован в буфер обмена.');
-        return;
+      await ensureDayJournalHydrated();
+      const doc = buildDayJournalExportDoc();
+      const text = JSON.stringify(doc, null, 2);
+      await Clipboard.setStringAsync(text);
+      setExportHint('Скопировано в буфер обмена');
+      setTimeout(() => setExportHint(null), 3500);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      try {
+        await ensureDayJournalHydrated();
+        const text = JSON.stringify(buildDayJournalExportDoc(), null, 2);
+        if (Platform.OS !== 'web') {
+          await Share.share({ message: text, title: 'Дневник Sophia' });
+          setExportHint('Открыто меню «Поделиться» — сохрани или отправь JSON');
+        } else {
+          setExportHint(`Не удалось скопировать: ${msg}`);
+        }
+      } catch {
+        setExportHint(`Ошибка экспорта: ${msg}`);
+        Alert.alert('Экспорт дневника', msg);
       }
-      await Share.share({ message: text, title: 'Дневник Sophia' });
-    } catch {
-      Alert.alert('Экспорт', text.slice(0, 2000));
+      setTimeout(() => setExportHint(null), 6000);
     }
   }, []);
 
@@ -221,46 +280,88 @@ export function DayScreen() {
             </Text>
             <Text style={[typography.hero, { fontSize: 34, letterSpacing: -1.1, color: colors.text }]}>День</Text>
             <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, opacity: 0.9 }]}>
-              {headlineDate()}
+              {formatDayHeading(viewDateKey, todayKey)}
+              {isViewingToday ? ' · сегодня' : ''}
             </Text>
           </View>
         </View>
 
-        <HabitHero totalHabits={totalHabits} doneToday={doneCount} />
+        <View
+          style={{
+            marginTop: spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: spacing.sm,
+          }}
+        >
+          <Pressable
+            onPress={goPrevDay}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Предыдущий день"
+            style={{ padding: 6 }}
+          >
+            <Ionicons name="chevron-back" size={24} color="rgba(255,255,255,0.65)" />
+          </Pressable>
+          <Text
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 15,
+              fontWeight: '600',
+              color: colors.text,
+            }}
+            numberOfLines={2}
+          >
+            {viewDateKey}
+          </Text>
+          <Pressable
+            onPress={goNextDay}
+            disabled={viewDateKey >= todayKey}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Следующий день"
+            style={{ padding: 6, opacity: viewDateKey >= todayKey ? 0.25 : 1 }}
+          >
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.65)" />
+          </Pressable>
+        </View>
 
-        <SurfaceCard glow style={{ marginTop: spacing.lg, overflow: 'hidden' }}>
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(168,85,247,0.06)', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ ...StyleSheet.absoluteFillObject, borderRadius: radius.xl }}
-          />
-          <View style={{ position: 'relative', zIndex: 1 }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.38)', letterSpacing: 1.4, marginBottom: spacing.sm }}>
-              ОБЗОР ДНЯ
+        {historyDayKeys.length > 0 ? (
+          <View style={{ marginTop: spacing.md }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.38)', letterSpacing: 1.2, marginBottom: spacing.sm }}>
+              ДНИ С ЗАПИСЯМИ
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-              <ProgressRing
-                value01={score01}
-                size={118}
-                stroke={9}
-                label={`${score100}`}
-                sublabel="%"
-                trackColor={RING_TRACK}
-                progressColor={ACCENT}
-                sublabelColor={RING_SUB}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, lineHeight: 24, fontWeight: '500', color: colors.text }}>
-                  {totalHabits === 0
-                    ? 'На «Привычки» отметь звёздочкой, что входит в ритм дня — тогда появится счёт X/Y.'
-                    : `${doneCount} из ${totalHabits} · ${score100}% дня`}
-                </Text>
-              </View>
-            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+              {historyDayKeys.map((k) => {
+                const on = k === viewDateKey;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                      setViewDateKey(k);
+                    }}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: on ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
+                      backgroundColor: on ? 'rgba(168,85,247,0.14)' : 'rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: on ? '#FAFAFC' : 'rgba(255,255,255,0.65)' }}>
+                      {shortDayLabel(k)}
+                      {k === todayKey ? ' · сегодня' : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
-        </SurfaceCard>
+        ) : null}
 
         {/* Один блок: настроение + переключатель утро/вечер */}
         <SurfaceCard style={{ marginTop: spacing.md, paddingVertical: spacing.xl }}>
@@ -318,7 +419,7 @@ export function DayScreen() {
                     key={o.id}
                     onPress={() => {
                       if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      updateEntry(dateKey, {
+                      updateEntry(viewDateKey, {
                         morningState: journal.morningState === o.id ? undefined : (o.id as MorningStateId),
                       });
                     }}
@@ -365,7 +466,7 @@ export function DayScreen() {
                         key={o.id}
                         onPress={() => {
                           if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                          updateEntry(dateKey, {
+                          updateEntry(viewDateKey, {
                             eveningEnergy: journal.eveningEnergy === o.id ? undefined : (o.id as EveningEnergyId),
                           });
                         }}
@@ -412,7 +513,7 @@ export function DayScreen() {
                         key={o.id}
                         onPress={() => {
                           if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                          updateEntry(dateKey, {
+                          updateEntry(viewDateKey, {
                             dayType: journal.dayType === o.id ? undefined : (o.id as DayTypeId),
                           });
                         }}
@@ -452,7 +553,7 @@ export function DayScreen() {
                         key={o.id}
                         onPress={() => {
                           if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                          toggleRecovery(dateKey, o.id as RecoveryId);
+                          toggleRecovery(viewDateKey, o.id as RecoveryId);
                         }}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
@@ -480,7 +581,7 @@ export function DayScreen() {
           <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.35, color: colors.text, marginBottom: spacing.sm }}>Заметка</Text>
           <TextInput
             value={journal.note ?? ''}
-            onChangeText={(t) => updateEntry(dateKey, { note: t })}
+            onChangeText={(t) => updateEntry(viewDateKey, { note: t })}
             placeholder="Одна мысль на вечер…"
             placeholderTextColor="rgba(255,255,255,0.28)"
             multiline
@@ -509,7 +610,7 @@ export function DayScreen() {
           </Text>
           {habits.isLoading ? (
             <Text style={{ color: colors.textMuted }}>Загрузка…</Text>
-          ) : totalHabits === 0 ? (
+          ) : data.length === 0 ? (
             <Text style={{ color: colors.textMuted }}>Пока нет привычек.</Text>
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -571,21 +672,31 @@ export function DayScreen() {
           )}
         </SurfaceCard>
 
-        <Pressable
-          onPress={exportJournal}
-          style={({ pressed }) => ({
-            marginTop: spacing.lg,
-            alignSelf: 'flex-start',
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.1)',
-            backgroundColor: pressed ? 'rgba(255,255,255,0.05)' : 'transparent',
-          })}
-        >
-          <Text style={{ color: 'rgba(196,181,253,0.95)', fontWeight: '600', fontSize: 14 }}>Экспорт дневника (JSON)</Text>
-        </Pressable>
+        <View style={{ marginTop: spacing.lg }}>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: 'rgba(255,255,255,0.42)', marginBottom: spacing.sm }}>
+            Дневник (утро, вечер, заметки) хранится только на этом устройстве в локальной памяти. В Supabase и
+            синхронизацию с облаком он не передаётся — только экспорт JSON.
+          </Text>
+          <Pressable
+            onPress={exportJournal}
+            style={({ pressed }) => ({
+              alignSelf: 'flex-start',
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+              backgroundColor: pressed ? 'rgba(255,255,255,0.05)' : 'transparent',
+            })}
+          >
+            <Text style={{ color: 'rgba(196,181,253,0.95)', fontWeight: '600', fontSize: 14 }}>
+              Экспорт дневника (JSON)
+            </Text>
+          </Pressable>
+          {exportHint ? (
+            <Text style={{ marginTop: spacing.sm, fontSize: 13, color: 'rgba(134,239,172,0.95)' }}>{exportHint}</Text>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
