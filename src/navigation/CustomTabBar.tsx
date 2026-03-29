@@ -10,14 +10,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/theme';
 
 const TAB_HREF: Record<string, Href> = {
+  day: '/day',
   habits: '/habits',
 };
 
 const LABELS: Record<string, string> = {
+  day: 'День',
   habits: 'Привычки',
 };
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  day: 'sunny-outline',
   /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
   habits: 'repeat-outline',
 };

@@ -903,6 +903,10 @@ function HabitCard({
                   paddingTop: spacing.md,
                   borderTopWidth: StyleSheet.hairlineWidth,
                   borderTopColor: 'rgba(255,255,255,0.08)',
+                  width: '100%',
+                  ...(Platform.OS === 'web'
+                    ? { maxWidth: 400, alignSelf: 'flex-start' as const }
+                    : { alignSelf: 'stretch' }),
                 }}
               >
                 <View style={{ marginBottom: spacing.md }}>
@@ -1247,26 +1251,33 @@ export function HabitsScreen() {
         </View>
 
         {data.length > 0 && monthStats.max > 0 ? (
-          <View
+          <SurfaceCard
+            glow
             style={{
               marginTop: spacing.lg,
-              borderRadius: radius.xl,
               overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: 'rgba(201,168,108,0.28)',
-              backgroundColor: 'rgba(7,6,11,0.55)',
             }}
           >
             <LinearGradient
-              colors={['rgba(212,184,122,0.12)', 'rgba(74,45,92,0.15)', 'rgba(7,6,11,0.85)']}
+              pointerEvents="none"
+              colors={['rgba(168,85,247,0.07)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ padding: spacing.lg }}
-            >
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                borderRadius: radius.xl,
+              }}
+            />
+            <View style={{ position: 'relative', zIndex: 1 }}>
               <Text
                 style={[
                   typography.caption,
-                  { color: 'rgba(212,184,122,0.95)', letterSpacing: 1.2, marginBottom: spacing.sm },
+                  {
+                    color: 'rgba(255,255,255,0.32)',
+                    letterSpacing: 1.3,
+                    textTransform: 'uppercase',
+                    marginBottom: spacing.sm,
+                  },
                 ]}
               >
                 МЕСЯЦ · {monthTitleShort}
@@ -1289,8 +1300,8 @@ export function HabitsScreen() {
                   </Text>
                 </View>
               </View>
-            </LinearGradient>
-          </View>
+            </View>
+          </SurfaceCard>
         ) : null}
 
         <HabitHero totalHabits={heroScore.total} doneToday={heroScore.done} />

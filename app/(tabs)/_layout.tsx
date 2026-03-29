@@ -9,7 +9,7 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false }}
     >
       {/** Экраны остаются в дереве маршрутов; из таббара скрыты (`href: null`). */}
-      <Tabs.Screen name="day" options={{ title: 'День', href: null }} />
+      <Tabs.Screen name="day" options={{ title: 'День' }} />
       <Tabs.Screen name="finance" options={{ title: 'Финансы', href: null }} />
       <Tabs.Screen name="habits" options={{ title: 'Привычки' }} />
     </Tabs>

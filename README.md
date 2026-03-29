@@ -37,7 +37,7 @@ Expo Router, TypeScript, TanStack Query, Zustand, Reanimated, Gesture Handler, e
 ## Structure
 
 - `app/` — routes only: `(tabs)` + modal `create-event`
-- `src/theme/` — design tokens
+- `src/theme/` — design tokens; эталон UI ритма — **Привычки** и **День** ([docs/UI_HABITS.md](docs/UI_HABITS.md))
 - `src/entities/` — domain types
 - `src/services/repositories/` — interfaces + mock implementations (swap for REST/Supabase)
 - `src/services/ai/` — `sophiaService` + types
