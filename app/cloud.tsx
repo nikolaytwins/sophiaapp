@@ -86,11 +86,30 @@ export default function CloudScreen() {
   if (!useSupabaseConfigured) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Облако', headerShown: true }} />
-        <View style={[styles.center, { padding: spacing.xl, paddingTop: insets.top + 24 }]}>
-          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>
-            В проекте не заданы EXPO_PUBLIC_SUPABASE_URL и EXPO_PUBLIC_SUPABASE_ANON_KEY. Скопируй
-            sophia.env.template → sophia.env, заполни ключи и перезапусти Expo.
+        <Stack.Screen
+          options={{
+            title: 'Облако',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#0A0A10' },
+            headerTintColor: '#fff',
+            headerTitleStyle: { color: '#fff' },
+          }}
+        />
+        <View
+          style={[
+            styles.center,
+            {
+              flex: 1,
+              padding: spacing.xl,
+              paddingTop: insets.top + 24,
+              backgroundColor: '#030304',
+            },
+          ]}
+        >
+          <Text style={[typography.body, { color: '#E5E7EB', textAlign: 'center', lineHeight: 22 }]}>
+            В этой сборке не подставлены ключи Supabase (для веба они задаются в GitHub → Settings →
+            Secrets → Actions: EXPO_PUBLIC_SUPABASE_URL и EXPO_PUBLIC_SUPABASE_ANON_KEY, затем
+            пересобери деплой). Локально: файл sophia.env в корне проекта.
           </Text>
           <Pressable
             onPress={() => router.back()}
