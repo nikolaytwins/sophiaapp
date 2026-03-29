@@ -24,4 +24,5 @@ create policy "sprint_sync_insert_own"
 create policy "sprint_sync_update_own"
   on public.sprint_sync_state
   for update
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

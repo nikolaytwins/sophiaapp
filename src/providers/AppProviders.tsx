@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GoalsCloudSync } from '@/providers/GoalsCloudSync';
 import { SprintCloudSync } from '@/providers/SprintCloudSync';
 import { SupabaseAuthListener } from '@/providers/SupabaseAuthListener';
 
@@ -24,6 +25,7 @@ export function AppProviders({ children }: Props) {
   return (
     <QueryClientProvider client={client}>
       <SupabaseAuthListener />
+      <GoalsCloudSync />
       <SprintCloudSync />
       <SafeAreaProvider>{children}</SafeAreaProvider>
     </QueryClientProvider>

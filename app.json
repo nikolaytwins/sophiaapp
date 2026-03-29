@@ -31,7 +31,16 @@
       "favicon": "./assets/images/favicon.png",
       "backgroundColor": "#07060B"
     },
-    "plugins": ["expo-router", "expo-calendar"],
+    "plugins": [
+      "expo-router",
+      "expo-calendar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Доступ к фото для обложек годовых целей."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "baseUrl": "/sophia"
