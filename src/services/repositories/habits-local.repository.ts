@@ -51,6 +51,12 @@ export const localHabitsRepository: HabitsRepository = {
     return delay(useHabitsStore.getState().listView());
   },
 
+  async setRequired(id: string, required: boolean) {
+    await ensureHabitsStoreHydrated();
+    useHabitsStore.getState().setRequired(id, required);
+    return delay(useHabitsStore.getState().listView());
+  },
+
   async exportAnalytics(): Promise<HabitsAnalyticsExport> {
     await ensureHabitsStoreHydrated();
     const slice = getHabitsPersistSlice();

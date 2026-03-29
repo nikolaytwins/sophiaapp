@@ -47,6 +47,8 @@ export type CreateHabitInput = {
   weeklyTarget?: number;
   /** Только `media` — блок «Медийка и работа». */
   section?: 'media';
+  /** По умолчанию true — входит в ритм дня и в месячный счёт (ежедневные). */
+  required?: boolean;
 };
 
 export interface HabitsRepository {
@@ -57,6 +59,8 @@ export interface HabitsRepository {
   /** Удаляет последнюю отметку за dateKey (по умолчанию — сегодня). */
   undoWeekly(id: string, dateKey?: string): Promise<Habit[]>;
   remove(id: string): Promise<Habit[]>;
+  /** Вкл/выкл «в ритме дня» (обязательная для X/Y и месячного max у ежедневных). */
+  setRequired(id: string, required: boolean): Promise<Habit[]>;
   /** Все отметки + hero для выгрузки / GPT. */
   exportAnalytics(): Promise<HabitsAnalyticsExport>;
 }

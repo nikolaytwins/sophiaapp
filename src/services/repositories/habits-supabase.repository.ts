@@ -6,6 +6,7 @@ import {
   createHabitSlice,
   ensureDefaultHabitsSlice,
   removeHabitSlice,
+  setRequiredSlice,
   totalCompletionCount,
   undoWeeklySlice,
   type HabitsPersistSlice,
@@ -131,6 +132,13 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     async remove(id: string) {
       let slice = await loadNormalized();
       slice = removeHabitSlice(slice, id);
+      await putState(slice);
+      return toList(slice);
+    },
+
+    async setRequired(id: string, required: boolean) {
+      let slice = await loadNormalized();
+      slice = setRequiredSlice(slice, id, required);
       await putState(slice);
       return toList(slice);
     },

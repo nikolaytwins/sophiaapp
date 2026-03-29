@@ -17,6 +17,7 @@ import {
   ensureDefaultHabitsSlice,
   HABITS_SEED_ROWS,
   removeHabitSlice,
+  setRequiredSlice,
   type HabitsPersistSlice,
   undoWeeklySlice,
 } from '@/features/habits/habitsPersistReducer';
@@ -69,6 +70,7 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
     todaySessionCount,
     createdAt: raw.createdAt,
     completionDates: [...raw.completionDates],
+    required: raw.required !== false,
   };
 }
 
@@ -85,6 +87,7 @@ type State = HabitsPersistSlice & {
   remove: (id: string) => void;
   checkIn: (id: string, dateKey?: string) => void;
   undoWeekly: (id: string, dateKey?: string) => void;
+  setRequired: (id: string, required: boolean) => void;
 };
 
 export const useHabitsStore = create<State>()(
@@ -109,6 +112,8 @@ export const useHabitsStore = create<State>()(
       checkIn: (id, dateKey) => set((s) => checkInSlice(s, id, dateKey)),
 
       undoWeekly: (id, dateKey) => set((s) => undoWeeklySlice(s, id, dateKey)),
+
+      setRequired: (id, required) => set((s) => setRequiredSlice(s, id, required)),
     }),
     {
       name: STORAGE_KEY,

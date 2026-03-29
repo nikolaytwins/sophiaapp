@@ -45,6 +45,11 @@ export const delegatingHabitsRepository: HabitsRepository = {
     return localHabitsRepository.remove(id);
   },
 
+  async setRequired(id, required) {
+    if (await useCloudHabits()) return supabaseRepo.setRequired(id, required);
+    return localHabitsRepository.setRequired(id, required);
+  },
+
   async exportAnalytics() {
     if (await useCloudHabits()) return supabaseRepo.exportAnalytics();
     return localHabitsRepository.exportAnalytics();

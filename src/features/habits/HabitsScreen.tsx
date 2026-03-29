@@ -41,7 +41,7 @@ import {
   type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
 import { useSupabaseConfigured } from '@/config/env';
-import { addDays, localDateKey, startOfWeekMondayKey } from '@/features/habits/habitLogic';
+import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { monthHabitQuota } from '@/features/habits/monthCompletionQuota';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
@@ -67,64 +67,11 @@ const HABITS_TAB_OPTIONS: { value: HabitsTab; label: string }[] = [
   { value: 'media', label: 'Медийка и работа' },
 ];
 
-const HERO_HABIT_IDS = {
-  steps: 'seed_steps_10k',
-  protein: 'seed_protein_140',
-  sleep: 'seed_sleep_0100',
-  noComps: 'seed_no_comps',
-  noAstro: 'seed_no_tarot_astro',
-  reels: 'seed_reels_daily',
-  agencySprint: 'seed_agency_sprint_5',
-} as const;
-
-function weekdayFromKey(dateKey: string): number {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  return new Date(y, m - 1, d).getDay(); // 0=Sun ... 6=Sat
-}
-
-function isAgencySprintDay(dateKey: string): boolean {
-  const wd = weekdayFromKey(dateKey);
-  return wd === 1 || wd === 2 || wd === 3 || wd === 4 || wd === 6; // пн-чт и сб
-}
-
-function heroScoreForDayView(habits: Habit[], dateKey: string): { done: number; total: number } {
-  const byId = new Map(habits.map((h) => [h.id, h]));
-  const noComps = byId.get(HERO_HABIT_IDS.noComps);
-
-  const doneDaily = (id: string) => Boolean(byId.get(id)?.completionDates?.includes(dateKey));
-
-  const noCompsDoneWithWeeklyAllowance = (): boolean => {
-    if (!noComps) return false;
-    if (noComps.completionDates?.includes(dateKey)) return true;
-    const ws = startOfWeekMondayKey(dateKey);
-    let misses = 0;
-    let d = ws;
-    while (d <= dateKey) {
-      if (!noComps.completionDates?.includes(d)) misses++;
-      if (misses > 1) return false;
-      d = addDays(d, 1);
-    }
-    return true;
-  };
-
-  const checks: { enabled?: () => boolean; done: () => boolean }[] = [
-    { done: () => doneDaily(HERO_HABIT_IDS.steps) },
-    { done: () => doneDaily(HERO_HABIT_IDS.protein) },
-    { done: () => doneDaily(HERO_HABIT_IDS.sleep) },
-    { done: () => doneDaily(HERO_HABIT_IDS.noAstro) },
-    { done: () => doneDaily(HERO_HABIT_IDS.reels) },
-    { done: noCompsDoneWithWeeklyAllowance },
-    { enabled: () => isAgencySprintDay(dateKey), done: () => doneDaily(HERO_HABIT_IDS.agencySprint) },
-  ];
-
-  let total = 0;
-  let done = 0;
-  for (const c of checks) {
-    if (c.enabled && !c.enabled()) continue;
-    total++;
-    if (c.done()) done++;
-  }
-  return { done, total };
+/** Счёт X/Y и hero: только привычки с «звёздочкой» (required !== false). */
+function ritualScoreForDayView(habits: Habit[]): { done: number; total: number } {
+  const list = habits.filter((h) => h.required !== false);
+  const done = list.filter((h) => h.todayDone).length;
+  return { done, total: list.length };
 }
 
 function streakLabel(h: Habit): string {
@@ -365,12 +312,14 @@ function HabitCard({
   onCheck,
   onUndo,
   onDelete,
+  onToggleRequired,
   todayKey,
 }: {
   habit: Habit;
   onCheck: (dateKey?: string) => void;
   onUndo: (dateKey?: string) => void;
   onDelete: () => void;
+  onToggleRequired?: () => void;
   todayKey: string;
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
@@ -643,6 +592,23 @@ function HabitCard({
                   <Text style={[typography.caption, { color: accent, fontWeight: '700' }]}>каждый день</Text>
                 </View>
               </View>
+              {onToggleRequired ? (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    onToggleRequired();
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={habit.required ? 'Не учитывать в ритме дня' : 'В ритме дня'}
+                >
+                  <Ionicons
+                    name={habit.required ? 'star' : 'star-outline'}
+                    size={22}
+                    color={habit.required ? accent : 'rgba(255,255,255,0.28)'}
+                  />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -880,6 +846,23 @@ function HabitCard({
                 </View>
               </View>
 
+              {onToggleRequired ? (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    onToggleRequired();
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={habit.required ? 'Не учитывать в ритме дня' : 'В ритме дня'}
+                >
+                  <Ionicons
+                    name={habit.required ? 'star' : 'star-outline'}
+                    size={22}
+                    color={habit.required ? accent : 'rgba(255,255,255,0.28)'}
+                  />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -1145,6 +1128,13 @@ export function HabitsScreen() {
     },
   });
 
+  const setRequiredMutation = useMutation({
+    mutationFn: ({ id, required }: { id: string; required: boolean }) => repos.habits.setRequired(id, required),
+    onSuccess: (list) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
+    },
+  });
+
   const data = habits.data ?? [];
   const coreDaily = data.filter((h) => h.cadence === 'daily' && h.section !== 'media');
   const coreWeekly = data.filter((h) => h.cadence === 'weekly' && h.section !== 'media');
@@ -1153,7 +1143,7 @@ export function HabitsScreen() {
   const [habitsTab, setHabitsTab] = useState<HabitsTab>('daily');
 
   const todayKey = localDateKey();
-  const heroScore = useMemo(() => heroScoreForDayView(data, todayKey), [data, todayKey]);
+  const ritualScore = useMemo(() => ritualScoreForDayView(data), [data]);
 
   const monthStats = useMemo(() => {
     const [y, m] = todayKey.split('-').map(Number);
@@ -1289,14 +1279,17 @@ export function HabitsScreen() {
                   stroke={10}
                   label={`${monthStats.percent}`}
                   sublabel="%"
+                  trackColor="rgba(255,255,255,0.09)"
+                  progressColor={ACCENT}
+                  sublabelColor="rgba(196,181,253,0.78)"
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={[typography.body, { color: colors.text, lineHeight: 22 }]}>
-                    Выполнено {monthStats.filled} из {monthStats.max} возможных отметок за месяц по всем
-                    привычкам.
+                    Выполнено {monthStats.filled} из {monthStats.max} отметок за месяц (только ежедневные
+                    привычки с звёздочкой «в ритме»).
                   </Text>
                   <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                    Ежедневные считаются по дням, еженедельные — по числу отметок в пределах месяца.
+                    На каждый день месяца — по одному слоту на каждую такую привычку.
                   </Text>
                 </View>
               </View>
@@ -1304,7 +1297,7 @@ export function HabitsScreen() {
           </SurfaceCard>
         ) : null}
 
-        <HabitHero totalHabits={heroScore.total} doneToday={heroScore.done} />
+        <HabitHero totalHabits={ritualScore.total} doneToday={ritualScore.done} />
 
         {data.length === 0 ? (
           <SurfaceCard
@@ -1488,6 +1481,9 @@ export function HabitsScreen() {
                     onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
                     onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
                       onDelete={() => removeHabit.mutate(h.id)}
+                      onToggleRequired={() =>
+                        setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                      }
                     />
                   ))
                 ) : (
@@ -1512,6 +1508,9 @@ export function HabitsScreen() {
                     onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
                     onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
                       onDelete={() => removeHabit.mutate(h.id)}
+                      onToggleRequired={() =>
+                        setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                      }
                     />
                   ))
                 ) : (
@@ -1597,6 +1596,9 @@ export function HabitsScreen() {
                     onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
                     onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
                         onDelete={() => removeHabit.mutate(h.id)}
+                        onToggleRequired={() =>
+                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
                       />
                     ))
                   ) : (

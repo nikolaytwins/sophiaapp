@@ -10,9 +10,24 @@ type Props = {
   stroke?: number;
   label?: string;
   sublabel?: string;
+  /** Фон кольца (по умолчанию из темы — на экранах «Ритм» задавайте нейтральный тёмный трек). */
+  trackColor?: string;
+  /** Дуга прогресса (по умолчанию accent темы). */
+  progressColor?: string;
+  /** Подпись под числом, напр. «%». */
+  sublabelColor?: string;
 };
 
-export function ProgressRing({ value01, size = 132, stroke = 10, label, sublabel }: Props) {
+export function ProgressRing({
+  value01,
+  size = 132,
+  stroke = 10,
+  label,
+  sublabel,
+  trackColor,
+  progressColor,
+  sublabelColor,
+}: Props) {
   const { colors, typography } = useAppTheme();
   const r = (size - stroke) / 2;
   const cx = size / 2;
@@ -36,20 +51,24 @@ export function ProgressRing({ value01, size = 132, stroke = 10, label, sublabel
         sub: {
           ...typography.caption,
           marginTop: 2,
+          color: sublabelColor ?? colors.textMuted,
         },
       }),
-    [colors, typography]
+    [colors, sublabelColor, typography]
   );
+
+  const track = trackColor ?? colors.borderStrong;
+  const arc = progressColor ?? colors.accent;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cy} r={r} stroke={colors.borderStrong} strokeWidth={stroke} fill="none" />
+        <Circle cx={cx} cy={cy} r={r} stroke={track} strokeWidth={stroke} fill="none" />
         <Circle
           cx={cx}
           cy={cy}
           r={r}
-          stroke={colors.accent}
+          stroke={arc}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}

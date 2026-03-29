@@ -66,6 +66,11 @@ export interface HabitPersisted {
   weeklyTarget?: number;
   /** Опционально: отдельная секция на экране привычек. */
   section?: HabitListSection;
+  /**
+   * Учитывать в «ритме дня» и в месячном счёте (ежедневные).
+   * `false` — не входит в X/Y и в max за месяц; по умолчанию (undefined) = да.
+   */
+  required?: boolean;
   createdAt: string;
   completionDates: string[];
 }
@@ -90,6 +95,8 @@ export interface Habit {
   createdAt: string;
   /** YYYY-MM-DD — для сетки месяца / истории недель (из persisted). */
   completionDates?: string[];
+  /** Входит в счётчик «ритма» (X/Y) и в месячный max для ежедневных. */
+  required: boolean;
 }
 
 export interface HealthSnapshot {
