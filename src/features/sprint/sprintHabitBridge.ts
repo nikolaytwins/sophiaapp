@@ -1,0 +1,39 @@
+import type { HabitPersisted } from '@/entities/models';
+import { useSprintStore } from '@/stores/sprint.store';
+
+function completionDeltaForCheckIn(prev: HabitPersisted, next: HabitPersisted, dateKey: string): number {
+  if (prev.cadence === 'daily') {
+    const was = prev.completionDates.includes(dateKey);
+    const now = next.completionDates.includes(dateKey);
+    if (!was && now) return 1;
+    if (was && !now) return -1;
+    return 0;
+  }
+  return next.completionDates.length - prev.completionDates.length;
+}
+
+function completionDeltaForUndoWeekly(prev: HabitPersisted, next: HabitPersisted): number {
+  return next.completionDates.length - prev.completionDates.length;
+}
+
+/**
+ * Вызывать после успешного checkIn в сторе привычек.
+ * Учитывает ежедневный toggle (−1) и еженедельные несколько отметок за раз.
+ */
+export function applySprintAfterHabitCheckIn(
+  habitId: string,
+  prev: HabitPersisted,
+  next: HabitPersisted,
+  dateKey: string
+): void {
+  const delta = completionDeltaForCheckIn(prev, next, dateKey);
+  if (delta === 0) return;
+  useSprintStore.getState().applyHabitContribution(habitId, delta);
+}
+
+/** После undo еженедельной отметки за сегодня. */
+export function applySprintAfterHabitUndoWeekly(habitId: string, prev: HabitPersisted, next: HabitPersisted): void {
+  const delta = completionDeltaForUndoWeekly(prev, next);
+  if (delta === 0) return;
+  useSprintStore.getState().applyHabitContribution(habitId, delta);
+}

@@ -1,5 +1,9 @@
 import { localDateKey } from '@/features/habits/habitLogic';
 import {
+  applySprintAfterHabitCheckIn,
+  applySprintAfterHabitUndoWeekly,
+} from '@/features/sprint/sprintHabitBridge';
+import {
   checkInSlice,
   createHabitSlice,
   ensureDefaultHabitsSlice,
@@ -109,14 +113,25 @@ export function createRemoteHabitsRepository(baseUrl: string, syncKey: string): 
 
     async checkIn(id: string, dateKey?: string) {
       let slice = await loadNormalized();
+      const dk = dateKey ?? localDateKey();
+      const prev = slice.habits.find((h) => h.id === id);
       slice = checkInSlice(slice, id, dateKey);
+      const next = slice.habits.find((h) => h.id === id);
+      if (prev && next) {
+        applySprintAfterHabitCheckIn(id, prev, next, dk);
+      }
       await putState(slice);
       return toList(slice);
     },
 
     async undoWeekly(id: string, dateKey?: string) {
       let slice = await loadNormalized();
+      const prev = slice.habits.find((h) => h.id === id);
       slice = undoWeeklySlice(slice, id, dateKey);
+      const next = slice.habits.find((h) => h.id === id);
+      if (prev && next) {
+        applySprintAfterHabitUndoWeekly(id, prev, next);
+      }
       await putState(slice);
       return toList(slice);
     },

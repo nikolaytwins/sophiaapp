@@ -1,4 +1,9 @@
 import type { Habit } from '@/entities/models';
+import { localDateKey } from '@/features/habits/habitLogic';
+import {
+  applySprintAfterHabitCheckIn,
+  applySprintAfterHabitUndoWeekly,
+} from '@/features/sprint/sprintHabitBridge';
 import { getHabitsPersistSlice, useHabitsStore } from '@/stores/habits.store';
 
 import type { HabitsAnalyticsExport, HabitsRepository } from './types';
@@ -35,13 +40,24 @@ export const localHabitsRepository: HabitsRepository = {
 
   async checkIn(id: string, dateKey?: string) {
     await ensureHabitsStoreHydrated();
+    const dk = dateKey ?? localDateKey();
+    const prev = useHabitsStore.getState().habits.find((h) => h.id === id);
     useHabitsStore.getState().checkIn(id, dateKey);
+    const next = useHabitsStore.getState().habits.find((h) => h.id === id);
+    if (prev && next) {
+      applySprintAfterHabitCheckIn(id, prev, next, dk);
+    }
     return delay(useHabitsStore.getState().listView());
   },
 
   async undoWeekly(id: string, dateKey?: string) {
     await ensureHabitsStoreHydrated();
+    const prev = useHabitsStore.getState().habits.find((h) => h.id === id);
     useHabitsStore.getState().undoWeekly(id, dateKey);
+    const next = useHabitsStore.getState().habits.find((h) => h.id === id);
+    if (prev && next) {
+      applySprintAfterHabitUndoWeekly(id, prev, next);
+    }
     return delay(useHabitsStore.getState().listView());
   },
 

@@ -11,16 +11,19 @@ import { useAppTheme } from '@/theme';
 
 const TAB_HREF: Record<string, Href> = {
   day: '/day',
+  sprint: '/sprint' as Href,
   habits: '/habits',
 };
 
 const LABELS: Record<string, string> = {
   day: 'День',
+  sprint: 'Спринт',
   habits: 'Привычки',
 };
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
+  sprint: 'flag-outline',
   /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
   habits: 'repeat-outline',
 };

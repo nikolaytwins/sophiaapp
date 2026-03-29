@@ -41,6 +41,9 @@ export default function RootLayout() {
       <AppProviders>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="sprint-archive" />
+          <Stack.Screen name="sprint-settings" />
+          <Stack.Screen name="sprint-detail/[id]" />
           <Stack.Screen name="(private)" />
           <Stack.Screen name="create-event" options={{ presentation: 'modal' }} />
           <Stack.Screen name="cloud" />
