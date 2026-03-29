@@ -42,7 +42,6 @@ import {
   ymToIndex,
   type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
-import { useSupabaseConfigured as supabaseConfigured } from '@/config/env';
 import { formatHabitsAnalyticsForGpt } from '@/features/habits/habitsExportFormat';
 import { addDays, localDateKey, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import { repos } from '@/services/repositories';
@@ -1175,23 +1174,21 @@ export function HabitsScreen() {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {supabaseConfigured ? (
-              <Link href={'/cloud' as Href} asChild>
-                <Pressable
-                  accessibilityLabel="Облако и вход"
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 12,
-                    paddingVertical: 12,
-                    borderRadius: 20,
-                    backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
-                    borderWidth: 1,
-                    borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
-                  })}
-                >
-                  <Ionicons name="cloud-outline" size={22} color={ACCENT} />
-                </Pressable>
-              </Link>
-            ) : null}
+            <Link href={'/cloud' as Href} asChild>
+              <Pressable
+                accessibilityLabel="Облако и вход"
+                style={({ pressed }) => ({
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  borderRadius: 20,
+                  backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
+                  borderWidth: 1,
+                  borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
+                })}
+              >
+                <Ionicons name="cloud-outline" size={22} color={ACCENT} />
+              </Pressable>
+            </Link>
             <Pressable
               accessibilityLabel="Выгрузить привычки для анализа"
               onPress={() => void onExportAnalytics()}
