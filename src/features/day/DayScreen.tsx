@@ -259,8 +259,8 @@ export function DayScreen() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: insets.top + spacing.xl,
-          paddingHorizontal: spacing.xl,
-          paddingBottom: insets.bottom + 120,
+          paddingHorizontal: spacing.xl + 8,
+          paddingBottom: insets.bottom + 148,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

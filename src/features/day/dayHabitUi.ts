@@ -24,3 +24,12 @@ export function habitCadenceLabel(h: Habit): string {
 
 /** Короткие подписи дней недели (пн–вс). */
 export const WEEKDAY_SHORT_RU = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'] as const;
+
+/** Пары под две колонки — в строке одинаковая высота через flex + stretch. */
+export function chunkPairs<T>(items: T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+  return rows;
+}
