@@ -215,28 +215,7 @@ export function DayHabitGrid({ habits, loading, emptyHint, viewDateKey, todayKey
   const rows = chunkPairs(habits);
 
   return (
-    <View style={{ marginTop: spacing.lg + 4 }}>
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: '700',
-          letterSpacing: 1.4,
-          color: 'rgba(255,255,255,0.38)',
-          marginBottom: 8,
-        }}
-      >
-        ПРИВЫЧКИ
-      </Text>
-      <Text
-        style={{
-          fontSize: 15,
-          color: 'rgba(255,255,255,0.48)',
-          marginBottom: spacing.lg + 4,
-          lineHeight: 22,
-        }}
-      >
-        Тап по карточке или по кругу — отметка за выбранный день (как на «Привычки»).
-      </Text>
+    <View style={{ marginTop: spacing.md }}>
       {loading ? (
         <View style={{ paddingVertical: 28, alignItems: 'center' }}>
           <ActivityIndicator color={ACCENT_PURPLE} />

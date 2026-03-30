@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Habit } from '@/entities/models';
 import { DayHabitGrid } from '@/features/day/DayHabitGrid';
 import { habitDoneOnDate } from '@/features/day/dayHabitUi';
+import { dayJournalEntryHasContent } from '@/features/day/dayJournal.logic';
 import {
   DAY_TYPE_OPTIONS,
   EVENING_ENERGY_OPTIONS,
@@ -46,26 +47,23 @@ import { useAppTheme } from '@/theme';
 
 const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
 
-function entryHasContent(e: DayJournalEntry | undefined): boolean {
-  if (!e) return false;
-  return Boolean(
-    e.morningState ||
-      e.eveningEnergy ||
-      e.dayType ||
-      (e.recoveryIds?.length ?? 0) > 0 ||
-      (e.note?.trim().length ?? 0) > 0
-  );
-}
-
-function formatDayHeading(dateKey: string, todayKey: string): string {
+/** Дата и день недели для шапки экрана «День». */
+function formatScreenDayPrimary(dateKey: string, todayKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
+  const withYear = dateKey.slice(0, 4) !== todayKey.slice(0, 4);
   return dt.toLocaleDateString('ru-RU', {
-    weekday: 'long',
     day: 'numeric',
     month: 'long',
-    ...(dateKey !== todayKey ? { year: 'numeric' as const } : {}),
+    ...(withYear ? { year: 'numeric' as const } : {}),
   });
+}
+
+function formatScreenWeekday(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const w = dt.toLocaleDateString('ru-RU', { weekday: 'long' });
+  return w.charAt(0).toUpperCase() + w.slice(1);
 }
 
 function shortDayLabel(dateKey: string): string {
@@ -120,7 +118,7 @@ function SurfaceCard({
 }
 
 export function DayScreen() {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const habits = useHabitsQuery();
@@ -148,7 +146,7 @@ export function DayScreen() {
 
   const historyDayKeys = useMemo(() => {
     return Object.keys(allJournalEntries)
-      .filter((k) => entryHasContent(allJournalEntries[k]))
+      .filter((k) => dayJournalEntryHasContent(allJournalEntries[k]))
       .sort()
       .reverse()
       .slice(0, 40);
@@ -265,76 +263,65 @@ export function DayScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: spacing.md }}>
-            <Text
-              style={[
-                typography.caption,
-                {
-                  color: 'rgba(255,255,255,0.42)',
-                  letterSpacing: 2.2,
-                  textTransform: 'uppercase',
-                  marginBottom: spacing.xs,
-                },
-              ]}
-            >
-              Ритм
-            </Text>
-            <Text style={[typography.hero, { fontSize: 34, letterSpacing: -1.1, color: colors.text }]}>День</Text>
-            <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, opacity: 0.9 }]}>
-              {formatDayHeading(viewDateKey, todayKey)}
-              {isViewingToday ? ' · сегодня' : ''}
-            </Text>
-          </View>
-        </View>
-
         <View
           style={{
-            marginTop: spacing.md,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: spacing.sm,
+            marginBottom: spacing.sm,
           }}
         >
           <Pressable
             onPress={goPrevDay}
-            hitSlop={10}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Предыдущий день"
-            style={{ padding: 6 }}
+            style={{ paddingVertical: 4, paddingHorizontal: 2 }}
           >
-            <Ionicons name="chevron-back" size={24} color="rgba(255,255,255,0.65)" />
+            <Ionicons name="chevron-back" size={22} color="rgba(255,255,255,0.7)" />
           </Pressable>
-          <Text
-            style={{
-              flex: 1,
-              textAlign: 'center',
-              fontSize: 15,
-              fontWeight: '600',
-              color: colors.text,
-            }}
-            numberOfLines={2}
-          >
-            {viewDateKey}
-          </Text>
+          <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs }}>
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: '800',
+                letterSpacing: -0.5,
+                color: colors.text,
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              {formatScreenDayPrimary(viewDateKey, todayKey)}
+            </Text>
+            <Text
+              style={{
+                marginTop: 2,
+                fontSize: 14,
+                fontWeight: '600',
+                color: 'rgba(255,255,255,0.5)',
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              {formatScreenWeekday(viewDateKey)}
+              {isViewingToday ? ' · сегодня' : ''}
+            </Text>
+          </View>
           <Pressable
             onPress={goNextDay}
             disabled={viewDateKey >= todayKey}
-            hitSlop={10}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Следующий день"
-            style={{ padding: 6, opacity: viewDateKey >= todayKey ? 0.25 : 1 }}
+            style={{ paddingVertical: 4, paddingHorizontal: 2, opacity: viewDateKey >= todayKey ? 0.28 : 1 }}
           >
-            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.65)" />
+            <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.7)" />
           </Pressable>
         </View>
 
         {historyDayKeys.length > 0 ? (
-          <View style={{ marginTop: spacing.md }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.38)', letterSpacing: 1.2, marginBottom: spacing.sm }}>
-              ДНИ С ЗАПИСЯМИ
-            </Text>
+          <View style={{ marginTop: spacing.sm }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
               {historyDayKeys.map((k) => {
                 const on = k === viewDateKey;
@@ -374,29 +361,8 @@ export function DayScreen() {
           onToggle={onHabitIcon}
         />
 
-        <View style={{ marginTop: spacing.xl }}>
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: '700',
-              letterSpacing: 1.4,
-              color: 'rgba(255,255,255,0.38)',
-              marginBottom: 6,
-            }}
-          >
-            ДНЕВНИК
-          </Text>
-          <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.48)', marginBottom: spacing.md, lineHeight: 22 }}>
-            Состояние, тип дня и заметка хранятся локально. Экспорт — внизу экрана.
-          </Text>
-        </View>
-
-        {/* Один блок: настроение + переключатель утро/вечер */}
-        <SurfaceCard style={{ marginTop: spacing.sm, paddingVertical: spacing.xl }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.4, color: colors.text }}>Состояние</Text>
-          </View>
-
+        {/* Утро / вечер + заметки */}
+        <SurfaceCard style={{ marginTop: spacing.lg, paddingVertical: spacing.xl }}>
           <View
             style={{
               flexDirection: 'row',
@@ -606,12 +572,6 @@ export function DayScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={{ marginTop: spacing.md }}>
-          <Text style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.3, color: colors.text, marginBottom: spacing.sm }}>
-            Заметка дня
-          </Text>
-          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: spacing.sm, lineHeight: 20 }}>
-            Короткая мысль или итог — без обязательной структуры.
-          </Text>
           <TextInput
             value={journal.note ?? ''}
             onChangeText={(t) => updateEntry(viewDateKey, { note: t })}
@@ -635,10 +595,6 @@ export function DayScreen() {
         </SurfaceCard>
 
         <View style={{ marginTop: spacing.lg }}>
-          <Text style={{ fontSize: 12, lineHeight: 18, color: 'rgba(255,255,255,0.42)', marginBottom: spacing.sm }}>
-            Дневник (утро, вечер, заметки) хранится только на этом устройстве в локальной памяти. В Supabase и
-            синхронизацию с облаком он не передаётся — только экспорт JSON.
-          </Text>
           <Pressable
             onPress={exportJournal}
             style={({ pressed }) => ({

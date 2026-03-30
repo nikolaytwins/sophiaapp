@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { normalizeDayJournalEntriesMap } from '@/features/day/dayJournal.logic';
 import type { DayJournalEntry, RecoveryId } from '@/features/day/dayJournal.types';
 
 const STORAGE_KEY = 'sophia-os-day-journal-v1';
@@ -20,6 +21,8 @@ type State = {
   getEntry: (dateKey: string) => DayJournalEntry;
   updateEntry: (dateKey: string, patch: Partial<Omit<DayJournalEntry, 'dateKey'>>) => void;
   toggleRecovery: (dateKey: string, id: RecoveryId) => void;
+  /** Полная замена (после pull из Supabase). */
+  replaceEntries: (entries: Record<string, DayJournalEntry>) => void;
 };
 
 export const useDayJournalStore = create<State>()(
@@ -67,12 +70,21 @@ export const useDayJournalStore = create<State>()(
           return { entries: { ...s.entries, [dateKey]: next } };
         });
       },
+
+      replaceEntries: (entries) => set({ entries: normalizeDayJournalEntriesMap(entries) }),
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ entries: s.entries }),
+      migrate: (persisted) => {
+        const p = persisted as { entries?: unknown } | undefined;
+        if (p && 'entries' in p) {
+          return { entries: normalizeDayJournalEntriesMap({ entries: p.entries }) };
+        }
+        return persisted;
+      },
     }
   )
 );
