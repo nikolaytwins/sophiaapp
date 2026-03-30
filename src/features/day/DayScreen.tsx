@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Habit } from '@/entities/models';
+import { DayHabitGrid } from '@/features/day/DayHabitGrid';
+import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import {
   DAY_TYPE_OPTIONS,
   EVENING_ENERGY_OPTIONS,
@@ -42,7 +44,6 @@ import {
 } from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
 
-const ACCENT = '#A855F7';
 const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
 
 function entryHasContent(e: DayJournalEntry | undefined): boolean {
@@ -171,20 +172,21 @@ export function DayScreen() {
 
   const onHabitIcon = useCallback(
     (h: Habit) => {
+      if (viewDateKey > todayKey) return;
       if (Platform.OS !== 'web') {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       if (h.cadence === 'daily') {
-        checkIn.mutate({ id: h.id, dateKey: todayKey });
+        checkIn.mutate({ id: h.id, dateKey: viewDateKey });
         return;
       }
-      if (h.todayDone) {
-        undoWeekly.mutate({ id: h.id, dateKey: todayKey });
+      if (habitDoneOnDate(h, viewDateKey)) {
+        undoWeekly.mutate({ id: h.id, dateKey: viewDateKey });
       } else {
-        checkIn.mutate({ id: h.id, dateKey: todayKey });
+        checkIn.mutate({ id: h.id, dateKey: viewDateKey });
       }
     },
-    [checkIn, todayKey, undoWeekly]
+    [checkIn, todayKey, undoWeekly, viewDateKey]
   );
 
   const goPrevDay = useCallback(() => {
@@ -363,8 +365,34 @@ export function DayScreen() {
           </View>
         ) : null}
 
+        <DayHabitGrid
+          habits={data}
+          loading={habits.isLoading}
+          emptyHint="Пока нет привычек — добавь на вкладке «Привычки»."
+          viewDateKey={viewDateKey}
+          todayKey={todayKey}
+          onToggle={onHabitIcon}
+        />
+
+        <View style={{ marginTop: spacing.xl }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '700',
+              letterSpacing: 1.4,
+              color: 'rgba(255,255,255,0.38)',
+              marginBottom: 6,
+            }}
+          >
+            ДНЕВНИК
+          </Text>
+          <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.48)', marginBottom: spacing.md, lineHeight: 22 }}>
+            Состояние, тип дня и заметка хранятся локально. Экспорт — внизу экрана.
+          </Text>
+        </View>
+
         {/* Один блок: настроение + переключатель утро/вечер */}
-        <SurfaceCard style={{ marginTop: spacing.md, paddingVertical: spacing.xl }}>
+        <SurfaceCard style={{ marginTop: spacing.sm, paddingVertical: spacing.xl }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
             <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.4, color: colors.text }}>Состояние</Text>
           </View>
@@ -577,8 +605,13 @@ export function DayScreen() {
           )}
         </SurfaceCard>
 
-        <View style={{ marginTop: spacing.md }}>
-          <Text style={{ fontSize: 20, fontWeight: '700', letterSpacing: -0.35, color: colors.text, marginBottom: spacing.sm }}>Заметка</Text>
+        <SurfaceCard style={{ marginTop: spacing.md }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.3, color: colors.text, marginBottom: spacing.sm }}>
+            Заметка дня
+          </Text>
+          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: spacing.sm, lineHeight: 20 }}>
+            Короткая мысль или итог — без обязательной структуры.
+          </Text>
           <TextInput
             value={journal.note ?? ''}
             onChangeText={(t) => updateEntry(viewDateKey, { note: t })}
@@ -588,88 +621,17 @@ export function DayScreen() {
             numberOfLines={3}
             textAlignVertical="top"
             style={{
-              minHeight: 96,
+              minHeight: 100,
               padding: 16,
-              borderRadius: radius.xl,
+              borderRadius: radius.lg,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.07)',
-              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: 'rgba(0,0,0,0.2)',
               color: colors.text,
               fontSize: 16,
               lineHeight: 24,
             }}
           />
-        </View>
-
-        <SurfaceCard glow style={{ marginTop: spacing.lg }}>
-          <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.38)', letterSpacing: 1.4, marginBottom: 4 }}>
-            БЫСТРЫЙ ЧЕКИН
-          </Text>
-          <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', marginBottom: spacing.md, lineHeight: 22 }}>
-            Касание — та же отметка, что на «Привычки».
-          </Text>
-          {habits.isLoading ? (
-            <Text style={{ color: colors.textMuted }}>Загрузка…</Text>
-          ) : data.length === 0 ? (
-            <Text style={{ color: colors.textMuted }}>Пока нет привычек.</Text>
-          ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              {data.map((h) => {
-                const on = h.todayDone;
-                return (
-                  <Pressable
-                    key={h.id}
-                    onPress={() => onHabitIcon(h)}
-                    style={({ pressed }) => ({
-                      width: '30%',
-                      minWidth: 96,
-                      flexGrow: 1,
-                      alignItems: 'center',
-                      paddingVertical: 14,
-                      paddingHorizontal: 8,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      borderColor: on ? 'rgba(168,85,247,0.35)' : 'rgba(255,255,255,0.07)',
-                      backgroundColor: on ? 'rgba(168,85,247,0.1)' : 'rgba(255,255,255,0.03)',
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: radius.lg,
-                        backgroundColor: on ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.05)',
-                        borderWidth: 1,
-                        borderColor: on ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.06)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons
-                        name={h.icon as keyof typeof Ionicons.glyphMap}
-                        size={26}
-                        color={on ? ACCENT : 'rgba(255,255,255,0.5)'}
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={2}
-                      style={{
-                        marginTop: 8,
-                        textAlign: 'center',
-                        fontSize: 13,
-                        fontWeight: '600',
-                        color: on ? colors.text : 'rgba(255,255,255,0.68)',
-                        lineHeight: 17,
-                      }}
-                    >
-                      {h.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
         </SurfaceCard>
 
         <View style={{ marginTop: spacing.lg }}>
