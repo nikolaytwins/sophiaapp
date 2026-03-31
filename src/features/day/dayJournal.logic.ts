@@ -84,7 +84,11 @@ export function normalizeJournalEntry(
 export function normalizeJournalDocument(raw: unknown): JournalDocument {
   const base = emptyJournalDocument();
   if (!raw || typeof raw !== 'object') return base;
-  const o = raw as Record<string, unknown>;
+  const root = raw as Record<string, unknown>;
+  const o =
+    root.doc && typeof root.doc === 'object' && !Array.isArray(root.doc)
+      ? (root.doc as Record<string, unknown>)
+      : root;
 
   const fieldsRaw = Array.isArray(o.fields) ? o.fields : [];
   const normalizedFields = fieldsRaw

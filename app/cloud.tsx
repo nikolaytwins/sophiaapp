@@ -253,13 +253,12 @@ export default function CloudScreen() {
               <Ionicons name="cloud-outline" size={24} color="#A855F7" />
             </View>
             <Text style={[typography.title2, { color: colors.text, flex: 1 }]}>
-              Синхронизация привычек
+              Облако и авторизация
             </Text>
           </View>
 
           <Text style={[typography.body, { color: colors.textMuted, marginBottom: spacing.lg, lineHeight: 22 }]}>
-            Один вход — одни и те же отметки на телефоне и в браузере. Данные хранятся в твоём проекте
-            Supabase.
+            Один вход - и дневник, здоровье, привычки и цели сохраняются в твоём проекте Supabase.
           </Text>
 
           {sessionEmail ? (
@@ -274,9 +273,10 @@ export default function CloudScreen() {
               }}
             >
               <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 6 }]}>
-                Вошёл как
+                Статус
               </Text>
-              <Text style={[typography.title1, { color: colors.text }]}>{sessionEmail}</Text>
+              <Text style={[typography.title1, { color: colors.text }]}>Ты в облаке</Text>
+              <Text style={{ marginTop: 6, color: '#E9D5FF', fontWeight: '700' }}>{sessionEmail}</Text>
               <Pressable
                 onPress={() => void onSignOut()}
                 disabled={busy}
@@ -293,6 +293,22 @@ export default function CloudScreen() {
             </View>
           ) : (
             <>
+              <View
+                style={{
+                  padding: spacing.lg,
+                  borderRadius: radius.lg,
+                  backgroundColor: 'rgba(239,68,68,0.08)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(239,68,68,0.22)',
+                  marginBottom: spacing.lg,
+                }}
+              >
+                <Text style={{ color: '#FECACA', fontWeight: '800', marginBottom: 6 }}>Ты сейчас не авторизован</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.72)', lineHeight: 20 }}>
+                  Пока не войдёшь, дневник и другие данные могут оставаться только на текущем устройстве.
+                </Text>
+              </View>
+
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: spacing.lg }}>
                 {(
                   [

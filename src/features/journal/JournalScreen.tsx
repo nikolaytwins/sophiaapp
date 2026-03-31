@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { type Href, useRouter } from 'expo-router';
-import React, { useMemo, useState, type ChangeEvent } from 'react';
+import React, { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Platform,
   Pressable,
@@ -27,6 +27,7 @@ import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasContent, getFieldsBySection } from '@/features/day/dayJournal.logic';
 import type { JournalFieldDefinition } from '@/features/day/dayJournal.types';
 import { findJournalHabit } from '@/features/journal/journalHabit';
+import { getSupabase } from '@/lib/supabase';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
 import { repos } from '@/services/repositories';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
@@ -208,6 +209,7 @@ export function JournalScreen() {
   const [viewDateKey, setViewDateKey] = useState(localDateKey());
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [saveHint, setSaveHint] = useState<string | null>(null);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
 
   const doc = useDayJournalStore((s) => s.doc);
   const setFieldValue = useDayJournalStore((s) => s.setFieldValue);
@@ -227,6 +229,23 @@ export function JournalScreen() {
     [doc.entries, doc.fields]
   );
   const journalHabit = useMemo(() => findJournalHabit(habitsQ.data ?? []), [habitsQ.data]);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) {
+      setSessionEmail(null);
+      return;
+    }
+    void sb.auth.getSession().then(({ data }) => {
+      setSessionEmail(data.session?.user?.email ?? null);
+    });
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      setSessionEmail(session?.user?.email ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const commitFieldValue = async (field: JournalFieldDefinition, value: string | number | boolean | null) => {
     const before = getEntry(viewDateKey);
@@ -259,10 +278,17 @@ export function JournalScreen() {
   };
 
   const saveJournal = async () => {
-    if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await pushDayJournalToCloud();
-    setSaveHint('Сохранено');
-    setTimeout(() => setSaveHint(null), 2600);
+    try {
+      await pushDayJournalToCloud();
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaveHint('Сохранено');
+    } catch (error) {
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message = error instanceof Error ? error.message : 'Ошибка сохранения';
+      setSaveHint(`Не сохранилось: ${message}`);
+    } finally {
+      setTimeout(() => setSaveHint(null), 3200);
+    }
   };
 
   return (
@@ -283,7 +309,7 @@ export function JournalScreen() {
           subtitle="Ежедневные записи и здоровье в облаке"
           trailing={
             <Pressable
-              onPress={() => router.push('/journal-settings' as Href)}
+              onPress={() => router.push('/cloud' as Href)}
               style={{
                 width: 42,
                 height: 42,
@@ -295,10 +321,80 @@ export function JournalScreen() {
                 backgroundColor: 'rgba(255,255,255,0.03)',
               }}
             >
-              <Ionicons name="settings-outline" size={20} color={colors.text} />
+              <Ionicons name={sessionEmail ? 'cloud-done-outline' : 'cloud-offline-outline'} size={20} color={sessionEmail ? brand.primarySoft : '#FCA5A5'} />
             </Pressable>
           }
         />
+
+        <AppSurfaceCard glow style={{ marginBottom: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: sessionEmail ? brand.primaryMuted : 'rgba(239,68,68,0.12)',
+                borderWidth: 1,
+                borderColor: sessionEmail ? brand.surfaceBorderStrong : 'rgba(239,68,68,0.3)',
+              }}
+            >
+              <Ionicons name={sessionEmail ? 'cloud-done-outline' : 'warning-outline'} size={20} color={sessionEmail ? brand.primarySoft : '#FCA5A5'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                {sessionEmail ? 'Облако подключено' : 'Ты не вошёл в облако'}
+              </Text>
+              <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 19, color: colors.textMuted }}>
+                {sessionEmail
+                  ? `Синхронизация идёт через ${sessionEmail}`
+                  : 'Чтобы дневник точно сохранялся в Supabase, открой Облако и войди в аккаунт.'}
+              </Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <Pressable
+              onPress={() => router.push('/cloud' as Href)}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: sessionEmail ? brand.surfaceBorder : brand.surfaceBorderStrong,
+                backgroundColor: pressed
+                  ? brand.primaryMuted
+                  : sessionEmail
+                    ? 'rgba(255,255,255,0.03)'
+                    : brand.primaryMuted,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              })}
+            >
+              <Ionicons name={sessionEmail ? 'person-circle-outline' : 'log-in-outline'} size={16} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {sessionEmail ? 'Открыть Облако' : 'Войти в Облако'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/journal-settings' as Href)}
+              style={({ pressed }) => ({
+                width: 50,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: brand.surfaceBorder,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? brand.primaryMuted : 'rgba(255,255,255,0.03)',
+              })}
+            >
+              <Ionicons name="settings-outline" size={18} color={colors.text} />
+            </Pressable>
+          </View>
+        </AppSurfaceCard>
 
         <View
           style={{

@@ -55,9 +55,13 @@ export async function pullDayJournalFromCloud(): Promise<void> {
 }
 
 export async function pushDayJournalToCloud(): Promise<void> {
-  if (!useSupabaseConfigured) return;
+  if (!useSupabaseConfigured) {
+    throw new Error('Supabase не настроен');
+  }
   const session = await requireSession();
-  if (!session) return;
+  if (!session) {
+    throw new Error('Нет активной сессии Supabase');
+  }
 
   const sb = getSupabase()!;
   const doc = normalizeJournalDocument(useDayJournalStore.getState().doc);
@@ -73,6 +77,7 @@ export async function pushDayJournalToCloud(): Promise<void> {
 
   if (error) {
     console.warn('[day journal sync] push:', error.message);
+    throw new Error(error.message);
   }
 }
 
@@ -81,7 +86,10 @@ function schedulePush(): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
-    void pushDayJournalToCloud();
+    void pushDayJournalToCloud().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[day journal sync] scheduled push failed:', message);
+    });
   }, DEBOUNCE_MS);
 }
 
