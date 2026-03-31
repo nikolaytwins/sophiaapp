@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { darkPalette, lightPalette } from './palettes';
-import { createShadows, createTypography, radius, spacing } from './tokens';
+import { createBrand, createShadows, createTypography, radius, spacing } from './tokens';
 import { useThemeStore } from '@/stores/theme.store';
 
 export function useAppTheme() {
@@ -13,11 +13,13 @@ export function useAppTheme() {
 
   const typography = useMemo(() => createTypography(colors), [colors]);
   const shadows = useMemo(() => createShadows(mode), [mode]);
+  const brand = useMemo(() => createBrand(mode), [mode]);
 
   return {
     mode,
     isLight: mode === 'light',
     colors,
+    brand,
     typography,
     shadows,
     radius,

@@ -2,99 +2,143 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { normalizeDayJournalEntriesMap } from '@/features/day/dayJournal.logic';
-import type { DayJournalEntry, RecoveryId } from '@/features/day/dayJournal.types';
+import {
+  buildHealthExport,
+  buildNarrativeExport,
+  emptyJournalDocument,
+  getFieldsBySection,
+  newJournalFieldId,
+  nextSortOrder,
+  normalizeJournalDocument,
+  normalizeJournalEntry,
+  type JournalHealthExportDoc,
+  type JournalNarrativeExportDoc,
+} from '@/features/day/dayJournal.logic';
+import type {
+  JournalDocument,
+  JournalEntry,
+  JournalFieldDefinition,
+  JournalFieldSection,
+  JournalFieldType,
+  JournalFieldValue,
+} from '@/features/day/dayJournal.types';
 
-const STORAGE_KEY = 'sophia-os-day-journal-v1';
+const STORAGE_KEY = 'sophia-os-day-journal-v3';
 
-function emptyEntry(dateKey: string): DayJournalEntry {
-  return {
-    dateKey,
-    recoveryIds: [],
-    note: '',
-    updatedAt: new Date().toISOString(),
-  };
+function touch(doc: JournalDocument): JournalDocument {
+  return { ...doc, updatedAt: new Date().toISOString() };
 }
 
 type State = {
-  entries: Record<string, DayJournalEntry>;
-  getEntry: (dateKey: string) => DayJournalEntry;
-  updateEntry: (dateKey: string, patch: Partial<Omit<DayJournalEntry, 'dateKey'>>) => void;
-  toggleRecovery: (dateKey: string, id: RecoveryId) => void;
-  /** Полная замена (после pull из Supabase). */
-  replaceEntries: (entries: Record<string, DayJournalEntry>) => void;
+  doc: JournalDocument;
+  getEntry: (dateKey: string) => JournalEntry;
+  setFieldValue: (dateKey: string, fieldId: string, value: JournalFieldValue) => void;
+  addField: (input: {
+    label: string;
+    prompt?: string;
+    type: JournalFieldType;
+    section: JournalFieldSection;
+  }) => { ok: true; id: string } | { ok: false; error: string };
+  removeField: (fieldId: string) => void;
+  replaceDocument: (doc: JournalDocument) => void;
 };
 
 export const useDayJournalStore = create<State>()(
   persist(
     (set, get) => ({
-      entries: {},
+      doc: emptyJournalDocument(),
 
       getEntry: (dateKey) => {
-        const e = get().entries[dateKey];
-        return e ?? emptyEntry(dateKey);
+        const { doc } = get();
+        return doc.entries[dateKey] ?? normalizeJournalEntry(dateKey, undefined, doc.fields);
       },
 
-      updateEntry: (dateKey, patch) => {
-        set((s) => {
-          const cur = s.entries[dateKey] ?? emptyEntry(dateKey);
-          const next: DayJournalEntry = {
-            ...cur,
-            ...patch,
-            dateKey,
-            recoveryIds: patch.recoveryIds ?? cur.recoveryIds,
-            updatedAt: new Date().toISOString(),
+      setFieldValue: (dateKey, fieldId, value) => {
+        set((state) => {
+          const doc = touch(state.doc);
+          const current = doc.entries[dateKey] ?? normalizeJournalEntry(dateKey, undefined, doc.fields);
+          return {
+            doc: {
+              ...doc,
+              entries: {
+                ...doc.entries,
+                [dateKey]: {
+                  ...current,
+                  values: { ...current.values, [fieldId]: value },
+                  updatedAt: new Date().toISOString(),
+                },
+              },
+            },
           };
-          return { entries: { ...s.entries, [dateKey]: next } };
         });
       },
 
-      toggleRecovery: (dateKey, id) => {
-        set((s) => {
-          const cur = s.entries[dateKey] ?? emptyEntry(dateKey);
-          const had = cur.recoveryIds.includes(id);
-          let recoveryIds: RecoveryId[];
-          if (had) {
-            recoveryIds = cur.recoveryIds.filter((x) => x !== id);
-          } else if (cur.recoveryIds.length < 2) {
-            recoveryIds = [...cur.recoveryIds, id];
-          } else {
-            recoveryIds = [...cur.recoveryIds.slice(1), id];
-          }
-          const next: DayJournalEntry = {
-            ...cur,
-            dateKey,
-            recoveryIds,
-            updatedAt: new Date().toISOString(),
+      addField: (input) => {
+        const label = input.label.trim();
+        if (!label) return { ok: false, error: 'Введите название поля.' };
+        const id = newJournalFieldId();
+        set((state) => {
+          const doc = touch(state.doc);
+          const field: JournalFieldDefinition = {
+            id,
+            label,
+            ...(input.prompt?.trim() ? { prompt: input.prompt.trim() } : {}),
+            type: input.type,
+            section: input.section,
+            sortOrder: nextSortOrder(doc.fields, input.section),
           };
-          return { entries: { ...s.entries, [dateKey]: next } };
+          const nextFields = [...doc.fields, field].sort((a, b) => a.sortOrder - b.sortOrder);
+          const nextEntries = Object.fromEntries(
+            Object.entries(doc.entries).map(([dateKey, entry]) => [
+              dateKey,
+              {
+                ...entry,
+                values: {
+                  ...entry.values,
+                  [field.id]: input.type === 'toggle' ? false : input.type === 'number' ? null : '',
+                },
+              },
+            ])
+          );
+          return { doc: { ...doc, fields: nextFields, entries: nextEntries } };
+        });
+        return { ok: true, id };
+      },
+
+      removeField: (fieldId) => {
+        set((state) => {
+          const doc = touch(state.doc);
+          const field = doc.fields.find((f) => f.id === fieldId);
+          if (!field || field.builtIn) return { doc };
+          const nextFields = doc.fields.filter((f) => f.id !== fieldId);
+          const nextEntries = Object.fromEntries(
+            Object.entries(doc.entries).map(([dateKey, entry]) => {
+              const values = { ...entry.values };
+              delete values[fieldId];
+              return [dateKey, { ...entry, values }];
+            })
+          );
+          return { doc: { ...doc, fields: nextFields, entries: nextEntries } };
         });
       },
 
-      replaceEntries: (entries) => set({ entries: normalizeDayJournalEntriesMap(entries) }),
+      replaceDocument: (doc) => set({ doc: normalizeJournalDocument(doc) }),
     }),
     {
       name: STORAGE_KEY,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ entries: s.entries }),
+      partialize: (s) => ({ doc: normalizeJournalDocument(s.doc) }),
       migrate: (persisted) => {
-        const p = persisted as { entries?: unknown } | undefined;
-        if (p && 'entries' in p) {
-          return { entries: normalizeDayJournalEntriesMap({ entries: p.entries }) };
-        }
-        return persisted;
+        const p = persisted as { doc?: unknown; entries?: unknown } | undefined;
+        if (p?.doc) return { doc: normalizeJournalDocument(p.doc) };
+        if (p && 'entries' in p) return { doc: normalizeJournalDocument({ entries: p.entries }) };
+        return { doc: emptyJournalDocument() };
       },
     }
   )
 );
 
-export function getAllDayJournalEntriesSorted(): DayJournalEntry[] {
-  const { entries } = useDayJournalStore.getState();
-  return Object.values(entries).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-}
-
-/** До гидрации из AsyncStorage `entries` может быть пустым — экспорт ждёт это. */
 export function ensureDayJournalHydrated(): Promise<void> {
   if (useDayJournalStore.persist.hasHydrated()) {
     return Promise.resolve();
@@ -107,16 +151,19 @@ export function ensureDayJournalHydrated(): Promise<void> {
   });
 }
 
-export type DayJournalExportDoc = {
-  schema: 'sophia.dayJournal.v1';
-  exportedAt: string;
-  entries: DayJournalEntry[];
-};
+export function getDayJournalDocument(): JournalDocument {
+  return normalizeJournalDocument(useDayJournalStore.getState().doc);
+}
 
-export function buildDayJournalExportDoc(): DayJournalExportDoc {
-  return {
-    schema: 'sophia.dayJournal.v1',
-    exportedAt: new Date().toISOString(),
-    entries: getAllDayJournalEntriesSorted(),
-  };
+export function getDayJournalFields(section?: JournalFieldSection): JournalFieldDefinition[] {
+  const doc = getDayJournalDocument();
+  return section ? getFieldsBySection(doc.fields, section) : doc.fields;
+}
+
+export function buildDayJournalNarrativeExportDoc(): JournalNarrativeExportDoc {
+  return buildNarrativeExport(getDayJournalDocument());
+}
+
+export function buildDayJournalHealthExportDoc(): JournalHealthExportDoc {
+  return buildHealthExport(getDayJournalDocument());
 }

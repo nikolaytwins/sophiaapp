@@ -49,6 +49,8 @@ import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { ProgressRing } from '@/shared/ui/ProgressRing';
+import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
+import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -57,8 +59,6 @@ const ACCENT_MUTED = 'rgba(168,85,247,0.45)';
 const ACCENT_FILL = 'rgba(168,85,247,0.10)';
 const WEEKLY = '#C4B5FD';
 const WEEKLY_FILL = 'rgba(196,181,253,0.10)';
-const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
-
 type HabitsTab = 'daily' | 'weekly' | 'media';
 
 const HABITS_TAB_OPTIONS: { value: HabitsTab; label: string }[] = [
@@ -84,37 +84,6 @@ function streakLabel(h: Habit): string {
 function headlineDate(): string {
   const d = new Date();
   return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-function SurfaceCard({
-  children,
-  glow,
-  style,
-  padding = true,
-}: {
-  children: React.ReactNode;
-  glow?: boolean;
-  style?: StyleProp<ViewStyle>;
-  padding?: boolean;
-}) {
-  const { radius, spacing } = useAppTheme();
-  const base = {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: glow ? 'rgba(168,85,247,0.22)' : 'rgba(255,255,255,0.07)',
-    backgroundColor: 'rgba(18,18,22,0.92)',
-    padding: padding ? spacing.lg : 0,
-    ...(Platform.OS === 'web'
-      ? {}
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 14 },
-          shadowOpacity: glow ? 0.5 : 0.38,
-          shadowRadius: glow ? 28 : 22,
-          elevation: glow ? 10 : 7,
-        }),
-  };
-  return <View style={[base, style]}>{children}</View>;
 }
 
 function CheckInControl({
@@ -1177,8 +1146,7 @@ export function HabitsScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#030304' }}>
-      <LinearGradient pointerEvents="none" colors={[...CANVAS_GRAD]} style={StyleSheet.absoluteFillObject} />
+    <ScreenCanvas>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -1617,6 +1585,6 @@ export function HabitsScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenCanvas>
   );
 }

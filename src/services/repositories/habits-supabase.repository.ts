@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { localDateKey } from '@/features/habits/habitLogic';
+import { ensureJournalHabitForAccount } from '@/features/journal/journalHabit';
 import {
   applySprintAfterHabitCheckIn,
   applySprintAfterHabitUndoWeekly,
@@ -9,6 +10,7 @@ import {
   checkInSlice,
   createHabitSlice,
   ensureDefaultHabitsSlice,
+  normalizeHabitsSlice,
   removeHabitSlice,
   setRequiredSlice,
   totalCompletionCount,
@@ -26,47 +28,50 @@ function normalizePayload(data: unknown): HabitsPersistSlice {
   }
   const o = data as Record<string, unknown>;
   return {
-    habits: Array.isArray(o.habits) ? (o.habits as HabitsPersistSlice['habits']) : [],
-    defaultsSeeded: Boolean(o.defaultsSeeded),
-    heroHistory:
-      o.heroHistory && typeof o.heroHistory === 'object' && !Array.isArray(o.heroHistory)
-        ? (o.heroHistory as HabitsPersistSlice['heroHistory'])
-        : {},
+    ...normalizeHabitsSlice({
+      habits: Array.isArray(o.habits) ? (o.habits as HabitsPersistSlice['habits']) : [],
+      defaultsSeeded: Boolean(o.defaultsSeeded),
+      heroHistory:
+        o.heroHistory && typeof o.heroHistory === 'object' && !Array.isArray(o.heroHistory)
+          ? (o.heroHistory as HabitsPersistSlice['heroHistory'])
+          : {},
+    }),
   };
 }
 
 export function createSupabaseHabitsRepository(getClient: () => SupabaseClient): HabitsRepository {
-  async function requireUserId(): Promise<string> {
+  async function requireUser(): Promise<{ id: string; email: string | null }> {
     const supabase = getClient();
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) {
       throw new Error('Нет входа в облако. Открой экран «Облако» и войди по email.');
     }
-    return user.id;
+    return { id: user.id, email: user.email ?? null };
   }
 
   async function getState(): Promise<HabitsPersistSlice> {
     const supabase = getClient();
-    const userId = await requireUserId();
+    const user = await requireUser();
     const { data, error } = await supabase
       .from('habit_sync_state')
       .select('payload')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     if (error) {
       throw new Error(`Supabase: ${error.message}`);
     }
-    return normalizePayload(data?.payload);
+    return ensureJournalHabitForAccount(normalizePayload(data?.payload), user.email);
   }
 
   async function putState(slice: HabitsPersistSlice): Promise<void> {
     const supabase = getClient();
-    const userId = await requireUserId();
+    const user = await requireUser();
+    const nextSlice = ensureJournalHabitForAccount(slice, user.email);
     const { error } = await supabase.from('habit_sync_state').upsert(
       {
-        user_id: userId,
-        payload: slice,
+        user_id: user.id,
+        payload: nextSlice,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
@@ -86,6 +91,16 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     return getState();
   }
 
+  async function ensureSpecialHabitsOnServer(slice: HabitsPersistSlice): Promise<HabitsPersistSlice> {
+    const supabase = getClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const next = ensureJournalHabitForAccount(slice, user?.email ?? null);
+    if (next.habits.length !== slice.habits.length) {
+      await putState(next);
+    }
+    return next;
+  }
+
   async function ensureSeedsOnServer(slice: HabitsPersistSlice): Promise<HabitsPersistSlice> {
     const next = ensureDefaultHabitsSlice(slice);
     if (next.habits.length !== slice.habits.length || next.defaultsSeeded !== slice.defaultsSeeded) {
@@ -97,6 +112,7 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
   async function loadNormalized(): Promise<HabitsPersistSlice> {
     let remote = await getState();
     remote = await maybeMigrateFromLocal(remote);
+    remote = await ensureSpecialHabitsOnServer(remote);
     remote = await ensureSeedsOnServer(remote);
     return remote;
   }

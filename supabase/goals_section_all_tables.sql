@@ -94,10 +94,11 @@ create policy "global_vision_update_own"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- --- Дневник дня (экран «День»)
+-- --- Дневник и здоровье (отдельная вкладка «Дневник»)
 create table if not exists public.day_journal_sync_state (
   user_id uuid primary key references auth.users (id) on delete cascade,
-  payload jsonb not null default '{"entries":{}}'::jsonb,
+  payload jsonb not null default '{"doc":{"fields":[],"entries":{},"updatedAt":""}}'::jsonb,
+  -- Для уже существующей таблицы app сам нормализует старый payload; новый default нужен только для свежих инсталляций.
   updated_at timestamptz not null default now()
 );
 

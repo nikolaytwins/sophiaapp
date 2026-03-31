@@ -1,54 +1,104 @@
-/** Стабильные id для экспорта и аналитики по дням. */
+export type JournalFieldType = 'text' | 'number' | 'toggle';
+export type JournalFieldSection = 'journal' | 'health';
 
-export type MorningStateId = 'charged' | 'ok' | 'flat' | 'dead';
+export type JournalFieldDefinition = {
+  id: string;
+  label: string;
+  prompt?: string;
+  type: JournalFieldType;
+  section: JournalFieldSection;
+  sortOrder: number;
+  builtIn?: boolean;
+};
 
-export type EveningEnergyId = 'charged' | 'calm' | 'tension' | 'overload' | 'edge';
+export type JournalFieldValue = string | number | boolean | null;
 
-export type DayTypeId = 'super_productive' | 'focus' | 'chaos' | 'stuck' | 'dropped' | 'rest';
-
-export type RecoveryId = 'walk' | 'nothing' | 'screen' | 'workout' | 'people' | 'scroll' | 'sleep';
-
-export type DayJournalEntry = {
+export type JournalEntry = {
   dateKey: string;
-  morningState?: MorningStateId;
-  eveningEnergy?: EveningEnergyId;
-  dayType?: DayTypeId;
-  /** Не больше двух значений. */
-  recoveryIds: RecoveryId[];
-  note: string;
+  values: Record<string, JournalFieldValue>;
   updatedAt: string;
 };
 
-export const MORNING_STATE_OPTIONS: { id: MorningStateId; label: string }[] = [
-  { id: 'charged', label: '🔥 заряжен' },
-  { id: 'ok', label: '🙂 норм' },
-  { id: 'flat', label: '😐 вялый' },
-  { id: 'dead', label: '💀 убит' },
-];
+export type JournalDocument = {
+  fields: JournalFieldDefinition[];
+  entries: Record<string, JournalEntry>;
+  updatedAt: string;
+};
 
-export const EVENING_ENERGY_OPTIONS: { id: EveningEnergyId; label: string }[] = [
-  { id: 'charged', label: '🔥 заряжен' },
-  { id: 'calm', label: '🧘 спокойно' },
-  { id: 'tension', label: '⚠️ напряжение' },
-  { id: 'overload', label: '💀 перегруз' },
-  { id: 'edge', label: '🚨 на грани' },
-];
-
-export const DAY_TYPE_OPTIONS: { id: DayTypeId; label: string }[] = [
-  { id: 'super_productive', label: '🚀 Суперпродуктив (много задач)' },
-  { id: 'focus', label: '🎯 Фокус (1–2 ключевые задачи)' },
-  { id: 'chaos', label: '🌀 Суета (работа без результата)' },
-  { id: 'stuck', label: '🧱 Застрял (пытался, но не пошло)' },
-  { id: 'dropped', label: '💤 Выпал (почти не работал)' },
-  { id: 'rest', label: '🌿 Отдых (осознанный выходной)' },
-];
-
-export const RECOVERY_OPTIONS: { id: RecoveryId; label: string }[] = [
-  { id: 'walk', label: '🚶 прогулка' },
-  { id: 'nothing', label: '🧠 ничего не делал' },
-  { id: 'screen', label: '🎬 кино / сериал' },
-  { id: 'workout', label: '🏋️ тренировка' },
-  { id: 'people', label: '👥 люди' },
-  { id: 'scroll', label: '📱 залип' },
-  { id: 'sleep', label: '😴 сон' },
+export const DEFAULT_JOURNAL_FIELDS: JournalFieldDefinition[] = [
+  {
+    id: 'emotion_of_day',
+    label: 'Эмоции дня',
+    prompt: 'Что чувствовал сегодня?',
+    type: 'text',
+    section: 'journal',
+    sortOrder: 0,
+    builtIn: true,
+  },
+  {
+    id: 'what_i_did',
+    label: 'Что делал сегодня?',
+    prompt: 'Что реально было через хочу, а что через надо',
+    type: 'text',
+    section: 'journal',
+    sortOrder: 1,
+    builtIn: true,
+  },
+  {
+    id: 'proud_of_today',
+    label: 'Чем горжусь сегодня, что получилось?',
+    type: 'text',
+    section: 'journal',
+    sortOrder: 2,
+    builtIn: true,
+  },
+  {
+    id: 'body_and_resource',
+    label: 'Тело и ресурс',
+    prompt: 'Во сколько лег/встал, как себя чувствовал, какое настроение?',
+    type: 'text',
+    section: 'journal',
+    sortOrder: 3,
+    builtIn: true,
+  },
+  {
+    id: 'health_steps',
+    label: 'Сколько шагов прошел',
+    type: 'number',
+    section: 'health',
+    sortOrder: 100,
+    builtIn: true,
+  },
+  {
+    id: 'health_calories',
+    label: 'Калории',
+    type: 'number',
+    section: 'health',
+    sortOrder: 101,
+    builtIn: true,
+  },
+  {
+    id: 'health_protein',
+    label: 'Белок',
+    type: 'number',
+    section: 'health',
+    sortOrder: 102,
+    builtIn: true,
+  },
+  {
+    id: 'health_fat',
+    label: 'Жиры',
+    type: 'number',
+    section: 'health',
+    sortOrder: 103,
+    builtIn: true,
+  },
+  {
+    id: 'health_carbs',
+    label: 'Углеводы',
+    type: 'number',
+    section: 'health',
+    sortOrder: 104,
+    builtIn: true,
+  },
 ];

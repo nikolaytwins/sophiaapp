@@ -1,7 +1,4 @@
-import {
-  isDayJournalEmpty,
-  normalizeDayJournalEntriesMap,
-} from '@/features/day/dayJournal.logic';
+import { isJournalDocumentEmpty, normalizeJournalDocument } from '@/features/day/dayJournal.logic';
 import { useSupabaseConfigured } from '@/config/env';
 import { getSupabase } from '@/lib/supabase';
 import { ensureDayJournalHydrated, useDayJournalStore } from '@/stores/dayJournal.store';
@@ -10,7 +7,6 @@ const DEBOUNCE_MS = 900;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let syncingFromCloud = false;
-
 
 async function requireSession() {
   const sb = getSupabase();
@@ -40,18 +36,18 @@ export async function pullDayJournalFromCloud(): Promise<void> {
     return;
   }
 
-  const remote = normalizeDayJournalEntriesMap(data?.payload ?? data);
+  const remote = normalizeJournalDocument(data?.payload ?? data);
   await ensureDayJournalHydrated();
-  const local = useDayJournalStore.getState().entries;
+  const local = normalizeJournalDocument(useDayJournalStore.getState().doc);
 
   syncingFromCloud = true;
   try {
-    if (isDayJournalEmpty(remote) && !isDayJournalEmpty(local)) {
+    if (isJournalDocumentEmpty(remote) && !isJournalDocumentEmpty(local)) {
       await pushDayJournalToCloud();
       return;
     }
-    if (!isDayJournalEmpty(remote)) {
-      useDayJournalStore.getState().replaceEntries(remote);
+    if (!isJournalDocumentEmpty(remote)) {
+      useDayJournalStore.getState().replaceDocument(remote);
     }
   } finally {
     syncingFromCloud = false;
@@ -64,12 +60,12 @@ export async function pushDayJournalToCloud(): Promise<void> {
   if (!session) return;
 
   const sb = getSupabase()!;
-  const entries = normalizeDayJournalEntriesMap(useDayJournalStore.getState().entries);
+  const doc = normalizeJournalDocument(useDayJournalStore.getState().doc);
 
   const { error } = await sb.from('day_journal_sync_state').upsert(
     {
       user_id: session.user.id,
-      payload: { entries },
+      payload: { doc },
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' }
@@ -89,7 +85,6 @@ function schedulePush(): void {
   }, DEBOUNCE_MS);
 }
 
-/** Дневник дня: pull после входа, debounced push при изменении записей. */
 export function startDayJournalSupabaseSync(): () => void {
   if (!useSupabaseConfigured) {
     return () => {};
@@ -110,7 +105,7 @@ export function startDayJournalSupabaseSync(): () => void {
     if (cancelled) return;
 
     storeUnsub = useDayJournalStore.subscribe((state, prev) => {
-      if (state.entries === prev.entries) return;
+      if (state.doc === prev.doc) return;
       if (syncingFromCloud) return;
       schedulePush();
     });

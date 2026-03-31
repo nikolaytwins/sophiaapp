@@ -13,10 +13,37 @@ export type HabitsPersistSlice = {
   heroHistory: Record<string, { done: number; total: number }>;
 };
 
+const REMOVED_HABIT_IDS = new Set(['seed_no_comps']);
+const WALK_WITHOUT_GOAL_ID = 'seed_walk_without_goal';
+
 export const HABITS_SEED_ROWS: HabitPersisted[] = DEFAULT_HABIT_SEEDS.map((h) => ({
   ...h,
   createdAt: new Date().toISOString(),
 }));
+
+function normalizeHabitRow(row: HabitPersisted): HabitPersisted {
+  if (row.id === 'seed_no_tarot_astro') {
+    return { ...row, name: 'Без планирования' };
+  }
+  return row;
+}
+
+export function normalizeHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice {
+  const baseHabits = s.habits
+    .filter((h) => !REMOVED_HABIT_IDS.has(h.id))
+    .map(normalizeHabitRow);
+
+  const hasWalkHabit = baseHabits.some((h) => h.id === WALK_WITHOUT_GOAL_ID);
+  const nextHabits = hasWalkHabit
+    ? baseHabits
+    : [...baseHabits, { ...HABITS_SEED_ROWS.find((h) => h.id === WALK_WITHOUT_GOAL_ID)!, createdAt: new Date().toISOString() }];
+
+  return {
+    habits: nextHabits,
+    defaultsSeeded: s.defaultsSeeded,
+    heroHistory: s.heroHistory,
+  };
+}
 
 function isRitualHabit(h: HabitPersisted): boolean {
   return h.required !== false;
@@ -53,12 +80,13 @@ export type CreateHabitPersistInput = {
 };
 
 export function ensureDefaultHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice {
-  if (s.defaultsSeeded) return s;
-  if (s.habits.length > 0) return { ...s, defaultsSeeded: true };
+  const normalized = normalizeHabitsSlice(s);
+  if (normalized.defaultsSeeded) return normalized;
+  if (normalized.habits.length > 0) return { ...normalized, defaultsSeeded: true };
   return {
     habits: HABITS_SEED_ROWS.map((h) => ({ ...h, createdAt: new Date().toISOString() })),
     defaultsSeeded: true,
-    heroHistory: s.heroHistory,
+    heroHistory: normalized.heroHistory,
   };
 }
 

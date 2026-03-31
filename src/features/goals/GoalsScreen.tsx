@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnnualGoalsScreen } from '@/features/goals/AnnualGoalsScreen';
 import { GlobalVisionScreen } from '@/features/goals/GlobalVisionScreen';
-import { GOALS_ACCENT, GOALS_BG } from '@/features/goals/goalsNotionTheme';
+import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
+import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
+import { ScreenTitle } from '@/shared/ui/ScreenTitle';
 import { useAppTheme } from '@/theme';
 
 const CARD_R = 18;
@@ -31,12 +33,7 @@ export function GoalsScreen() {
   const [mainTab, setMainTab] = useState<GoalsMainTabId>('annual');
 
   return (
-    <View style={{ flex: 1, backgroundColor: GOALS_BG }}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={['#0F0F0F', '#12121A', '#0F0F0F']}
-        style={StyleSheet.absoluteFillObject}
-      />
+    <ScreenCanvas>
       <View
         style={{
           paddingTop: insets.top + spacing.xl,
@@ -44,23 +41,7 @@ export function GoalsScreen() {
           paddingBottom: spacing.md,
         }}
       >
-        <Text
-          style={[
-            typography.caption,
-            {
-              color: 'rgba(255,255,255,0.38)',
-              letterSpacing: 2.4,
-              textTransform: 'uppercase',
-              marginBottom: spacing.xs,
-            },
-          ]}
-        >
-          Раздел
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: 36, fontWeight: '800', letterSpacing: -1.2, color: colors.text }}>Цели</Text>
-          <Text style={{ fontSize: 22 }}>✨</Text>
-        </View>
+        <ScreenTitle eyebrow="Раздел" title="Цели" trailing={<Text style={{ fontSize: 22 }}>✨</Text>} />
       </View>
 
       <View style={{ flex: 1 }}>
@@ -155,6 +136,6 @@ export function GoalsScreen() {
 
         {mainTab === 'annual' ? <AnnualGoalsScreen /> : <GlobalVisionScreen />}
       </View>
-    </View>
+    </ScreenCanvas>
   );
 }

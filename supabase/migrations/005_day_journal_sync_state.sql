@@ -1,9 +1,10 @@
--- Sophia OS: дневник дня (JSON entries по датам), синхронизация после входа.
+-- Sophia OS: дневник и здоровье (настраиваемые поля + записи по датам), синхронизация после входа.
 -- Выполни в Supabase → SQL Editor после 004_global_vision_sync_state.sql
 
 create table if not exists public.day_journal_sync_state (
   user_id uuid primary key references auth.users (id) on delete cascade,
-  payload jsonb not null default '{"entries":{}}'::jsonb,
+  payload jsonb not null default '{"doc":{"fields":[],"entries":{},"updatedAt":""}}'::jsonb,
+  -- Если таблица уже создана со старым default, приложение всё равно корректно нормализует payload.
   updated_at timestamptz not null default now()
 );
 

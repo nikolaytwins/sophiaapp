@@ -16,6 +16,7 @@ import {
   createHabitSlice,
   ensureDefaultHabitsSlice,
   HABITS_SEED_ROWS,
+  normalizeHabitsSlice,
   removeHabitSlice,
   setRequiredSlice,
   type HabitsPersistSlice,
@@ -117,9 +118,20 @@ export const useHabitsStore = create<State>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ habits: s.habits, defaultsSeeded: s.defaultsSeeded, heroHistory: s.heroHistory }),
+      partialize: (s) => normalizeHabitsSlice({ habits: s.habits, defaultsSeeded: s.defaultsSeeded, heroHistory: s.heroHistory }),
+      migrate: (persisted) => {
+        const p = persisted as HabitsPersistSlice | undefined;
+        if (!p) {
+          return { habits: HABITS_SEED_ROWS, defaultsSeeded: true, heroHistory: {} };
+        }
+        return normalizeHabitsSlice({
+          habits: Array.isArray(p.habits) ? p.habits : [],
+          defaultsSeeded: Boolean(p.defaultsSeeded),
+          heroHistory: p.heroHistory ?? {},
+        });
+      },
     }
   )
 );
@@ -131,5 +143,5 @@ export function habitRowToView(raw: HabitPersisted, todayKey?: string): Habit {
 /** Срез для синка / экспорта (после гидратации). */
 export function getHabitsPersistSlice(): HabitsPersistSlice {
   const { habits, defaultsSeeded, heroHistory } = useHabitsStore.getState();
-  return { habits, defaultsSeeded, heroHistory };
+  return normalizeHabitsSlice({ habits, defaultsSeeded, heroHistory });
 }

@@ -44,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="sprint-archive" />
           <Stack.Screen name="sprint-settings" />
           <Stack.Screen name="sprint-detail/[id]" />
+          <Stack.Screen name="journal-settings" />
           <Stack.Screen name="(private)" />
           <Stack.Screen name="create-event" options={{ presentation: 'modal' }} />
           <Stack.Screen name="cloud" />
