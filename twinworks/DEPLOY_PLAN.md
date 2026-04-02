@@ -69,3 +69,12 @@ sudo journalctl -u twinworks.service -f
 # Перезапуск после изменений кода (после build)
 sudo systemctl restart twinworks.service
 ```
+
+## 7. Если главный сайт (Twinworks) отдаёт 502 или HTTP 505
+
+Часто **502** ошибочно воспринимают как «505». Обычные причины:
+
+1. **Next.js слушал не тот адрес** — nginx ходит на `127.0.0.1:3001`, а процесс был только на IPv6. В проекте `npm run start` = `next start --hostname 127.0.0.1`; после обновления кода сделай `npm run build` и `sudo systemctl restart twinworks`.
+2. **Сервис не запущен или падает** — `sudo systemctl status twinworks` и `journalctl -u twinworks -n 80 --no-pager`.
+3. **БД без миграций** — `cd` в корень twinworks, `npx prisma migrate deploy`, снова `npm run build` и перезапуск сервиса.
+4. **Nginx** — обнови фрагмент из `deploy/nginx-twinworks.conf` (в т.ч. `proxy_http_version 1.1` для `location = /api/auth/check`), затем `sudo nginx -t && sudo systemctl reload nginx`.

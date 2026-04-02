@@ -8,7 +8,7 @@
     "prisma:generate": "prisma generate",
     "prebuild": "npm run prisma:generate && node scripts/check-prisma-client.cjs",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
     "db:generate": "prisma generate",
