@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type Href, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +31,9 @@ import {
   type SprintSphere,
 } from '@/features/sprint/sprint.types';
 import { localDateKey } from '@/features/habits/habitLogic';
+import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { repos } from '@/services/repositories';
 import { useSprintStore } from '@/stores/sprint.store';
 import { useAppTheme } from '@/theme';
 
@@ -57,6 +60,20 @@ function parseGoalNumber(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
   if (!Number.isFinite(n)) return 0;
   return Math.floor(n);
+}
+
+function confirmRemoveHabit(h: { id: string; name: string }, onRemove: (id: string) => void) {
+  if (Platform.OS !== 'web') {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }
+  Alert.alert(
+    'Удалить привычку?',
+    `«${h.name}» исчезнет везде (День, Привычки). Связи целей этого спринта сбросятся.`,
+    [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Удалить', style: 'destructive', onPress: () => onRemove(h.id) },
+    ]
+  );
 }
 
 function SurfaceCard({ children, style, glow }: { children: ReactNode; style?: object; glow?: boolean }) {
@@ -91,6 +108,7 @@ export function SprintScreen() {
   const { colors, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const qc = useQueryClient();
   const todayKey = localDateKey();
 
   const sprints = useSprintStore((s) => s.sprints);
@@ -123,6 +141,15 @@ export function SprintScreen() {
   const [progressDraftTarget, setProgressDraftTarget] = useState('');
 
   const habitsQ = useHabitsQuery();
+
+  const removeHabitMutation = useMutation({
+    mutationFn: (id: string) => repos.habits.remove(id),
+    onSuccess: (list, id) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
+      useSprintStore.getState().removeHabitFromAllGoalLinks(id);
+      setLinkHabitId((prev) => (prev === id ? null : prev));
+    },
+  });
 
   /** Автозавершение спринта после последнего дня периода. */
   useEffect(() => {
@@ -809,23 +836,41 @@ export function SprintScreen() {
                     <Text style={{ color: linkHabitId === null ? '#fff' : colors.textMuted }}>Без связи</Text>
                   </Pressable>
                   {(habitsQ.data ?? []).map((h) => (
-                    <Pressable
+                    <View
                       key={h.id}
-                      onPress={() => setLinkHabitId(h.id)}
                       style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
                         marginRight: 8,
                         borderRadius: 10,
                         borderWidth: 1,
                         borderColor: linkHabitId === h.id ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)',
-                        maxWidth: 200,
+                        maxWidth: 240,
+                        overflow: 'hidden',
                       }}
                     >
-                      <Text numberOfLines={1} style={{ color: linkHabitId === h.id ? '#fff' : colors.textMuted }}>
-                        {h.name}
-                      </Text>
-                    </Pressable>
+                      <Pressable
+                        onPress={() => setLinkHabitId(h.id)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text numberOfLines={1} style={{ color: linkHabitId === h.id ? '#fff' : colors.textMuted }}>
+                          {h.name}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => confirmRemoveHabit(h, (id) => removeHabitMutation.mutate(id))}
+                        style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Удалить привычку ${h.name}`}
+                      >
+                        <Ionicons name="trash-outline" size={17} color="rgba(248,113,113,0.9)" />
+                      </Pressable>
+                    </View>
                   ))}
                 </ScrollView>
               </>
@@ -871,13 +916,30 @@ export function SprintScreen() {
                 <Text style={{ color: 'rgba(255,120,120,0.95)' }}>Убрать связь</Text>
               </Pressable>
               {(habitsQ.data ?? []).map((h) => (
-                <Pressable
+                <View
                   key={h.id}
-                  onPress={() => applyHabitToGoal(h.id)}
-                  style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255,255,255,0.06)',
+                  }}
                 >
-                  <Text style={{ color: colors.text, fontWeight: '600' }}>{h.name}</Text>
-                </Pressable>
+                  <Pressable
+                    onPress={() => applyHabitToGoal(h.id)}
+                    style={{ flex: 1, paddingVertical: 12, paddingRight: 8 }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{h.name}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => confirmRemoveHabit(h, (id) => removeHabitMutation.mutate(id))}
+                    style={{ paddingVertical: 12, paddingHorizontal: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Удалить привычку ${h.name}`}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.9)" />
+                  </Pressable>
+                </View>
               ))}
             </ScrollView>
           </Pressable>

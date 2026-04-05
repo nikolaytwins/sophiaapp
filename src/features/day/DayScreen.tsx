@@ -1,19 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Habit } from '@/entities/models';
+import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
+import { NikolayDayFocusPanel, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { journalEntryHasContent } from '@/features/day/dayJournal.logic';
 import { DayHabitGrid } from '@/features/day/DayHabitGrid';
 import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
+import { useSprintStore } from '@/stores/sprint.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
@@ -44,6 +48,32 @@ export function DayScreen() {
   const journalDoc = useDayJournalStore((s) => s.doc);
   const todayKey = localDateKey();
   const [viewDateKey, setViewDateKey] = useState(todayKey);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+
+  const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
+  const nikolayMoneyGoals = useMemo(
+    () => pickNikolayMoneyProgressGoals(activeSprint?.goals ?? []),
+    [activeSprint]
+  );
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) {
+      setAccountEmail(null);
+      return undefined;
+    }
+    void sb.auth.getSession().then(({ data: { session } }) => {
+      setAccountEmail(session?.user?.email ?? null);
+    });
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      setAccountEmail(session?.user?.email ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const isNikolay = isNikolayPrimaryAccount(accountEmail);
 
   const data = habits.data ?? [];
 
@@ -58,6 +88,14 @@ export function DayScreen() {
     mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.undoWeekly(id, dk),
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
+    },
+  });
+
+  const removeHabit = useMutation({
+    mutationFn: (id: string) => repos.habits.remove(id),
+    onSuccess: (list, id) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
+      useSprintStore.getState().removeHabitFromAllGoalLinks(id);
     },
   });
 
@@ -180,6 +218,10 @@ export function DayScreen() {
           </AppSurfaceCard>
         ) : null}
 
+        {isNikolay ? (
+          <NikolayDayFocusPanel chinaGoal={nikolayMoneyGoals.china} cushionGoal={nikolayMoneyGoals.cushion} />
+        ) : null}
+
         <DayHabitGrid
           habits={data}
           loading={habits.isLoading}
@@ -187,6 +229,7 @@ export function DayScreen() {
           viewDateKey={viewDateKey}
           todayKey={todayKey}
           onToggle={onHabitIcon}
+          onRequestDelete={(h) => removeHabit.mutate(h.id)}
         />
       </ScrollView>
     </ScreenCanvas>

@@ -45,6 +45,7 @@ import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { monthHabitQuota } from '@/features/habits/monthCompletionQuota';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
+import { useSprintStore } from '@/stores/sprint.store';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
@@ -57,7 +58,6 @@ import {
   groupNikolayWeeklyHabits,
   NIKOLAY_DAILY_GROUPS,
   NIKOLAY_WEEKLY_GROUPS,
-  NikolayHabitsHeadlines,
 } from '@/features/accounts/nikolayHabitsUi';
 import { useAppTheme } from '@/theme';
 
@@ -355,6 +355,20 @@ function HabitCard({
 
   const needsAttention = isDaily ? !habit.todayDone : !habit.weekQuotaMet;
 
+  const confirmDelete = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+    Alert.alert(
+      'Удалить привычку?',
+      `«${habit.name}» исчезнет везде. Связи целей со спринтом сбросятся.`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  }, [habit.name, onDelete]);
+
   const rhythmHint = useMemo(() => {
     if (isDaily) return null;
     if (habit.weekQuotaMet) return null;
@@ -512,19 +526,7 @@ function HabitCard({
   } as const;
 
   return (
-    <Pressable
-      onLongPress={() => {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert('Удалить привычку?', habit.name, [
-          { text: 'Отмена', style: 'cancel' },
-          {
-            text: 'Удалить',
-            style: 'destructive',
-            onPress: onDelete,
-          },
-        ]);
-      }}
-    >
+    <Pressable onLongPress={confirmDelete}>
       <SurfaceCard
         glow={needsAttention}
         style={{
@@ -586,6 +588,14 @@ function HabitCard({
                   />
                 </Pressable>
               ) : null}
+              <Pressable
+                onPress={confirmDelete}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Удалить привычку"
+              >
+                <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
+              </Pressable>
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -840,6 +850,14 @@ function HabitCard({
                   />
                 </Pressable>
               ) : null}
+              <Pressable
+                onPress={confirmDelete}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Удалить привычку"
+              >
+                <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
+              </Pressable>
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -1100,8 +1118,9 @@ export function HabitsScreen() {
 
   const removeHabit = useMutation({
     mutationFn: (id: string) => repos.habits.remove(id),
-    onSuccess: (list) => {
+    onSuccess: (list, id) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
+      useSprintStore.getState().removeHabitFromAllGoalLinks(id);
     },
   });
 
@@ -1276,8 +1295,6 @@ export function HabitsScreen() {
         ) : null}
 
         <HabitHero totalHabits={ritualScore.total} doneToday={ritualScore.done} />
-
-        {isNikolay ? <NikolayHabitsHeadlines /> : null}
 
         {data.length === 0 ? (
           <SurfaceCard

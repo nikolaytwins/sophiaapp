@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
 
 import type { Habit } from '@/entities/models';
 import {
@@ -35,18 +36,34 @@ const CARD_GRADIENTS: [string, string][] = [
   ['rgba(139,92,246,0.12)', 'rgba(109,40,217,0.05)'],
 ];
 
+function promptDeleteHabit(h: Habit, onConfirm: () => void) {
+  if (Platform.OS !== 'web') {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }
+  Alert.alert(
+    'Удалить привычку?',
+    `«${h.name}» исчезнет везде: День, Спринт, вкладка «Привычки». Связи целей со спринтом сбросятся.`,
+    [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Удалить', style: 'destructive', onPress: onConfirm },
+    ]
+  );
+}
+
 function HabitCard({
   habit: h,
   viewDateKey,
   todayKey,
   index,
   onToggle,
+  onRequestDelete,
 }: {
   habit: Habit;
   viewDateKey: string;
   todayKey: string;
   index: number;
   onToggle: (habit: Habit) => void;
+  onRequestDelete?: (habit: Habit) => void;
 }) {
   const { radius, colors } = useAppTheme();
   const weekKeys = getWeekDayKeys(viewDateKey);
@@ -63,6 +80,10 @@ function HabitCard({
     <Pressable
       disabled={future}
       onPress={() => onToggle(h)}
+      onLongPress={
+        onRequestDelete && !future ? () => promptDeleteHabit(h, () => onRequestDelete(h)) : undefined
+      }
+      delayLongPress={480}
       style={({ pressed }) => ({
         flex: 1,
         alignSelf: 'stretch',
@@ -104,24 +125,37 @@ function HabitCard({
                 color={doneToday ? ACCENT_PURPLE : 'rgba(255,255,255,0.72)'}
               />
             </View>
-            <View
-              pointerEvents="none"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                borderWidth: 2,
-                borderColor: doneToday ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.18)',
-                backgroundColor: doneToday ? 'rgba(168,85,247,0.28)' : 'rgba(255,255,255,0.06)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons
-                name={doneToday ? 'checkmark' : 'ellipse-outline'}
-                size={doneToday ? 22 : 18}
-                color={doneToday ? '#FAFAFC' : 'rgba(255,255,255,0.35)'}
-              />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              {onRequestDelete && !future ? (
+                <Pressable
+                  onPress={() => promptDeleteHabit(h, () => onRequestDelete(h))}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Удалить привычку"
+                  style={{ padding: 6 }}
+                >
+                  <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.92)" />
+                </Pressable>
+              ) : null}
+              <View
+                pointerEvents="none"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  borderWidth: 2,
+                  borderColor: doneToday ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.18)',
+                  backgroundColor: doneToday ? 'rgba(168,85,247,0.28)' : 'rgba(255,255,255,0.06)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons
+                  name={doneToday ? 'checkmark' : 'ellipse-outline'}
+                  size={doneToday ? 22 : 18}
+                  color={doneToday ? '#FAFAFC' : 'rgba(255,255,255,0.35)'}
+                />
+              </View>
             </View>
           </View>
 
@@ -208,9 +242,19 @@ type Props = {
   viewDateKey: string;
   todayKey: string;
   onToggle: (habit: Habit) => void;
+  /** Удаление после подтверждения (корзина и долгое нажатие на карточку). */
+  onRequestDelete?: (habit: Habit) => void;
 };
 
-export function DayHabitGrid({ habits, loading, emptyHint, viewDateKey, todayKey, onToggle }: Props) {
+export function DayHabitGrid({
+  habits,
+  loading,
+  emptyHint,
+  viewDateKey,
+  todayKey,
+  onToggle,
+  onRequestDelete,
+}: Props) {
   const { spacing, colors } = useAppTheme();
   const rows = chunkPairs(habits);
 
@@ -253,6 +297,7 @@ export function DayHabitGrid({ habits, loading, emptyHint, viewDateKey, todayKey
                         viewDateKey={viewDateKey}
                         todayKey={todayKey}
                         onToggle={onToggle}
+                        onRequestDelete={onRequestDelete}
                       />
                     </View>
                   );

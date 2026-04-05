@@ -1,7 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { type Href, Link } from 'expo-router';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Habit } from '@/entities/models';
+import type { SprintGoal } from '@/features/sprint/sprint.types';
+import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { useAppTheme } from '@/theme';
 
 export const NIKOLAY_DAILY_GROUPS: Array<{ key: 'money' | 'body' | 'life' | 'default'; label: string }> = [
@@ -47,126 +50,223 @@ export function groupNikolayWeeklyHabits(habits: Habit[]): Record<'body' | 'life
   return m;
 }
 
-const REMINDER_BORDER = 'rgba(251,191,36,0.45)';
-const REMINDER_BG = 'rgba(251,191,36,0.08)';
+/** Прогресс-цели спринта: Китай и подушка (по названию). */
+export function pickNikolayMoneyProgressGoals(
+  goals: SprintGoal[]
+): { china: SprintGoal | null; cushion: SprintGoal | null } {
+  const progress = goals.filter((g) => g.kind === 'progress' && g.target != null && g.current != null);
+  let china: SprintGoal | null = null;
+  let cushion: SprintGoal | null = null;
+  for (const g of progress) {
+    const t = g.title.toLowerCase();
+    if (!china && t.includes('китай')) china = g;
+    else if (!cushion && t.includes('подуш')) cushion = g;
+  }
+  return { china, cushion };
+}
 
-/**
- * Супер-цель и жёсткие напоминания — только для профиля nikolaytwins / nikollaytwins.
- */
-export function NikolayHabitsHeadlines() {
-  const { radius, typography, spacing } = useAppTheme();
+function fmtRub(n: number): string {
+  return new Intl.NumberFormat('ru-RU').format(Math.round(n));
+}
+
+function ProgressGoalCard({
+  overline,
+  title,
+  goal,
+  fallbackHint,
+}: {
+  overline: string;
+  title: string;
+  goal: SprintGoal | null;
+  fallbackHint: string;
+}) {
+  const { colors, typography, spacing, radius, brand } = useAppTheme();
+  const target = goal?.target ?? 0;
+  const current = goal?.current ?? 0;
+  const hasNumbers = goal != null && target > 0;
+  const pct = hasNumbers ? Math.min(1, Math.max(0, current / target)) : 0;
 
   return (
-    <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
-      <LinearGradient
-        colors={['rgba(220,38,38,0.35)', 'rgba(234,179,8,0.28)', 'rgba(168,85,247,0.2)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+    <AppSurfaceCard
+      style={{
+        marginBottom: spacing.sm,
+        borderWidth: 1,
+        borderColor: brand.surfaceBorder,
+        backgroundColor: 'rgba(255,255,255,0.02)',
+      }}
+    >
+      <Text
         style={{
-          borderRadius: radius.xl,
-          borderWidth: 2,
-          borderColor: 'rgba(250,204,21,0.55)',
-          paddingVertical: spacing.lg,
-          paddingHorizontal: spacing.lg,
-          overflow: 'hidden',
-          ...(Platform.OS === 'web'
-            ? {
-                boxShadow:
-                  '0 0 48px rgba(234,179,8,0.25), inset 0 0 0 1px rgba(255,255,255,0.08)',
-              }
-            : {
-                shadowColor: '#EAB308',
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.35,
-                shadowRadius: 24,
-                elevation: 10,
-              }),
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 1.6,
+          color: 'rgba(255,255,255,0.38)',
+          textTransform: 'uppercase',
         }}
       >
-        <Text
-          style={{
-            fontSize: 10,
+        {overline}
+      </Text>
+      <Text
+        style={[
+          typography.title2,
+          {
+            marginTop: 6,
+            fontSize: 17,
             fontWeight: '800',
-            letterSpacing: 2.4,
-            color: 'rgba(254,243,199,0.85)',
-          }}
-        >
-          РАДИ ЧЕГО Я РАБОТАЮ
-        </Text>
-        <Text
-          style={[
-            typography.hero,
-            {
+            color: colors.text,
+            letterSpacing: -0.3,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {goal?.title ?? title}
+      </Text>
+      {hasNumbers ? (
+        <>
+          <Text style={{ marginTop: 8, fontSize: 13, color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+            {fmtRub(current)} / {fmtRub(target)} ₽
+          </Text>
+          <View
+            style={{
               marginTop: 10,
-              fontSize: 28,
-              letterSpacing: -0.8,
-              lineHeight: 34,
-              color: '#FFFBEB',
-              fontWeight: '800',
+              height: 8,
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,255,255,0.07)',
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                width: `${Math.round(pct * 1000) / 10}%`,
+                height: '100%',
+                borderRadius: 999,
+                backgroundColor: 'rgba(167,139,250,0.55)',
+              }}
+            />
+          </View>
+          <Text style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+            {Math.round(pct * 100)}% · из активного спринта
+          </Text>
+        </>
+      ) : (
+        <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 19, color: colors.textMuted }}>{fallbackHint}</Text>
+      )}
+    </AppSurfaceCard>
+  );
+}
+
+const SPRINT_HREF = '/sprint' as Href;
+
+/**
+ * Экран «День»: две денежные цели из спринта + спокойные напоминания.
+ */
+export function NikolayDayFocusPanel({
+  chinaGoal,
+  cushionGoal,
+}: {
+  chinaGoal: SprintGoal | null;
+  cushionGoal: SprintGoal | null;
+}) {
+  const { spacing, brand, radius } = useAppTheme();
+
+  return (
+    <View style={{ marginBottom: spacing.md }}>
+      <Text
+        style={{
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 2,
+          color: 'rgba(255,255,255,0.35)',
+          textTransform: 'uppercase',
+          marginBottom: spacing.sm,
+        }}
+      >
+        Фокус · деньги
+      </Text>
+
+      <ProgressGoalCard
+        overline="Ради чего копим"
+        title="Поездка в Китай"
+        goal={chinaGoal}
+        fallbackHint="Добавь прогресс-цель про Китай во вкладке «Спринт» — здесь появится шкала."
+      />
+      <ProgressGoalCard
+        overline="Стабильность"
+        title="Финансовая подушка"
+        goal={cushionGoal}
+        fallbackHint="Добавь цель «подушка» в спринте — отобразим накопление здесь."
+      />
+
+      <Link href={SPRINT_HREF} asChild>
+        <Pressable
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            alignSelf: 'flex-start',
+            marginBottom: spacing.md,
+            paddingVertical: 6,
+            opacity: pressed ? 0.85 : 1,
+            ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+          })}
+        >
+          <Ionicons name="rocket-outline" size={16} color={brand.primarySoft} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: brand.primarySoft }}>Открыть спринт</Text>
+        </Pressable>
+      </Link>
+
+      <View style={{ gap: spacing.sm }}>
+        <View
+          style={[
+            styles.reminderMuted,
+            {
+              borderRadius: radius.lg,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
             },
           ]}
         >
-          Поездка в Китай
-        </Text>
-        <Text
-          style={{
-            marginTop: 10,
-            fontSize: 14,
-            lineHeight: 21,
-            color: 'rgba(255,251,235,0.72)',
-            fontWeight: '600',
-          }}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <Ionicons name="game-controller-outline" size={16} color="rgba(255,255,255,0.4)" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 0.3 }}>
+              Компы и игры
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.52)' }}>
+            Только после сделанного рабочего действия — сначала шаг, потом награда.
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.reminderMuted,
+            {
+              borderRadius: radius.lg,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
+            },
+          ]}
         >
-          Главная награда за дисциплину и деньги — держи это в голове каждый день.
-        </Text>
-      </LinearGradient>
-
-      <View
-        style={[
-          styles.reminder,
-          {
-            borderRadius: radius.lg,
-            paddingVertical: spacing.md,
-            paddingHorizontal: spacing.lg,
-          },
-        ]}
-      >
-        <Text style={[typography.title2, { fontSize: 15, color: '#FEF3C7', fontWeight: '800' }]}>
-          Компьютерные игры — только после сделанного рабочего действия
-        </Text>
-        <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 19, color: 'rgba(254,243,199,0.78)' }}>
-          Сначала шаг по работе, потом награда. Так цепляется честная дофаминовая петля.
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.reminder,
-          {
-            borderRadius: radius.lg,
-            paddingVertical: spacing.md,
-            paddingHorizontal: spacing.lg,
-            borderColor: 'rgba(239,68,68,0.5)',
-            backgroundColor: 'rgba(239,68,68,0.1)',
-          },
-        ]}
-      >
-        <Text style={[typography.title2, { fontSize: 15, color: '#FECACA', fontWeight: '800' }]}>
-          Убрать жизнь в фантазиях
-        </Text>
-        <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: 'rgba(254,202,202,0.88)' }}>
-          Временно не крутить в голове девушек и тройнички, «гигантские проекты» и сценарии. Фокус —
-          реальные шаги здесь и сейчас.
-        </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <Ionicons name="eye-off-outline" size={16} color="rgba(255,255,255,0.4)" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 0.3 }}>
+              Меньше фантазий
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, lineHeight: 20, color: 'rgba(255,255,255,0.52)' }}>
+            Временно не уводить голову в сценарии, «гигантские проекты» и лишние образы — фокус на реальных шагах
+            сегодня.
+          </Text>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  reminder: {
-    borderWidth: 1,
-    borderColor: REMINDER_BORDER,
-    backgroundColor: REMINDER_BG,
+  reminderMuted: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
   },
 });

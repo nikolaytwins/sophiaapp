@@ -69,6 +69,8 @@ type SprintState = {
   toggleCheckpoint: (sprintId: string, goalId: string) => void;
   /** События привычки (signed: +N completions или −N при undo). */
   applyHabitContribution: (habitId: string, signedCompletionEvents: number) => void;
+  /** Убрать связи целей со спринтами после удаления привычки. */
+  removeHabitFromAllGoalLinks: (habitId: string) => void;
   getActiveSprint: () => Sprint | null;
   getSprintById: (id: string) => Sprint | undefined;
 };
@@ -233,6 +235,18 @@ export const useSprintStore = create<SprintState>()(
               ),
             };
           }),
+        }));
+      },
+
+      removeHabitFromAllGoalLinks: (habitId) => {
+        set((state) => ({
+          sprints: state.sprints.map((s) => ({
+            ...s,
+            goals: s.goals.map((g) => ({
+              ...g,
+              habitLinks: g.habitLinks.filter((l) => l.habitId !== habitId),
+            })),
+          })),
         }));
       },
 
