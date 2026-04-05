@@ -1,3 +1,4 @@
+import { applyNikolaySprintProfile } from '@/features/accounts/nikolaySprintMigration';
 import type { Sprint } from '@/features/sprint/sprint.types';
 import { normalizeSingleActiveSprint } from '@/features/sprint/sprint.logic';
 import { useSupabaseConfigured } from '@/config/env';
@@ -45,7 +46,8 @@ export async function pullSprintStateFromCloud(): Promise<void> {
     return;
   }
 
-  const remote = normalizePayload(data?.payload);
+  const rawRemote = normalizePayload(data?.payload);
+  const remote = applyNikolaySprintProfile(rawRemote, session.user.email);
   await ensureSprintStoreHydrated();
   const local = useSprintStore.getState().sprints;
 
@@ -57,6 +59,11 @@ export async function pullSprintStateFromCloud(): Promise<void> {
     }
     if (remote.length > 0) {
       useSprintStore.setState({ sprints: remote });
+      if (JSON.stringify(remote) !== JSON.stringify(rawRemote)) {
+        syncingFromCloud = false;
+        await pushSprintStateToCloud();
+        syncingFromCloud = true;
+      }
     }
   } finally {
     syncingFromCloud = false;

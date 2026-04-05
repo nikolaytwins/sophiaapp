@@ -11,6 +11,8 @@ export type HabitsPersistSlice = {
   habits: HabitPersisted[];
   defaultsSeeded: boolean;
   heroHistory: Record<string, { done: number; total: number }>;
+  /** Версия персонального профиля привычек (nikolaytwins / nikollaytwins). */
+  nikolayHabitsProfileVersion?: number;
 };
 
 const REMOVED_HABIT_IDS = new Set(['seed_no_comps']);
@@ -42,6 +44,9 @@ export function normalizeHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice 
     habits: nextHabits,
     defaultsSeeded: s.defaultsSeeded,
     heroHistory: s.heroHistory,
+    ...(typeof s.nikolayHabitsProfileVersion === 'number'
+      ? { nikolayHabitsProfileVersion: s.nikolayHabitsProfileVersion }
+      : {}),
   };
 }
 
@@ -75,7 +80,7 @@ export type CreateHabitPersistInput = {
   cadence: HabitPersisted['cadence'];
   weeklyTarget?: number;
   section?: HabitPersisted['section'];
-  /** По умолчанию true — в ритме. */
+  /** По умолчанию true — в ритме (ежедневные). */
   required?: boolean;
 };
 
@@ -95,6 +100,7 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
   const id = `h_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const wt =
     input.cadence === 'weekly' ? Math.min(7, Math.max(1, input.weeklyTarget ?? 3)) : undefined;
+  const sec = input.section;
   const row: HabitPersisted = {
     id,
     name: input.name.trim(),
@@ -102,7 +108,7 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
     cadence: input.cadence,
     weeklyTarget: wt,
     required: input.required !== false,
-    ...(input.section === 'media' ? { section: 'media' as const } : {}),
+    ...(sec === 'media' || sec === 'money' || sec === 'body' || sec === 'life' ? { section: sec } : {}),
     createdAt: new Date().toISOString(),
     completionDates: [],
   };

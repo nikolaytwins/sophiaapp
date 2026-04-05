@@ -1,3 +1,4 @@
+import { applyNikolayAnnualGoalsProfile } from '@/features/accounts/nikolayAnnualMigration';
 import { emptyAnnualDocument, normalizeAnnualDocument } from '@/features/goals/annualGoals.logic';
 import type { AnnualGoalsDocument } from '@/features/goals/annualGoals.types';
 import { useSupabaseConfigured } from '@/config/env';
@@ -63,7 +64,8 @@ export async function pullAnnualGoalsFromCloud(): Promise<void> {
     return;
   }
 
-  const remoteDoc = normalizePayload(data?.payload);
+  const rawRemoteDoc = normalizePayload(data?.payload);
+  const remoteDoc = applyNikolayAnnualGoalsProfile(rawRemoteDoc, session.user.email);
   await ensureAnnualGoalsHydrated();
   const local = useAnnualGoalsStore.getState().doc;
 
@@ -75,6 +77,11 @@ export async function pullAnnualGoalsFromCloud(): Promise<void> {
     }
     if (!isDocEmpty(remoteDoc)) {
       useAnnualGoalsStore.getState().replaceDocument(remoteDoc);
+      if (JSON.stringify(remoteDoc) !== JSON.stringify(rawRemoteDoc)) {
+        syncingFromCloud = false;
+        await pushAnnualGoalsToCloud();
+        syncingFromCloud = true;
+      }
     }
   } finally {
     syncingFromCloud = false;

@@ -51,6 +51,14 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
+import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
+import {
+  groupNikolayDailyHabits,
+  groupNikolayWeeklyHabits,
+  NIKOLAY_DAILY_GROUPS,
+  NIKOLAY_WEEKLY_GROUPS,
+  NikolayHabitsHeadlines,
+} from '@/features/accounts/nikolayHabitsUi';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -1145,6 +1153,8 @@ export function HabitsScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const isNikolay = isNikolayPrimaryAccount(accountEmail);
+
   return (
     <ScreenCanvas>
       <ScrollView
@@ -1266,6 +1276,8 @@ export function HabitsScreen() {
         ) : null}
 
         <HabitHero totalHabits={ritualScore.total} doneToday={ritualScore.done} />
+
+        {isNikolay ? <NikolayHabitsHeadlines /> : null}
 
         {data.length === 0 ? (
           <SurfaceCard
@@ -1441,19 +1453,57 @@ export function HabitsScreen() {
             <View style={{ marginTop: spacing.lg }}>
               {habitsTab === 'daily' ? (
                 coreDaily.length > 0 ? (
-                  coreDaily.map((h) => (
-                    <HabitCard
-                      key={h.id}
-                      habit={h}
-                      todayKey={todayKey}
-                    onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                    onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                      onDelete={() => removeHabit.mutate(h.id)}
-                      onToggleRequired={() =>
-                        setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                      }
-                    />
-                  ))
+                  isNikolay ? (
+                    <>
+                      {NIKOLAY_DAILY_GROUPS.flatMap(({ key, label }) => {
+                        const grouped = groupNikolayDailyHabits(coreDaily)[key];
+                        if (grouped.length === 0) return [];
+                        return [
+                          label ? (
+                            <Text
+                              key={`nikolay-d-${key}`}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: '800',
+                                color: 'rgba(196,181,253,0.92)',
+                                marginBottom: spacing.sm,
+                                marginTop: key === 'money' ? 0 : spacing.md,
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          ) : null,
+                          ...grouped.map((h) => (
+                            <HabitCard
+                              key={h.id}
+                              habit={h}
+                              todayKey={todayKey}
+                              onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
+                              onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
+                              onDelete={() => removeHabit.mutate(h.id)}
+                              onToggleRequired={() =>
+                                setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                              }
+                            />
+                          )),
+                        ];
+                      })}
+                    </>
+                  ) : (
+                    coreDaily.map((h) => (
+                      <HabitCard
+                        key={h.id}
+                        habit={h}
+                        todayKey={todayKey}
+                        onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
+                        onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
+                        onDelete={() => removeHabit.mutate(h.id)}
+                        onToggleRequired={() =>
+                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
+                      />
+                    ))
+                  )
                 ) : (
                   <Text
                     style={[
@@ -1468,19 +1518,57 @@ export function HabitsScreen() {
 
               {habitsTab === 'weekly' ? (
                 coreWeekly.length > 0 ? (
-                  coreWeekly.map((h) => (
-                    <HabitCard
-                      key={h.id}
-                      habit={h}
-                      todayKey={todayKey}
-                    onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                    onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                      onDelete={() => removeHabit.mutate(h.id)}
-                      onToggleRequired={() =>
-                        setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                      }
-                    />
-                  ))
+                  isNikolay ? (
+                    <>
+                      {NIKOLAY_WEEKLY_GROUPS.flatMap(({ key, label }) => {
+                        const grouped = groupNikolayWeeklyHabits(coreWeekly)[key];
+                        if (grouped.length === 0) return [];
+                        return [
+                          label ? (
+                            <Text
+                              key={`nikolay-w-${key}`}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: '800',
+                                color: 'rgba(196,181,253,0.92)',
+                                marginBottom: spacing.sm,
+                                marginTop: key === 'body' ? 0 : spacing.md,
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          ) : null,
+                          ...grouped.map((h) => (
+                            <HabitCard
+                              key={h.id}
+                              habit={h}
+                              todayKey={todayKey}
+                              onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
+                              onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
+                              onDelete={() => removeHabit.mutate(h.id)}
+                              onToggleRequired={() =>
+                                setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                              }
+                            />
+                          )),
+                        ];
+                      })}
+                    </>
+                  ) : (
+                    coreWeekly.map((h) => (
+                      <HabitCard
+                        key={h.id}
+                        habit={h}
+                        todayKey={todayKey}
+                        onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
+                        onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
+                        onDelete={() => removeHabit.mutate(h.id)}
+                        onToggleRequired={() =>
+                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
+                      />
+                    ))
+                  )
                 ) : (
                   <Text
                     style={[

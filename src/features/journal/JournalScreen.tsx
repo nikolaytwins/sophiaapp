@@ -26,6 +26,8 @@ import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasContent, getFieldsBySection } from '@/features/day/dayJournal.logic';
 import type { JournalFieldDefinition } from '@/features/day/dayJournal.types';
+import { mergeNikolayJournalFields } from '@/features/accounts/nikolayJournalFields';
+import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { findJournalHabit } from '@/features/journal/journalHabit';
 import { getSupabase } from '@/lib/supabase';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
@@ -246,6 +248,15 @@ export function JournalScreen() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!isNikolayPrimaryAccount(sessionEmail)) return;
+    const prev = useDayJournalStore.getState().doc;
+    const merged = mergeNikolayJournalFields(prev);
+    if (merged !== prev) {
+      useDayJournalStore.getState().replaceDocument(merged);
+    }
+  }, [sessionEmail]);
 
   const commitFieldValue = async (field: JournalFieldDefinition, value: string | number | boolean | null) => {
     const before = getEntry(viewDateKey);

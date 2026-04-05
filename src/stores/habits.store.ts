@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from '@/lib/zustandPersist';
 
 import type { Habit, HabitPersisted } from '@/entities/models';
 import {
@@ -120,7 +120,15 @@ export const useHabitsStore = create<State>()(
       name: STORAGE_KEY,
       version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => normalizeHabitsSlice({ habits: s.habits, defaultsSeeded: s.defaultsSeeded, heroHistory: s.heroHistory }),
+      partialize: (s) =>
+        normalizeHabitsSlice({
+          habits: s.habits,
+          defaultsSeeded: s.defaultsSeeded,
+          heroHistory: s.heroHistory,
+          ...(typeof s.nikolayHabitsProfileVersion === 'number'
+            ? { nikolayHabitsProfileVersion: s.nikolayHabitsProfileVersion }
+            : {}),
+        }),
       migrate: (persisted) => {
         const p = persisted as HabitsPersistSlice | undefined;
         if (!p) {
@@ -130,6 +138,9 @@ export const useHabitsStore = create<State>()(
           habits: Array.isArray(p.habits) ? p.habits : [],
           defaultsSeeded: Boolean(p.defaultsSeeded),
           heroHistory: p.heroHistory ?? {},
+          ...(typeof (p as HabitsPersistSlice).nikolayHabitsProfileVersion === 'number'
+            ? { nikolayHabitsProfileVersion: (p as HabitsPersistSlice).nikolayHabitsProfileVersion! }
+            : {}),
         });
       },
     }
@@ -142,6 +153,13 @@ export function habitRowToView(raw: HabitPersisted, todayKey?: string): Habit {
 
 /** Срез для синка / экспорта (после гидратации). */
 export function getHabitsPersistSlice(): HabitsPersistSlice {
-  const { habits, defaultsSeeded, heroHistory } = useHabitsStore.getState();
-  return normalizeHabitsSlice({ habits, defaultsSeeded, heroHistory });
+  const s = useHabitsStore.getState();
+  return normalizeHabitsSlice({
+    habits: s.habits,
+    defaultsSeeded: s.defaultsSeeded,
+    heroHistory: s.heroHistory,
+    ...(typeof s.nikolayHabitsProfileVersion === 'number'
+      ? { nikolayHabitsProfileVersion: s.nikolayHabitsProfileVersion }
+      : {}),
+  });
 }

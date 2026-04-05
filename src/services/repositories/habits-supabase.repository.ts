@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { localDateKey } from '@/features/habits/habitLogic';
+import { applyNikolayHabitsProfile } from '@/features/accounts/nikolayHabitsMigration';
 import { ensureJournalHabitForAccount } from '@/features/journal/journalHabit';
 import {
   applySprintAfterHabitCheckIn,
@@ -35,6 +36,9 @@ function normalizePayload(data: unknown): HabitsPersistSlice {
         o.heroHistory && typeof o.heroHistory === 'object' && !Array.isArray(o.heroHistory)
           ? (o.heroHistory as HabitsPersistSlice['heroHistory'])
           : {},
+      ...(typeof o.nikolayHabitsProfileVersion === 'number'
+        ? { nikolayHabitsProfileVersion: o.nikolayHabitsProfileVersion }
+        : {}),
     }),
   };
 }
@@ -110,10 +114,19 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
   }
 
   async function loadNormalized(): Promise<HabitsPersistSlice> {
+    const user = await requireUser();
     let remote = await getState();
     remote = await maybeMigrateFromLocal(remote);
     remote = await ensureSpecialHabitsOnServer(remote);
     remote = await ensureSeedsOnServer(remote);
+    const nikolay = applyNikolayHabitsProfile(remote, user.email);
+    if (
+      nikolay.nikolayHabitsProfileVersion !== remote.nikolayHabitsProfileVersion ||
+      JSON.stringify(nikolay.habits) !== JSON.stringify(remote.habits)
+    ) {
+      await putState(nikolay);
+      remote = nikolay;
+    }
     return remote;
   }
 

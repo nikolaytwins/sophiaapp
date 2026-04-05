@@ -1,3 +1,4 @@
+import { mergeNikolayJournalFieldsIfNeeded } from '@/features/accounts/nikolayJournalFields';
 import { isJournalDocumentEmpty, normalizeJournalDocument } from '@/features/day/dayJournal.logic';
 import { useSupabaseConfigured } from '@/config/env';
 import { getSupabase } from '@/lib/supabase';
@@ -36,7 +37,8 @@ export async function pullDayJournalFromCloud(): Promise<void> {
     return;
   }
 
-  const remote = normalizeJournalDocument(data?.payload ?? data);
+  const rawRemote = normalizeJournalDocument(data?.payload ?? data);
+  const remote = mergeNikolayJournalFieldsIfNeeded(rawRemote, session.user.email);
   await ensureDayJournalHydrated();
   const local = normalizeJournalDocument(useDayJournalStore.getState().doc);
 
@@ -48,6 +50,11 @@ export async function pullDayJournalFromCloud(): Promise<void> {
     }
     if (!isJournalDocumentEmpty(remote)) {
       useDayJournalStore.getState().replaceDocument(remote);
+      if (JSON.stringify(remote) !== JSON.stringify(rawRemote)) {
+        syncingFromCloud = false;
+        await pushDayJournalToCloud();
+        syncingFromCloud = true;
+      }
     }
   } finally {
     syncingFromCloud = false;

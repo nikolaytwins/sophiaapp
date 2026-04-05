@@ -16,9 +16,13 @@ config.resolver.extraNodeModules = {
  */
 const zustandMiddlewareCjs = path.join(__dirname, 'node_modules', 'zustand', 'middleware.js');
 
+const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (platform === 'web' && moduleName === 'zustand/middleware') {
     return { filePath: zustandMiddlewareCjs, type: 'sourceFile' };
+  }
+  if (typeof defaultResolveRequest === 'function') {
+    return defaultResolveRequest(context, moduleName, platform);
   }
   return context.resolveRequest(context, moduleName, platform);
 };

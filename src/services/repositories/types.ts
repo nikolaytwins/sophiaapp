@@ -7,6 +7,7 @@ import type {
   Goal,
   Habit,
   HabitCadence,
+  HabitListSection,
   HabitPersisted,
   HealthSnapshot,
   QuickPrompt,
@@ -45,8 +46,8 @@ export type CreateHabitInput = {
   icon: string;
   cadence: HabitCadence;
   weeklyTarget?: number;
-  /** Только `media` — блок «Медийка и работа». */
-  section?: 'media';
+  /** Секция списка привычек (вкладка или группа). */
+  section?: HabitListSection;
   /** По умолчанию true — входит в ритм дня и в месячный счёт (ежедневные). */
   required?: boolean;
 };

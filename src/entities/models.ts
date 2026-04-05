@@ -53,8 +53,11 @@ export interface Goal {
 
 export type HabitCadence = 'daily' | 'weekly';
 
-/** Только `media` выносит привычку в блок «Медийка и работа»; иначе — основной ритм. */
-export type HabitListSection = 'media';
+/**
+ * `media` — вкладка «Медийка и работа».
+ * `money` | `body` | `life` — группировка в основном ритме (профиль nikolaytwins).
+ */
+export type HabitListSection = 'media' | 'money' | 'body' | 'life';
 
 /** Persisted shape — completions are local YYYY-MM-DD; weekly allows duplicate days. */
 export interface HabitPersisted {
