@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { fetchJsonArray } from '@/lib/safe-fetch'
 
 interface Category {
   id: string
@@ -102,11 +103,11 @@ export default function NewTransactionPage() {
   const fetchData = async () => {
     try {
       const [cats, accs] = await Promise.all([
-        fetch('/api/categories').then(r => r.json()),
-        fetch('/api/accounts').then(r => r.json()),
+        fetchJsonArray<Category>('/api/categories'),
+        fetchJsonArray<Account>('/api/accounts'),
       ])
-      setCategories(Array.isArray(cats) ? cats : [])
-      setAccounts(Array.isArray(accs) ? accs : [])
+      setCategories(cats)
+      setAccounts(accs)
     } catch {
       setCategories([])
       setAccounts([])
@@ -135,6 +136,7 @@ export default function NewTransactionPage() {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(data),
       })
 

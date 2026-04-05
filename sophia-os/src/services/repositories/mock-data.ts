@@ -8,6 +8,7 @@ import type {
   Habit,
   HealthSnapshot,
   QuickPrompt,
+  SophiaHabitsManifest,
   Task,
   UserProfile,
 } from '@/entities/models';
@@ -142,14 +143,135 @@ export const mockGoals: Goal[] = [
   },
 ];
 
+export const DEFAULT_SOPHIA_HABITS_MANIFEST: SophiaHabitsManifest = {
+  northStar: {
+    badge: 'Супер-цель',
+    title: 'Поездка в Китай',
+    subtitle: 'То, ради чего я работаю — держу ритм и фокус.',
+    amountLine: '~300 000 ₽ на поездку',
+  },
+  reminders: [
+    {
+      id: 'pc-reward',
+      variant: 'info',
+      title: 'Компьютер — только награда',
+      body: 'Компы только после сделанного действия по работе, как награда.',
+    },
+    {
+      id: 'no-fantasy',
+      variant: 'warning',
+      title: '❗ Убрать жизнь в фантазиях',
+      body: 'Временно не крутить в голове девушек, тройнички и большие проекты — только реальные шаги.',
+    },
+  ],
+  sprintGoals: [
+    { id: 'china-300k', title: 'Китай — накопить ~300 000 ₽' },
+    { id: 'cushion-700k', title: 'Подушка безопасности — 700 000 ₽' },
+  ],
+  journalPrompt:
+    'Я оправдывался? Объяснял себя? Подстраивался под ожидания другого?',
+};
+
 export const mockHabits: Habit[] = [
-  { id: 'h1', name: 'Утро без телефона 30 мин', streak: 9, icon: 'phone-portrait-outline', todayDone: true },
-  { id: 'h2', name: '10k шагов', streak: 4, icon: 'walk-outline', todayDone: false },
-  { id: 'h3', name: 'Вода 2.2л', streak: 12, icon: 'water-outline', todayDone: false },
-  { id: 'h4', name: 'Силовая 45 мин', streak: 2, icon: 'barbell-outline', todayDone: false },
+  {
+    id: 'h1',
+    name: '3–5 действий на привлечение клиентов',
+    streak: 2,
+    icon: 'megaphone-outline',
+    todayDone: false,
+    todayCount: 1,
+    category: 'money',
+    trackMode: 'count',
+    countMin: 3,
+    countMax: 5,
+    subtitle: 'Считай любой контакт: написал, выложил, ответил, предложил.',
+  },
+  {
+    id: 'h2',
+    name: 'Сон до 01:00',
+    streak: 5,
+    icon: 'moon-outline',
+    todayDone: true,
+    category: 'body',
+    trackMode: 'toggle',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h3',
+    name: 'Прогулка без цели',
+    streak: 3,
+    icon: 'walk-outline',
+    todayDone: false,
+    category: 'body',
+    trackMode: 'toggle',
+    subtitle: 'Без цели по шагам — просто выйти.',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h4',
+    name: 'Тренировка (3× в неделю)',
+    streak: 1,
+    icon: 'barbell-outline',
+    todayDone: false,
+    category: 'body',
+    trackMode: 'toggle',
+    subtitle: 'Отмечай в дни тренировки.',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h5',
+    name: '1 выходной в неделю',
+    streak: 0,
+    icon: 'umbrella-outline',
+    todayDone: false,
+    category: 'body',
+    trackMode: 'toggle',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h6',
+    name: '1 яркое событие в неделю',
+    streak: 0,
+    icon: 'star-outline',
+    todayDone: false,
+    category: 'body',
+    trackMode: 'toggle',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h7',
+    name: 'Дневник 10–15 минут',
+    streak: 4,
+    icon: 'book-outline',
+    todayDone: false,
+    category: 'life',
+    trackMode: 'toggle',
+    subtitle: 'Выписать всё из головы.',
+    countMin: 0,
+    countMax: 5,
+  },
+  {
+    id: 'h8',
+    name: 'В отношениях: не «отец/спасатель»',
+    streak: 0,
+    icon: 'heart-outline',
+    todayDone: false,
+    category: 'life',
+    trackMode: 'toggle',
+    subtitle: 'Не оправдывался, не подстраивался под чужие ожидания.',
+    countMin: 0,
+    countMax: 5,
+  },
 ];
 
 let habitsState: Habit[] = mockHabits.map((h) => ({ ...h }));
+
+const mockReflectionByDate: Record<string, string> = {};
 
 export function getHabitsState() {
   return habitsState;
@@ -157,6 +279,17 @@ export function getHabitsState() {
 
 export function setHabitsState(next: Habit[]) {
   habitsState = next;
+}
+
+export function getMockReflectionNote(dateKey: string): string | null {
+  const v = mockReflectionByDate[dateKey];
+  return v && v.trim() !== '' ? v : null;
+}
+
+export function setMockReflectionNote(dateKey: string, note: string) {
+  const t = note.trim();
+  if (t === '') delete mockReflectionByDate[dateKey];
+  else mockReflectionByDate[dateKey] = t;
 }
 
 export const mockHealth: HealthSnapshot = {

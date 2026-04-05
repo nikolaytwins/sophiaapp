@@ -13,8 +13,10 @@ import type {
   UserRepository,
 } from './types';
 import {
+  DEFAULT_SOPHIA_HABITS_MANIFEST,
   getChatMessages,
   getHabitsState,
+  getMockReflectionNote,
   getTasksState,
   mockDailyScore,
   mockEsoteric,
@@ -26,8 +28,10 @@ import {
   mockUser,
   pushUserChatMessage,
   setHabitsState,
+  setMockReflectionNote,
   setTasksState,
 } from './mock-data';
+import type { HabitToggleOptions } from './types';
 
 function delay<T>(value: T, ms = 40): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -96,22 +100,48 @@ export const mockGoalsRepository: GoalsRepository = {
   },
 };
 
+function mockSnapshot(dateKey: string) {
+  return {
+    habits: [...getHabitsState()],
+    manifest: DEFAULT_SOPHIA_HABITS_MANIFEST,
+    dailyReflection: {
+      prompt: DEFAULT_SOPHIA_HABITS_MANIFEST.journalPrompt,
+      note: getMockReflectionNote(dateKey),
+    },
+  };
+}
+
 export const mockHabitsRepository: HabitsRepository = {
-  async list(_dateKey?: string) {
-    return delay([...getHabitsState()]);
+  async list(dateKey?: string) {
+    const dk = dateKey ?? new Date().toISOString().slice(0, 10);
+    return delay(mockSnapshot(dk));
   },
-  async toggle(habitId: string, _dateKey?: string) {
+  async toggle(habitId: string, dateKey?: string, opts?: HabitToggleOptions) {
+    const dk = dateKey ?? new Date().toISOString().slice(0, 10);
     const next = getHabitsState().map((h) => {
       if (h.id !== habitId) return h;
+      if (h.trackMode === 'count') {
+        const maxC = h.countMax ?? 5;
+        const minC = h.countMin ?? 3;
+        let c = h.todayCount ?? 0;
+        if (typeof opts?.setCount === 'number' && Number.isFinite(opts.setCount)) {
+          c = Math.max(0, Math.min(maxC, Math.round(opts.setCount)));
+        } else if (opts?.bump === -1) c = Math.max(0, c - 1);
+        else if (opts?.bump === 1) c = Math.min(maxC, c + 1);
+        else c = Math.min(maxC, c + 1);
+        const todayDone = c >= minC;
+        return { ...h, todayCount: c, todayDone };
+      }
       const on = !h.todayDone;
-      return {
-        ...h,
-        todayDone: on,
-        streak: on ? h.streak + 1 : Math.max(0, h.streak - 1),
-      };
+      return { ...h, todayDone: on, todayCount: 0 };
     });
     setHabitsState(next);
-    return delay([...next]);
+    return delay(mockSnapshot(dk));
+  },
+  async saveReflection(note: string, dateKey?: string) {
+    const dk = dateKey ?? new Date().toISOString().slice(0, 10);
+    setMockReflectionNote(dk, note);
+    return delay(mockSnapshot(dk));
   },
 };
 

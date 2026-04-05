@@ -44,7 +44,9 @@
 | `EXPO_PUBLIC_SOPHIA_HABITS_API_BASE` | Origin без слэша, например `https://app.twinlabs.ru` — к нему дописываются пути `/api/sophia/habits/...`. |
 | `EXPO_PUBLIC_SOPHIA_HABITS_BEARER_TOKEN` | Опционально: то же значение, что `TW_SITE_AUTH_TOKEN` на сервере Twinworks, если нет общей cookie-сессии (кросс-домен). **Попадает в клиентский бандл** — только для личного приложения. |
 
-На стороне Twinworks: применить миграции Prisma (`habit_check_ins`, поле `icon`), выставить при необходимости `SOPHIA_HABITS_CORS_ORIGIN=https://app.twinlabs.ru` если статика и API на разных origin. Выгрузка всех чекинов: `GET /api/sophia/habits/export` (тот же auth).
+На стороне Twinworks: применить миграции Prisma (`habit_check_ins`, поле `icon`, затем миграция **`20260405120000_habit_meta_and_reflection`** — категории, счётчик, поле дневника), выставить при необходимости `SOPHIA_HABITS_CORS_ORIGIN=https://app.twinlabs.ru` если статика и API на разных origin. Выгрузка всех чекинов: `GET /api/sophia/habits/export` (тот же auth). Сохранение текста рефлексии: **`POST /api/sophia/habits/reflection`** с телом `{"dateKey":"YYYY-MM-DD","note":"..."}`.
+
+**Аккуратно по нагрузке на VPS:** веб Sophia собирай в **GitHub Actions** (`build:web`), не на сервере. На Selectel достаточно `prisma migrate deploy`, при необходимости один раз `npx tsx scripts/sophia-habits-reset.ts` в каталоге `twinworks`, затем `systemctl restart twinworks` — без параллельного тяжёлого `next build`/`expo export` на той же машине.
 
 Workflow **Deploy Sophia OS web** передаёт эти секреты в шаг `build:web`, если они заданы в GitHub Actions.
 

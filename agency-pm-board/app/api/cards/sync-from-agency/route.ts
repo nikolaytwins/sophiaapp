@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createCard, listCards, deleteAllCards } from "@/lib/db";
 import { DEFAULT_STATUS } from "@/lib/statuses";
 
-/** Body: { onlyMonth?: "2025-03" | "2026-03", clearFirst?: boolean } — только проекты с дедлайном в этом месяце; clearFirst — сначала очистить канбан. */
+/** Body: { onlyMonth?: "2025-03" | "2026-03", clearFirst?: boolean } — только проекты, созданные в этом месяце (страница месяца в Agency); clearFirst — сначала очистить канбан. */
 export async function POST(request: Request) {
   try {
     let onlyMonth: string | undefined;
@@ -20,16 +20,20 @@ export async function POST(request: Request) {
     const twinworksUrl = process.env.TWINWORKS_AGENCY_URL || "http://127.0.0.1:3001";
     const r = await fetch(`${twinworksUrl}/api/agency/projects`);
     if (!r.ok) throw new Error("Twinworks projects fetch failed");
-    const projects: { id: string; name: string; deadline: string | null }[] = await r.json();
+    const projects: { id: string; name: string; deadline: string | null; createdAt?: string }[] = await r.json();
 
     let toSync = projects;
     if (onlyMonth) {
-      // Дедлайн в формате YYYY-MM-DD или ISO — оставляем только те, у кого deadline в указанном месяце
-      const [y, m] = onlyMonth.split("-");
-      const prefix = y && m ? `${y}-${m}` : onlyMonth;
-      toSync = projects.filter(
-        (p) => p.deadline && (p.deadline.startsWith(prefix) || p.deadline.slice(0, 7) === prefix)
-      );
+      // Проекты, созданные в указанном месяце (как на странице месяца в Agency), не по дедлайну
+      const [y, m] = onlyMonth.split("-").map(Number);
+      if (y && m) {
+        const monthStart = new Date(y, m - 1, 1);
+        const monthEnd = new Date(y, m, 0, 23, 59, 59);
+        toSync = projects.filter((p) => {
+          const created = p.createdAt ? new Date(p.createdAt) : null;
+          return created && created >= monthStart && created <= monthEnd;
+        });
+      }
     }
 
     if (clearFirst) {

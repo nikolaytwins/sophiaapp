@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { fetchJsonArray } from '@/lib/safe-fetch'
 
 interface Category {
   id: string
@@ -21,9 +22,8 @@ export default function CategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories')
-      const data = await res.json()
-      setCategories(Array.isArray(data) ? data : [])
+      const data = await fetchJsonArray<Category>('/api/categories')
+      setCategories(data)
     } catch (error) {
       console.error('Error fetching categories:', error)
       setCategories([])
@@ -37,6 +37,7 @@ export default function CategoriesPage() {
       await fetch('/api/categories', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ id, expectedMonthly }),
       })
       setEditingId(null)

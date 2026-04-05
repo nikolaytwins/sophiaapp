@@ -79,6 +79,11 @@ export async function POST(request: NextRequest) {
           order: h.order,
           isMain: h.isMain,
           icon: h.icon,
+          category: h.category,
+          subtitle: h.subtitle,
+          trackMode: h.trackMode,
+          countMin: h.countMin,
+          countMax: h.countMax,
         },
       })
     )

@@ -8,6 +8,15 @@ export default function Navigation() {
 
   if (pathname === '/login') return null
 
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    } catch {
+      /* ignore */
+    }
+    window.location.href = '/login'
+  }
+
   return (
     <nav className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -103,6 +112,31 @@ export default function Navigation() {
                 Контент
               </Link>
             </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {pathname?.startsWith('/neo') ? (
+              <a
+                href="/api/neo/reset"
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-md border border-blue-200 hover:bg-blue-50"
+              >
+                Обычный вид
+              </a>
+            ) : (
+              <a
+                href="/neo/agency"
+                className="text-xs text-gray-500 hover:text-blue-600 hidden sm:inline"
+              >
+                Neo UI
+              </a>
+            )}
+            <span className="text-xs text-gray-400 hidden sm:inline">Twinworks</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline"
+            >
+              Выйти
+            </button>
           </div>
         </div>
       </div>

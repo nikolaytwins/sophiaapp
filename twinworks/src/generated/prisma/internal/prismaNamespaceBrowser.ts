@@ -376,6 +376,7 @@ export const DailyLogScalarFieldEnum = {
   reels: 'reels',
   gamesDone: 'gamesDone',
   contentWritingDone: 'contentWritingDone',
+  selfAuditNote: 'selfAuditNote',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -403,6 +404,11 @@ export const HabitDefinitionScalarFieldEnum = {
   order: 'order',
   isMain: 'isMain',
   icon: 'icon',
+  category: 'category',
+  subtitle: 'subtitle',
+  trackMode: 'trackMode',
+  countMin: 'countMin',
+  countMax: 'countMax',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -415,6 +421,7 @@ export const HabitCheckInScalarFieldEnum = {
   habitDefinitionId: 'habitDefinitionId',
   dateKey: 'dateKey',
   done: 'done',
+  count: 'count',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

@@ -1,9 +1,10 @@
 import Constants from 'expo-constants';
 
-import type { Habit } from '@/entities/models';
+import type { HabitsSnapshot } from '@/entities/models';
+import { DEFAULT_SOPHIA_HABITS_MANIFEST } from '@/services/repositories/mock-data';
 import { localCalendarDateKey } from '@/utils/calendar-date';
 
-import type { HabitsRepository } from './types';
+import type { HabitsRepository, HabitToggleOptions } from './types';
 
 type HabitsExtra = {
   sophiaHabitsApiBase?: string;
@@ -37,11 +38,22 @@ async function habitsFetch(path: string, init?: RequestInit): Promise<Response> 
   });
 }
 
-type HabitsListJson = {
-  habits?: Habit[];
+type HabitsApiJson = Partial<HabitsSnapshot> & {
   hint?: string;
-  dateKey?: string;
+  ok?: boolean;
+  seeded?: boolean;
 };
+
+function normalizeSnapshot(j: HabitsApiJson, dateKey: string): HabitsSnapshot {
+  return {
+    habits: j.habits ?? [],
+    manifest: j.manifest ?? DEFAULT_SOPHIA_HABITS_MANIFEST,
+    dailyReflection: j.dailyReflection ?? {
+      prompt: DEFAULT_SOPHIA_HABITS_MANIFEST.journalPrompt,
+      note: null,
+    },
+  };
+}
 
 export const remoteHabitsRepository: HabitsRepository = {
   async list(dateKey?: string) {
@@ -51,7 +63,7 @@ export const remoteHabitsRepository: HabitsRepository = {
       const t = await res.text();
       throw new Error(`habits list ${res.status}: ${t.slice(0, 200)}`);
     }
-    const j = (await res.json()) as HabitsListJson;
+    const j = (await res.json()) as HabitsApiJson;
     if ((j.habits?.length ?? 0) === 0 && j.hint) {
       const boot = await habitsFetch(`/api/sophia/habits?dateKey=${encodeURIComponent(dk)}`, {
         method: 'POST',
@@ -62,25 +74,43 @@ export const remoteHabitsRepository: HabitsRepository = {
         const t = await boot.text();
         throw new Error(`habits bootstrap ${boot.status}: ${t.slice(0, 200)}`);
       }
-      const j2 = (await boot.json()) as HabitsListJson;
-      return j2.habits ?? [];
+      const j2 = (await boot.json()) as HabitsApiJson;
+      return normalizeSnapshot(j2, dk);
     }
-    return j.habits ?? [];
+    return normalizeSnapshot(j, dk);
   },
 
-  async toggle(habitId: string, dateKey?: string) {
+  async toggle(habitId: string, dateKey?: string, opts?: HabitToggleOptions) {
     const dk = dateKey ?? localCalendarDateKey();
+    const body: Record<string, unknown> = { dateKey: dk };
+    if (opts?.bump !== undefined) body.bump = opts.bump;
+    if (opts?.setCount !== undefined) body.setCount = opts.setCount;
     const res = await habitsFetch(`/api/sophia/habits/${encodeURIComponent(habitId)}/toggle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dateKey: dk }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const t = await res.text();
       throw new Error(`habits toggle ${res.status}: ${t.slice(0, 200)}`);
     }
-    const j = (await res.json()) as HabitsListJson;
-    return j.habits ?? [];
+    const j = (await res.json()) as HabitsApiJson;
+    return normalizeSnapshot(j, dk);
+  },
+
+  async saveReflection(note: string, dateKey?: string) {
+    const dk = dateKey ?? localCalendarDateKey();
+    const res = await habitsFetch(`/api/sophia/habits/reflection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateKey: dk, note }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`habits reflection ${res.status}: ${t.slice(0, 200)}`);
+    }
+    const j = (await res.json()) as HabitsApiJson;
+    return normalizeSnapshot(j, dk);
   },
 };
 

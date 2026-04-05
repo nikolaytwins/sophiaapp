@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { fetchJsonArray } from '@/lib/safe-fetch'
 
 interface Category {
   id: string
@@ -31,12 +32,13 @@ function ExpensesContent() {
 
   const fetchData = async () => {
     try {
+      const txUrl = month ? `/api/transactions?month=${encodeURIComponent(month)}` : `/api/transactions?t=${Date.now()}`
       const [categoriesRes, transactionsRes] = await Promise.all([
-        fetch('/api/categories').then(r => r.json()),
-        fetch(month ? `/api/transactions?month=${month}` : '/api/transactions').then(r => r.json()),
+        fetchJsonArray<Category>('/api/categories'),
+        fetchJsonArray<Record<string, unknown>>(txUrl),
       ])
       
-      setCategories(Array.isArray(categoriesRes) ? categoriesRes : [])
+      setCategories(categoriesRes)
       
       // Calculate expenses by category
       const expenses: Record<string, number> = {}

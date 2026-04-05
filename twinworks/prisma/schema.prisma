@@ -330,6 +330,7 @@ model DailyLog {
   reels              Boolean   @default(false)
   gamesDone          Boolean   @default(false)  // компьютерные игры
   contentWritingDone  Boolean   @default(false)  // написание контента
+  selfAuditNote      String?   // рефлексия: оправдания / подстройка (Sophia / дневник)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -357,6 +358,11 @@ model HabitDefinition {
   order       Int       @default(0) // порядок отображения
   isMain      Boolean   @default(false) // показывать в блоке «Главные привычки»
   icon        String?   // Ionicons name для Sophia / веба
+  category    String?   // money | body | life — группировка в Sophia
+  subtitle    String?   // подсказка под названием
+  trackMode   String    @default("toggle") // toggle | count (напр. 3–5 действий в день)
+  countMin    Int       @default(0) // для count: день «закрыт» при count >= countMin
+  countMax    Int       @default(5) // верхняя граница счётчика
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -371,6 +377,7 @@ model HabitCheckIn {
   habitDefinitionId String
   dateKey           String // YYYY-MM-DD в таймзоне клиента
   done              Boolean  @default(true)
+  count             Int      @default(0) // для trackMode=count: сколько действий за день
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

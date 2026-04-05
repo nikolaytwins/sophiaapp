@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { fetchJsonArray, fetchJsonRecord } from '@/lib/safe-fetch'
 import { formatDate } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
@@ -155,28 +156,35 @@ export default function FinancePage() {
       // Добавляем timestamp для предотвращения кэширования
       const timestamp = Date.now()
       const [accountsRes, transactionsRes, dashboardRes, categoriesRes] = await Promise.all([
-        fetch(`/api/accounts?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()),
-        fetch(`/api/transactions?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()),
-        fetch(`/api/dashboard?t=${timestamp}&ipTaxReserve=${encodeURIComponent(ipTaxReserve)}`, { cache: 'no-store' }).then(r => r.json()),
-        fetch(`/api/categories?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()).catch(() => []),
+        fetchJsonArray<Account>(`/api/accounts?t=${timestamp}`),
+        fetchJsonArray<Transaction>(`/api/transactions?t=${timestamp}`),
+        fetchJsonRecord(`/api/dashboard?t=${timestamp}&ipTaxReserve=${encodeURIComponent(ipTaxReserve)}`),
+        fetchJsonArray(`/api/categories?t=${timestamp}`),
       ])
       
-      // Логирование для отладки
-      console.log('📊 Обновление данных финансов:', {
-        oneTimeExpensesUnpaidTotal: dashboardRes.metrics?.oneTimeExpensesUnpaidTotal,
-        newMonthEndForecast: dashboardRes.metrics?.newMonthEndForecast,
-        timestamp: new Date().toISOString()
-      })
       setAccounts(accountsRes)
       setTransactions(transactionsRes)
-      setGoals(Array.isArray(dashboardRes.goals) ? dashboardRes.goals : [])
+      setGoals(
+        dashboardRes && Array.isArray((dashboardRes as { goals?: unknown }).goals)
+          ? ((dashboardRes as { goals: unknown[] }).goals)
+          : []
+      )
       setCategories(Array.isArray(categoriesRes) ? categoriesRes : [])
       
       // Получаем сальдо и баланс на начало месяца из dashboard
       const totalAccounts = accountsRes.reduce((sum: number, acc: Account) => sum + acc.balance, 0)
-      
-      if (dashboardRes.metrics) {
-        const metrics = dashboardRes.metrics
+
+      const metrics = dashboardRes ? (dashboardRes as { metrics?: Record<string, unknown> }).metrics : undefined
+      const num = (v: unknown, fallback = 0) => {
+        const x = Number(v)
+        return Number.isFinite(x) ? x : fallback
+      }
+      const numOrNull = (v: unknown) => {
+        if (v === undefined || v === null) return null
+        const x = Number(v)
+        return Number.isFinite(x) ? x : null
+      }
+      if (metrics) {
         console.log('📊 Получены метрики из API:', {
           oneTimeExpensesUnpaidTotal: metrics.oneTimeExpensesUnpaidTotal,
           newMonthEndForecast: metrics.newMonthEndForecast,
@@ -184,37 +192,47 @@ export default function FinancePage() {
           unpaidImpulseStudents: metrics.unpaidImpulseStudents,
         })
         
-        setBalance(metrics.balance || 0)
-        setProjectedExpenses(metrics.projectedExpenses || 0)
-        setDailyExpenseLimit(metrics.dailyExpenseLimit || 3500)
-        setUnpaidProjectsRevenue(metrics.unpaidProjectsRevenue || 0)
-        setEstimatedTotalAccountsNow(metrics.estimatedTotalAccountsNow ?? null)
-        setLastConfirmedTotalAccounts(metrics.lastConfirmedTotalAccounts ?? null)
-        setLastConfirmedTotalAccountsDate(metrics.lastConfirmedTotalAccountsDate ?? null)
-        setDaysSinceConfirmed(metrics.daysSinceConfirmed !== undefined && metrics.daysSinceConfirmed !== null ? metrics.daysSinceConfirmed : null)
-        setConfirmedDayLabel(metrics.confirmedDayLabel ?? null)
-        setServerNowIso(dashboardRes.calculationDebug?.now ?? null)
-        if (dashboardRes.metrics?.spentByBudgetCategory) {
-          setSpentByBudgetCategoryFromApi(dashboardRes.metrics.spentByBudgetCategory)
+        setBalance(num(metrics.balance))
+        setProjectedExpenses(num(metrics.projectedExpenses))
+        setDailyExpenseLimit(num(metrics.dailyExpenseLimit, 3500))
+        setUnpaidProjectsRevenue(num(metrics.unpaidProjectsRevenue))
+        setEstimatedTotalAccountsNow(numOrNull(metrics.estimatedTotalAccountsNow))
+        setLastConfirmedTotalAccounts(numOrNull(metrics.lastConfirmedTotalAccounts))
+        setLastConfirmedTotalAccountsDate(
+          metrics.lastConfirmedTotalAccountsDate != null
+            ? String(metrics.lastConfirmedTotalAccountsDate)
+            : null
+        )
+        setDaysSinceConfirmed(numOrNull(metrics.daysSinceConfirmed))
+        setConfirmedDayLabel(
+          metrics.confirmedDayLabel != null ? String(metrics.confirmedDayLabel) : null
+        )
+        const calcDbg = (dashboardRes as { calculationDebug?: Record<string, unknown> }).calculationDebug
+        setServerNowIso((calcDbg?.now as string | undefined) ?? null)
+        const spentByCat = metrics.spentByBudgetCategory as Record<string, number> | undefined
+        if (spentByCat) {
+          setSpentByBudgetCategoryFromApi(spentByCat)
         }
         
         // Сохраняем детали для отображения
         const details: typeof calculationDetails = {
-          totalAccounts: metrics.totalAccounts || 0,
-          oneTimeExpensesUnpaidTotal: metrics.oneTimeExpensesUnpaidTotal || 0,
-          dailyExpenseLimit: metrics.dailyExpenseLimit || 3500,
-          daysRemaining: metrics.daysRemaining || 0,
-          unpaidAgencyProjects: metrics.unpaidAgencyProjects || 0,
-          unpaidImpulseStudents: metrics.unpaidImpulseStudents || 0,
-          taxAmount: metrics.taxAmount || 0,
-          debug: dashboardRes.calculationDebug ? {
-            totalAccounts: dashboardRes.calculationDebug.totalAccounts,
-            lastConfirmedTotalAccounts: dashboardRes.calculationDebug.lastConfirmedTotalAccounts ?? null,
-            dailyExpenseLimit: dashboardRes.calculationDebug.dailyExpenseLimit,
-            daysSinceConfirmed: dashboardRes.calculationDebug.daysSinceConfirmed ?? null,
-            estimatedBeforeClamp: dashboardRes.calculationDebug.estimatedBeforeClamp ?? null,
-            estimatedAfterClamp: dashboardRes.calculationDebug.estimatedAfterClamp,
-          } : undefined,
+          totalAccounts: (metrics.totalAccounts as number) || 0,
+          oneTimeExpensesUnpaidTotal: (metrics.oneTimeExpensesUnpaidTotal as number) || 0,
+          dailyExpenseLimit: (metrics.dailyExpenseLimit as number) || 3500,
+          daysRemaining: (metrics.daysRemaining as number) || 0,
+          unpaidAgencyProjects: (metrics.unpaidAgencyProjects as number) || 0,
+          unpaidImpulseStudents: (metrics.unpaidImpulseStudents as number) || 0,
+          taxAmount: (metrics.taxAmount as number) || 0,
+          debug: calcDbg
+            ? {
+                totalAccounts: calcDbg.totalAccounts as number,
+                lastConfirmedTotalAccounts: (calcDbg.lastConfirmedTotalAccounts as number | null) ?? null,
+                dailyExpenseLimit: calcDbg.dailyExpenseLimit as number,
+                daysSinceConfirmed: (calcDbg.daysSinceConfirmed as number | null) ?? null,
+                estimatedBeforeClamp: (calcDbg.estimatedBeforeClamp as number | null) ?? null,
+                estimatedAfterClamp: calcDbg.estimatedAfterClamp as number,
+              }
+            : undefined,
         }
         console.log('📋 Детали расчета (сохраняем в state):', details)
         console.log('📋 Новый прогноз на конец месяца:', metrics.newMonthEndForecast)
@@ -226,14 +244,17 @@ export default function FinancePage() {
         })
         
         setCalculationDetails(details)
-        setNewMonthEndForecast(metrics.newMonthEndForecast ?? null)
+        setNewMonthEndForecast(numOrNull(metrics.newMonthEndForecast))
         
         console.log('✅ State обновлен. Новый прогноз:', metrics.newMonthEndForecast)
       }
       
       // Получаем разовые расходы (только личные для прогноза личных расходов)
       try {
-        const expenseSettingsRes = await fetch('/api/expense-settings')
+        const expenseSettingsRes = await fetch('/api/expense-settings', {
+          cache: 'no-store',
+          credentials: 'include',
+        })
         const expenseSettings = await expenseSettingsRes.json()
         if (expenseSettings.oneTimeExpenses) {
           // Фильтруем только личные расходы (type='personal' или type отсутствует/null)
@@ -258,7 +279,7 @@ export default function FinancePage() {
       
       try {
         // Пытаемся получить историю
-        const historyRes = await fetch('/api/history')
+        const historyRes = await fetch('/api/history', { cache: 'no-store', credentials: 'include' })
         const historyData = await historyRes.json()
         const historyArray = Array.isArray(historyData) ? historyData : []
         
@@ -270,7 +291,7 @@ export default function FinancePage() {
           setBalanceAtMonthStart(monthStartBalance)
         } else {
           // Если истории нет, вычисляем: текущий баланс минус сальдо
-          const balance = dashboardRes.metrics?.balance || 0
+          const balance = metrics ? num(metrics.balance) : 0
           const calculatedStart = totalAccounts - balance
           monthStartBalance = calculatedStart > 0 ? calculatedStart : totalAccounts
           setBalanceAtMonthStart(monthStartBalance)
@@ -681,27 +702,9 @@ export default function FinancePage() {
         <div className="flex space-x-2">
           <button
             onClick={async () => {
-              console.log('🔄 Кнопка обновления нажата')
               setLoading(true)
-              // Принудительно обновляем данные с новым timestamp
-              const timestamp = Date.now()
               try {
-                const [accountsRes, transactionsRes, dashboardRes, categoriesRes] = await Promise.all([
-                  fetch(`/api/accounts?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()),
-                  fetch(`/api/transactions?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()),
-                  fetch(`/api/dashboard?t=${timestamp}&ipTaxReserve=${encodeURIComponent(ipTaxReserve)}`, { cache: 'no-store' }).then(r => r.json()),
-                  fetch(`/api/categories?t=${timestamp}`, { cache: 'no-store' }).then(r => r.json()).catch(() => []),
-                ])
-                
-                console.log('📊 Обновленные данные:', {
-                  newMonthEndForecast: dashboardRes.metrics?.newMonthEndForecast,
-                  estimatedTotalAccountsNow: dashboardRes.metrics?.estimatedTotalAccountsNow,
-                  totalAccounts: dashboardRes.metrics?.totalAccounts,
-                })
-                
                 await fetchData(true)
-              } catch (error) {
-                console.error('Ошибка при обновлении:', error)
               } finally {
                 setLoading(false)
               }

@@ -20,8 +20,18 @@ export type HabitCheckInModel = runtime.Types.Result.DefaultSelection<Prisma.$Ha
 
 export type AggregateHabitCheckIn = {
   _count: HabitCheckInCountAggregateOutputType | null
+  _avg: HabitCheckInAvgAggregateOutputType | null
+  _sum: HabitCheckInSumAggregateOutputType | null
   _min: HabitCheckInMinAggregateOutputType | null
   _max: HabitCheckInMaxAggregateOutputType | null
+}
+
+export type HabitCheckInAvgAggregateOutputType = {
+  count: number | null
+}
+
+export type HabitCheckInSumAggregateOutputType = {
+  count: number | null
 }
 
 export type HabitCheckInMinAggregateOutputType = {
@@ -29,6 +39,7 @@ export type HabitCheckInMinAggregateOutputType = {
   habitDefinitionId: string | null
   dateKey: string | null
   done: boolean | null
+  count: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -38,6 +49,7 @@ export type HabitCheckInMaxAggregateOutputType = {
   habitDefinitionId: string | null
   dateKey: string | null
   done: boolean | null
+  count: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -47,17 +59,27 @@ export type HabitCheckInCountAggregateOutputType = {
   habitDefinitionId: number
   dateKey: number
   done: number
+  count: number
   createdAt: number
   updatedAt: number
   _all: number
 }
 
 
+export type HabitCheckInAvgAggregateInputType = {
+  count?: true
+}
+
+export type HabitCheckInSumAggregateInputType = {
+  count?: true
+}
+
 export type HabitCheckInMinAggregateInputType = {
   id?: true
   habitDefinitionId?: true
   dateKey?: true
   done?: true
+  count?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -67,6 +89,7 @@ export type HabitCheckInMaxAggregateInputType = {
   habitDefinitionId?: true
   dateKey?: true
   done?: true
+  count?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -76,6 +99,7 @@ export type HabitCheckInCountAggregateInputType = {
   habitDefinitionId?: true
   dateKey?: true
   done?: true
+  count?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -119,6 +143,18 @@ export type HabitCheckInAggregateArgs<ExtArgs extends runtime.Types.Extensions.I
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
+   * Select which fields to average
+  **/
+  _avg?: HabitCheckInAvgAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
+   * Select which fields to sum
+  **/
+  _sum?: HabitCheckInSumAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
    * Select which fields to find the minimum value
   **/
   _min?: HabitCheckInMinAggregateInputType
@@ -149,6 +185,8 @@ export type HabitCheckInGroupByArgs<ExtArgs extends runtime.Types.Extensions.Int
   take?: number
   skip?: number
   _count?: HabitCheckInCountAggregateInputType | true
+  _avg?: HabitCheckInAvgAggregateInputType
+  _sum?: HabitCheckInSumAggregateInputType
   _min?: HabitCheckInMinAggregateInputType
   _max?: HabitCheckInMaxAggregateInputType
 }
@@ -158,9 +196,12 @@ export type HabitCheckInGroupByOutputType = {
   habitDefinitionId: string
   dateKey: string
   done: boolean
+  count: number
   createdAt: Date
   updatedAt: Date
   _count: HabitCheckInCountAggregateOutputType | null
+  _avg: HabitCheckInAvgAggregateOutputType | null
+  _sum: HabitCheckInSumAggregateOutputType | null
   _min: HabitCheckInMinAggregateOutputType | null
   _max: HabitCheckInMaxAggregateOutputType | null
 }
@@ -188,6 +229,7 @@ export type HabitCheckInWhereInput = {
   habitDefinitionId?: Prisma.StringFilter<"HabitCheckIn"> | string
   dateKey?: Prisma.StringFilter<"HabitCheckIn"> | string
   done?: Prisma.BoolFilter<"HabitCheckIn"> | boolean
+  count?: Prisma.IntFilter<"HabitCheckIn"> | number
   createdAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
   habit?: Prisma.XOR<Prisma.HabitDefinitionScalarRelationFilter, Prisma.HabitDefinitionWhereInput>
@@ -198,6 +240,7 @@ export type HabitCheckInOrderByWithRelationInput = {
   habitDefinitionId?: Prisma.SortOrder
   dateKey?: Prisma.SortOrder
   done?: Prisma.SortOrder
+  count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   habit?: Prisma.HabitDefinitionOrderByWithRelationInput
@@ -212,6 +255,7 @@ export type HabitCheckInWhereUniqueInput = Prisma.AtLeast<{
   habitDefinitionId?: Prisma.StringFilter<"HabitCheckIn"> | string
   dateKey?: Prisma.StringFilter<"HabitCheckIn"> | string
   done?: Prisma.BoolFilter<"HabitCheckIn"> | boolean
+  count?: Prisma.IntFilter<"HabitCheckIn"> | number
   createdAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
   habit?: Prisma.XOR<Prisma.HabitDefinitionScalarRelationFilter, Prisma.HabitDefinitionWhereInput>
@@ -222,11 +266,14 @@ export type HabitCheckInOrderByWithAggregationInput = {
   habitDefinitionId?: Prisma.SortOrder
   dateKey?: Prisma.SortOrder
   done?: Prisma.SortOrder
+  count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.HabitCheckInCountOrderByAggregateInput
+  _avg?: Prisma.HabitCheckInAvgOrderByAggregateInput
   _max?: Prisma.HabitCheckInMaxOrderByAggregateInput
   _min?: Prisma.HabitCheckInMinOrderByAggregateInput
+  _sum?: Prisma.HabitCheckInSumOrderByAggregateInput
 }
 
 export type HabitCheckInScalarWhereWithAggregatesInput = {
@@ -237,6 +284,7 @@ export type HabitCheckInScalarWhereWithAggregatesInput = {
   habitDefinitionId?: Prisma.StringWithAggregatesFilter<"HabitCheckIn"> | string
   dateKey?: Prisma.StringWithAggregatesFilter<"HabitCheckIn"> | string
   done?: Prisma.BoolWithAggregatesFilter<"HabitCheckIn"> | boolean
+  count?: Prisma.IntWithAggregatesFilter<"HabitCheckIn"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"HabitCheckIn"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"HabitCheckIn"> | Date | string
 }
@@ -245,6 +293,7 @@ export type HabitCheckInCreateInput = {
   id?: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   habit: Prisma.HabitDefinitionCreateNestedOneWithoutCheckInsInput
@@ -255,6 +304,7 @@ export type HabitCheckInUncheckedCreateInput = {
   habitDefinitionId: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -263,6 +313,7 @@ export type HabitCheckInUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   habit?: Prisma.HabitDefinitionUpdateOneRequiredWithoutCheckInsNestedInput
@@ -273,6 +324,7 @@ export type HabitCheckInUncheckedUpdateInput = {
   habitDefinitionId?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -282,6 +334,7 @@ export type HabitCheckInCreateManyInput = {
   habitDefinitionId: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -290,6 +343,7 @@ export type HabitCheckInUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -299,6 +353,7 @@ export type HabitCheckInUncheckedUpdateManyInput = {
   habitDefinitionId?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -323,8 +378,13 @@ export type HabitCheckInCountOrderByAggregateInput = {
   habitDefinitionId?: Prisma.SortOrder
   dateKey?: Prisma.SortOrder
   done?: Prisma.SortOrder
+  count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type HabitCheckInAvgOrderByAggregateInput = {
+  count?: Prisma.SortOrder
 }
 
 export type HabitCheckInMaxOrderByAggregateInput = {
@@ -332,6 +392,7 @@ export type HabitCheckInMaxOrderByAggregateInput = {
   habitDefinitionId?: Prisma.SortOrder
   dateKey?: Prisma.SortOrder
   done?: Prisma.SortOrder
+  count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -341,8 +402,13 @@ export type HabitCheckInMinOrderByAggregateInput = {
   habitDefinitionId?: Prisma.SortOrder
   dateKey?: Prisma.SortOrder
   done?: Prisma.SortOrder
+  count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type HabitCheckInSumOrderByAggregateInput = {
+  count?: Prisma.SortOrder
 }
 
 export type HabitCheckInCreateNestedManyWithoutHabitInput = {
@@ -391,6 +457,7 @@ export type HabitCheckInCreateWithoutHabitInput = {
   id?: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -399,6 +466,7 @@ export type HabitCheckInUncheckedCreateWithoutHabitInput = {
   id?: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -436,6 +504,7 @@ export type HabitCheckInScalarWhereInput = {
   habitDefinitionId?: Prisma.StringFilter<"HabitCheckIn"> | string
   dateKey?: Prisma.StringFilter<"HabitCheckIn"> | string
   done?: Prisma.BoolFilter<"HabitCheckIn"> | boolean
+  count?: Prisma.IntFilter<"HabitCheckIn"> | number
   createdAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"HabitCheckIn"> | Date | string
 }
@@ -444,6 +513,7 @@ export type HabitCheckInCreateManyHabitInput = {
   id?: string
   dateKey: string
   done?: boolean
+  count?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -452,6 +522,7 @@ export type HabitCheckInUpdateWithoutHabitInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -460,6 +531,7 @@ export type HabitCheckInUncheckedUpdateWithoutHabitInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -468,6 +540,7 @@ export type HabitCheckInUncheckedUpdateManyWithoutHabitInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   dateKey?: Prisma.StringFieldUpdateOperationsInput | string
   done?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -479,6 +552,7 @@ export type HabitCheckInSelect<ExtArgs extends runtime.Types.Extensions.Internal
   habitDefinitionId?: boolean
   dateKey?: boolean
   done?: boolean
+  count?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   habit?: boolean | Prisma.HabitDefinitionDefaultArgs<ExtArgs>
@@ -489,6 +563,7 @@ export type HabitCheckInSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   habitDefinitionId?: boolean
   dateKey?: boolean
   done?: boolean
+  count?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   habit?: boolean | Prisma.HabitDefinitionDefaultArgs<ExtArgs>
@@ -499,6 +574,7 @@ export type HabitCheckInSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   habitDefinitionId?: boolean
   dateKey?: boolean
   done?: boolean
+  count?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   habit?: boolean | Prisma.HabitDefinitionDefaultArgs<ExtArgs>
@@ -509,11 +585,12 @@ export type HabitCheckInSelectScalar = {
   habitDefinitionId?: boolean
   dateKey?: boolean
   done?: boolean
+  count?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type HabitCheckInOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "habitDefinitionId" | "dateKey" | "done" | "createdAt" | "updatedAt", ExtArgs["result"]["habitCheckIn"]>
+export type HabitCheckInOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "habitDefinitionId" | "dateKey" | "done" | "count" | "createdAt" | "updatedAt", ExtArgs["result"]["habitCheckIn"]>
 export type HabitCheckInInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   habit?: boolean | Prisma.HabitDefinitionDefaultArgs<ExtArgs>
 }
@@ -534,6 +611,7 @@ export type $HabitCheckInPayload<ExtArgs extends runtime.Types.Extensions.Intern
     habitDefinitionId: string
     dateKey: string
     done: boolean
+    count: number
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["habitCheckIn"]>
@@ -964,6 +1042,7 @@ export interface HabitCheckInFieldRefs {
   readonly habitDefinitionId: Prisma.FieldRef<"HabitCheckIn", 'String'>
   readonly dateKey: Prisma.FieldRef<"HabitCheckIn", 'String'>
   readonly done: Prisma.FieldRef<"HabitCheckIn", 'Boolean'>
+  readonly count: Prisma.FieldRef<"HabitCheckIn", 'Int'>
   readonly createdAt: Prisma.FieldRef<"HabitCheckIn", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"HabitCheckIn", 'DateTime'>
 }

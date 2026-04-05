@@ -23,3 +23,101 @@ body {
 .habit-checkbox {
   accent-color: #0ea5e9;
 }
+
+/* ─── Neo UI: вайб Sophia OS (тёмный), акцент синий вместо золота/фиолета ─── */
+.neo-ui {
+  --neo-bg: #07060b;
+  --neo-surface: rgba(255, 255, 255, 0.06);
+  --neo-surface2: rgba(59, 130, 246, 0.1);
+  --neo-text: #f7f4fa;
+  --neo-muted: rgba(247, 244, 250, 0.52);
+  --neo-border: rgba(255, 255, 255, 0.08);
+  --neo-accent: #3b82f6;
+  --neo-accent-soft: rgba(59, 130, 246, 0.18);
+  --neo-success: #6ee7a8;
+}
+
+.neo-ui body.neo-ui-body,
+.neo-ui.neo-ui-body {
+  background: var(--neo-bg) !important;
+  color: var(--neo-text) !important;
+}
+
+.neo-ui .bg-white,
+.neo-ui .bg-gray-50,
+.neo-ui .bg-gray-100 {
+  background: var(--neo-surface) !important;
+}
+
+.neo-ui .border-gray-200,
+.neo-ui .border-gray-100 {
+  border-color: var(--neo-border) !important;
+}
+
+.neo-ui .text-gray-900,
+.neo-ui .text-gray-800 {
+  color: var(--neo-text) !important;
+}
+
+.neo-ui .text-gray-700,
+.neo-ui .text-gray-600,
+.neo-ui .text-gray-500 {
+  color: var(--neo-muted) !important;
+}
+
+.neo-ui .text-blue-600,
+.neo-ui .text-blue-700,
+.neo-ui .text-blue-800 {
+  color: var(--neo-accent) !important;
+}
+
+.neo-ui .border-blue-500,
+.neo-ui .border-blue-600 {
+  border-color: var(--neo-accent) !important;
+}
+
+.neo-ui .bg-blue-600,
+.neo-ui .bg-blue-700 {
+  background-color: var(--neo-accent) !important;
+}
+
+.neo-ui .hover\:bg-blue-700:hover {
+  background-color: #2563eb !important;
+}
+
+.neo-ui .hover\:bg-gray-50:hover,
+.neo-ui .hover\:bg-gray-100:hover {
+  background: var(--neo-surface2) !important;
+}
+
+.neo-ui .hover\:text-blue-800:hover,
+.neo-ui .hover\:text-blue-900:hover {
+  color: #60a5fa !important;
+}
+
+.neo-ui nav.bg-white,
+.neo-ui .bg-white.border-b {
+  background: rgba(0, 0, 0, 0.35) !important;
+  backdrop-filter: blur(12px);
+}
+
+.neo-ui input,
+.neo-ui select,
+.neo-ui textarea {
+  background: var(--neo-surface) !important;
+  color: var(--neo-text) !important;
+  border-color: var(--neo-border) !important;
+}
+
+.neo-ui .shadow-sm,
+.neo-ui .shadow {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45) !important;
+}
+
+.neo-ui .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--neo-border) !important;
+}
+
+.neo-ui .ring-gray-200 {
+  --tw-ring-color: var(--neo-border) !important;
+}

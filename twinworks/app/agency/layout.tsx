@@ -43,15 +43,25 @@ export default function AgencyLayout({
               </Link>
             ))}
             </div>
-            <a
-              href={pmBoardUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-slate-600 hover:text-blue-600 whitespace-nowrap"
-              title="Канбан для ПМ (статусы и дедлайны)"
-            >
-              Канбан ПМ: {pmBoardUrl}
-            </a>
+            <div className="flex items-center gap-3">
+              {pathname?.startsWith('/neo') && (
+                <a
+                  href="/api/neo/reset"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+                >
+                  Обычный вид
+                </a>
+              )}
+              <a
+                href={pmBoardUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-slate-600 hover:text-blue-600 whitespace-nowrap"
+                title="Канбан для ПМ (статусы и дедлайны)"
+              >
+                Канбан ПМ: {pmBoardUrl}
+              </a>
+            </div>
           </div>
         </div>
       </div>

@@ -38,6 +38,7 @@ export type DailyLogMinAggregateOutputType = {
   reels: boolean | null
   gamesDone: boolean | null
   contentWritingDone: boolean | null
+  selfAuditNote: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -56,6 +57,7 @@ export type DailyLogMaxAggregateOutputType = {
   reels: boolean | null
   gamesDone: boolean | null
   contentWritingDone: boolean | null
+  selfAuditNote: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -74,6 +76,7 @@ export type DailyLogCountAggregateOutputType = {
   reels: number
   gamesDone: number
   contentWritingDone: number
+  selfAuditNote: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -94,6 +97,7 @@ export type DailyLogMinAggregateInputType = {
   reels?: true
   gamesDone?: true
   contentWritingDone?: true
+  selfAuditNote?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -112,6 +116,7 @@ export type DailyLogMaxAggregateInputType = {
   reels?: true
   gamesDone?: true
   contentWritingDone?: true
+  selfAuditNote?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -130,6 +135,7 @@ export type DailyLogCountAggregateInputType = {
   reels?: true
   gamesDone?: true
   contentWritingDone?: true
+  selfAuditNote?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -221,6 +227,7 @@ export type DailyLogGroupByOutputType = {
   reels: boolean
   gamesDone: boolean
   contentWritingDone: boolean
+  selfAuditNote: string | null
   createdAt: Date
   updatedAt: Date
   _count: DailyLogCountAggregateOutputType | null
@@ -260,6 +267,7 @@ export type DailyLogWhereInput = {
   reels?: Prisma.BoolFilter<"DailyLog"> | boolean
   gamesDone?: Prisma.BoolFilter<"DailyLog"> | boolean
   contentWritingDone?: Prisma.BoolFilter<"DailyLog"> | boolean
+  selfAuditNote?: Prisma.StringNullableFilter<"DailyLog"> | string | null
   createdAt?: Prisma.DateTimeFilter<"DailyLog"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"DailyLog"> | Date | string
 }
@@ -278,6 +286,7 @@ export type DailyLogOrderByWithRelationInput = {
   reels?: Prisma.SortOrder
   gamesDone?: Prisma.SortOrder
   contentWritingDone?: Prisma.SortOrder
+  selfAuditNote?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -299,6 +308,7 @@ export type DailyLogWhereUniqueInput = Prisma.AtLeast<{
   reels?: Prisma.BoolFilter<"DailyLog"> | boolean
   gamesDone?: Prisma.BoolFilter<"DailyLog"> | boolean
   contentWritingDone?: Prisma.BoolFilter<"DailyLog"> | boolean
+  selfAuditNote?: Prisma.StringNullableFilter<"DailyLog"> | string | null
   createdAt?: Prisma.DateTimeFilter<"DailyLog"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"DailyLog"> | Date | string
 }, "id" | "date">
@@ -317,6 +327,7 @@ export type DailyLogOrderByWithAggregationInput = {
   reels?: Prisma.SortOrder
   gamesDone?: Prisma.SortOrder
   contentWritingDone?: Prisma.SortOrder
+  selfAuditNote?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.DailyLogCountOrderByAggregateInput
@@ -341,6 +352,7 @@ export type DailyLogScalarWhereWithAggregatesInput = {
   reels?: Prisma.BoolWithAggregatesFilter<"DailyLog"> | boolean
   gamesDone?: Prisma.BoolWithAggregatesFilter<"DailyLog"> | boolean
   contentWritingDone?: Prisma.BoolWithAggregatesFilter<"DailyLog"> | boolean
+  selfAuditNote?: Prisma.StringNullableWithAggregatesFilter<"DailyLog"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"DailyLog"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"DailyLog"> | Date | string
 }
@@ -359,6 +371,7 @@ export type DailyLogCreateInput = {
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -377,6 +390,7 @@ export type DailyLogUncheckedCreateInput = {
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -395,6 +409,7 @@ export type DailyLogUpdateInput = {
   reels?: Prisma.BoolFieldUpdateOperationsInput | boolean
   gamesDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
   contentWritingDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  selfAuditNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -413,6 +428,7 @@ export type DailyLogUncheckedUpdateInput = {
   reels?: Prisma.BoolFieldUpdateOperationsInput | boolean
   gamesDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
   contentWritingDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  selfAuditNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -431,6 +447,7 @@ export type DailyLogCreateManyInput = {
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -449,6 +466,7 @@ export type DailyLogUpdateManyMutationInput = {
   reels?: Prisma.BoolFieldUpdateOperationsInput | boolean
   gamesDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
   contentWritingDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  selfAuditNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -467,6 +485,7 @@ export type DailyLogUncheckedUpdateManyInput = {
   reels?: Prisma.BoolFieldUpdateOperationsInput | boolean
   gamesDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
   contentWritingDone?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  selfAuditNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -485,6 +504,7 @@ export type DailyLogCountOrderByAggregateInput = {
   reels?: Prisma.SortOrder
   gamesDone?: Prisma.SortOrder
   contentWritingDone?: Prisma.SortOrder
+  selfAuditNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -503,6 +523,7 @@ export type DailyLogMaxOrderByAggregateInput = {
   reels?: Prisma.SortOrder
   gamesDone?: Prisma.SortOrder
   contentWritingDone?: Prisma.SortOrder
+  selfAuditNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -521,6 +542,7 @@ export type DailyLogMinOrderByAggregateInput = {
   reels?: Prisma.SortOrder
   gamesDone?: Prisma.SortOrder
   contentWritingDone?: Prisma.SortOrder
+  selfAuditNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -541,6 +563,7 @@ export type DailyLogSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["dailyLog"]>
@@ -559,6 +582,7 @@ export type DailyLogSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["dailyLog"]>
@@ -577,6 +601,7 @@ export type DailyLogSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["dailyLog"]>
@@ -595,11 +620,12 @@ export type DailyLogSelectScalar = {
   reels?: boolean
   gamesDone?: boolean
   contentWritingDone?: boolean
+  selfAuditNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type DailyLogOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "date" | "dayMode" | "stepsDone" | "proteinDone" | "sleepDone" | "workoutType" | "alcohol" | "dayOff" | "junkFood" | "reels" | "gamesDone" | "contentWritingDone" | "createdAt" | "updatedAt", ExtArgs["result"]["dailyLog"]>
+export type DailyLogOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "date" | "dayMode" | "stepsDone" | "proteinDone" | "sleepDone" | "workoutType" | "alcohol" | "dayOff" | "junkFood" | "reels" | "gamesDone" | "contentWritingDone" | "selfAuditNote" | "createdAt" | "updatedAt", ExtArgs["result"]["dailyLog"]>
 
 export type $DailyLogPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "DailyLog"
@@ -618,6 +644,7 @@ export type $DailyLogPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     reels: boolean
     gamesDone: boolean
     contentWritingDone: boolean
+    selfAuditNote: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["dailyLog"]>
@@ -1056,6 +1083,7 @@ export interface DailyLogFieldRefs {
   readonly reels: Prisma.FieldRef<"DailyLog", 'Boolean'>
   readonly gamesDone: Prisma.FieldRef<"DailyLog", 'Boolean'>
   readonly contentWritingDone: Prisma.FieldRef<"DailyLog", 'Boolean'>
+  readonly selfAuditNote: Prisma.FieldRef<"DailyLog", 'String'>
   readonly createdAt: Prisma.FieldRef<"DailyLog", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"DailyLog", 'DateTime'>
 }

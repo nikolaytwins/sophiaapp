@@ -57,6 +57,49 @@ export interface Habit {
   streak: number;
   icon: string;
   todayDone: boolean;
+  category?: string | null;
+  subtitle?: string | null;
+  trackMode?: 'toggle' | 'count';
+  todayCount?: number;
+  countMin?: number;
+  countMax?: number;
+}
+
+export interface SophiaReminderCard {
+  id: string;
+  variant: 'info' | 'warning' | 'danger';
+  title: string;
+  body: string;
+}
+
+export interface SophiaNorthStar {
+  badge: string;
+  title: string;
+  subtitle: string;
+  amountLine: string;
+}
+
+export interface SophiaSprintGoal {
+  id: string;
+  title: string;
+}
+
+export interface SophiaHabitsManifest {
+  northStar: SophiaNorthStar;
+  reminders: SophiaReminderCard[];
+  sprintGoals: SophiaSprintGoal[];
+  journalPrompt: string;
+}
+
+export interface DailyReflection {
+  prompt: string;
+  note: string | null;
+}
+
+export interface HabitsSnapshot {
+  habits: Habit[];
+  manifest: SophiaHabitsManifest;
+  dailyReflection: DailyReflection;
 }
 
 export interface HealthSnapshot {

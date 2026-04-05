@@ -29,11 +29,15 @@ export type AggregateHabitDefinition = {
 export type HabitDefinitionAvgAggregateOutputType = {
   slotsCount: number | null
   order: number | null
+  countMin: number | null
+  countMax: number | null
 }
 
 export type HabitDefinitionSumAggregateOutputType = {
   slotsCount: number | null
   order: number | null
+  countMin: number | null
+  countMax: number | null
 }
 
 export type HabitDefinitionMinAggregateOutputType = {
@@ -44,6 +48,11 @@ export type HabitDefinitionMinAggregateOutputType = {
   order: number | null
   isMain: boolean | null
   icon: string | null
+  category: string | null
+  subtitle: string | null
+  trackMode: string | null
+  countMin: number | null
+  countMax: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -56,6 +65,11 @@ export type HabitDefinitionMaxAggregateOutputType = {
   order: number | null
   isMain: boolean | null
   icon: string | null
+  category: string | null
+  subtitle: string | null
+  trackMode: string | null
+  countMin: number | null
+  countMax: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -68,6 +82,11 @@ export type HabitDefinitionCountAggregateOutputType = {
   order: number
   isMain: number
   icon: number
+  category: number
+  subtitle: number
+  trackMode: number
+  countMin: number
+  countMax: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -77,11 +96,15 @@ export type HabitDefinitionCountAggregateOutputType = {
 export type HabitDefinitionAvgAggregateInputType = {
   slotsCount?: true
   order?: true
+  countMin?: true
+  countMax?: true
 }
 
 export type HabitDefinitionSumAggregateInputType = {
   slotsCount?: true
   order?: true
+  countMin?: true
+  countMax?: true
 }
 
 export type HabitDefinitionMinAggregateInputType = {
@@ -92,6 +115,11 @@ export type HabitDefinitionMinAggregateInputType = {
   order?: true
   isMain?: true
   icon?: true
+  category?: true
+  subtitle?: true
+  trackMode?: true
+  countMin?: true
+  countMax?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -104,6 +132,11 @@ export type HabitDefinitionMaxAggregateInputType = {
   order?: true
   isMain?: true
   icon?: true
+  category?: true
+  subtitle?: true
+  trackMode?: true
+  countMin?: true
+  countMax?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -116,6 +149,11 @@ export type HabitDefinitionCountAggregateInputType = {
   order?: true
   isMain?: true
   icon?: true
+  category?: true
+  subtitle?: true
+  trackMode?: true
+  countMin?: true
+  countMax?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -215,6 +253,11 @@ export type HabitDefinitionGroupByOutputType = {
   order: number
   isMain: boolean
   icon: string | null
+  category: string | null
+  subtitle: string | null
+  trackMode: string
+  countMin: number
+  countMax: number
   createdAt: Date
   updatedAt: Date
   _count: HabitDefinitionCountAggregateOutputType | null
@@ -250,6 +293,11 @@ export type HabitDefinitionWhereInput = {
   order?: Prisma.IntFilter<"HabitDefinition"> | number
   isMain?: Prisma.BoolFilter<"HabitDefinition"> | boolean
   icon?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  category?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  subtitle?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  trackMode?: Prisma.StringFilter<"HabitDefinition"> | string
+  countMin?: Prisma.IntFilter<"HabitDefinition"> | number
+  countMax?: Prisma.IntFilter<"HabitDefinition"> | number
   createdAt?: Prisma.DateTimeFilter<"HabitDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"HabitDefinition"> | Date | string
   checkIns?: Prisma.HabitCheckInListRelationFilter
@@ -263,6 +311,11 @@ export type HabitDefinitionOrderByWithRelationInput = {
   order?: Prisma.SortOrder
   isMain?: Prisma.SortOrder
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
+  subtitle?: Prisma.SortOrderInput | Prisma.SortOrder
+  trackMode?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   checkIns?: Prisma.HabitCheckInOrderByRelationAggregateInput
@@ -279,6 +332,11 @@ export type HabitDefinitionWhereUniqueInput = Prisma.AtLeast<{
   order?: Prisma.IntFilter<"HabitDefinition"> | number
   isMain?: Prisma.BoolFilter<"HabitDefinition"> | boolean
   icon?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  category?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  subtitle?: Prisma.StringNullableFilter<"HabitDefinition"> | string | null
+  trackMode?: Prisma.StringFilter<"HabitDefinition"> | string
+  countMin?: Prisma.IntFilter<"HabitDefinition"> | number
+  countMax?: Prisma.IntFilter<"HabitDefinition"> | number
   createdAt?: Prisma.DateTimeFilter<"HabitDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"HabitDefinition"> | Date | string
   checkIns?: Prisma.HabitCheckInListRelationFilter
@@ -292,6 +350,11 @@ export type HabitDefinitionOrderByWithAggregationInput = {
   order?: Prisma.SortOrder
   isMain?: Prisma.SortOrder
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
+  subtitle?: Prisma.SortOrderInput | Prisma.SortOrder
+  trackMode?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.HabitDefinitionCountOrderByAggregateInput
@@ -312,6 +375,11 @@ export type HabitDefinitionScalarWhereWithAggregatesInput = {
   order?: Prisma.IntWithAggregatesFilter<"HabitDefinition"> | number
   isMain?: Prisma.BoolWithAggregatesFilter<"HabitDefinition"> | boolean
   icon?: Prisma.StringNullableWithAggregatesFilter<"HabitDefinition"> | string | null
+  category?: Prisma.StringNullableWithAggregatesFilter<"HabitDefinition"> | string | null
+  subtitle?: Prisma.StringNullableWithAggregatesFilter<"HabitDefinition"> | string | null
+  trackMode?: Prisma.StringWithAggregatesFilter<"HabitDefinition"> | string
+  countMin?: Prisma.IntWithAggregatesFilter<"HabitDefinition"> | number
+  countMax?: Prisma.IntWithAggregatesFilter<"HabitDefinition"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"HabitDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"HabitDefinition"> | Date | string
 }
@@ -324,6 +392,11 @@ export type HabitDefinitionCreateInput = {
   order?: number
   isMain?: boolean
   icon?: string | null
+  category?: string | null
+  subtitle?: string | null
+  trackMode?: string
+  countMin?: number
+  countMax?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   checkIns?: Prisma.HabitCheckInCreateNestedManyWithoutHabitInput
@@ -337,6 +410,11 @@ export type HabitDefinitionUncheckedCreateInput = {
   order?: number
   isMain?: boolean
   icon?: string | null
+  category?: string | null
+  subtitle?: string | null
+  trackMode?: string
+  countMin?: number
+  countMax?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   checkIns?: Prisma.HabitCheckInUncheckedCreateNestedManyWithoutHabitInput
@@ -350,6 +428,11 @@ export type HabitDefinitionUpdateInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checkIns?: Prisma.HabitCheckInUpdateManyWithoutHabitNestedInput
@@ -363,6 +446,11 @@ export type HabitDefinitionUncheckedUpdateInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checkIns?: Prisma.HabitCheckInUncheckedUpdateManyWithoutHabitNestedInput
@@ -376,6 +464,11 @@ export type HabitDefinitionCreateManyInput = {
   order?: number
   isMain?: boolean
   icon?: string | null
+  category?: string | null
+  subtitle?: string | null
+  trackMode?: string
+  countMin?: number
+  countMax?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -388,6 +481,11 @@ export type HabitDefinitionUpdateManyMutationInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -400,6 +498,11 @@ export type HabitDefinitionUncheckedUpdateManyInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -412,6 +515,11 @@ export type HabitDefinitionCountOrderByAggregateInput = {
   order?: Prisma.SortOrder
   isMain?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  subtitle?: Prisma.SortOrder
+  trackMode?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -419,6 +527,8 @@ export type HabitDefinitionCountOrderByAggregateInput = {
 export type HabitDefinitionAvgOrderByAggregateInput = {
   slotsCount?: Prisma.SortOrder
   order?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
 }
 
 export type HabitDefinitionMaxOrderByAggregateInput = {
@@ -429,6 +539,11 @@ export type HabitDefinitionMaxOrderByAggregateInput = {
   order?: Prisma.SortOrder
   isMain?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  subtitle?: Prisma.SortOrder
+  trackMode?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -441,6 +556,11 @@ export type HabitDefinitionMinOrderByAggregateInput = {
   order?: Prisma.SortOrder
   isMain?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  subtitle?: Prisma.SortOrder
+  trackMode?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -448,6 +568,8 @@ export type HabitDefinitionMinOrderByAggregateInput = {
 export type HabitDefinitionSumOrderByAggregateInput = {
   slotsCount?: Prisma.SortOrder
   order?: Prisma.SortOrder
+  countMin?: Prisma.SortOrder
+  countMax?: Prisma.SortOrder
 }
 
 export type HabitDefinitionScalarRelationFilter = {
@@ -477,6 +599,11 @@ export type HabitDefinitionCreateWithoutCheckInsInput = {
   order?: number
   isMain?: boolean
   icon?: string | null
+  category?: string | null
+  subtitle?: string | null
+  trackMode?: string
+  countMin?: number
+  countMax?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -489,6 +616,11 @@ export type HabitDefinitionUncheckedCreateWithoutCheckInsInput = {
   order?: number
   isMain?: boolean
   icon?: string | null
+  category?: string | null
+  subtitle?: string | null
+  trackMode?: string
+  countMin?: number
+  countMax?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -517,6 +649,11 @@ export type HabitDefinitionUpdateWithoutCheckInsInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -529,6 +666,11 @@ export type HabitDefinitionUncheckedUpdateWithoutCheckInsInput = {
   order?: Prisma.IntFieldUpdateOperationsInput | number
   isMain?: Prisma.BoolFieldUpdateOperationsInput | boolean
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  trackMode?: Prisma.StringFieldUpdateOperationsInput | string
+  countMin?: Prisma.IntFieldUpdateOperationsInput | number
+  countMax?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -572,6 +714,11 @@ export type HabitDefinitionSelect<ExtArgs extends runtime.Types.Extensions.Inter
   order?: boolean
   isMain?: boolean
   icon?: boolean
+  category?: boolean
+  subtitle?: boolean
+  trackMode?: boolean
+  countMin?: boolean
+  countMax?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   checkIns?: boolean | Prisma.HabitDefinition$checkInsArgs<ExtArgs>
@@ -586,6 +733,11 @@ export type HabitDefinitionSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   order?: boolean
   isMain?: boolean
   icon?: boolean
+  category?: boolean
+  subtitle?: boolean
+  trackMode?: boolean
+  countMin?: boolean
+  countMax?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["habitDefinition"]>
@@ -598,6 +750,11 @@ export type HabitDefinitionSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   order?: boolean
   isMain?: boolean
   icon?: boolean
+  category?: boolean
+  subtitle?: boolean
+  trackMode?: boolean
+  countMin?: boolean
+  countMax?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["habitDefinition"]>
@@ -610,11 +767,16 @@ export type HabitDefinitionSelectScalar = {
   order?: boolean
   isMain?: boolean
   icon?: boolean
+  category?: boolean
+  subtitle?: boolean
+  trackMode?: boolean
+  countMin?: boolean
+  countMax?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type HabitDefinitionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "type" | "slotsCount" | "order" | "isMain" | "icon" | "createdAt" | "updatedAt", ExtArgs["result"]["habitDefinition"]>
+export type HabitDefinitionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "type" | "slotsCount" | "order" | "isMain" | "icon" | "category" | "subtitle" | "trackMode" | "countMin" | "countMax" | "createdAt" | "updatedAt", ExtArgs["result"]["habitDefinition"]>
 export type HabitDefinitionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   checkIns?: boolean | Prisma.HabitDefinition$checkInsArgs<ExtArgs>
   _count?: boolean | Prisma.HabitDefinitionCountOutputTypeDefaultArgs<ExtArgs>
@@ -635,6 +797,11 @@ export type $HabitDefinitionPayload<ExtArgs extends runtime.Types.Extensions.Int
     order: number
     isMain: boolean
     icon: string | null
+    category: string | null
+    subtitle: string | null
+    trackMode: string
+    countMin: number
+    countMax: number
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["habitDefinition"]>
@@ -1068,6 +1235,11 @@ export interface HabitDefinitionFieldRefs {
   readonly order: Prisma.FieldRef<"HabitDefinition", 'Int'>
   readonly isMain: Prisma.FieldRef<"HabitDefinition", 'Boolean'>
   readonly icon: Prisma.FieldRef<"HabitDefinition", 'String'>
+  readonly category: Prisma.FieldRef<"HabitDefinition", 'String'>
+  readonly subtitle: Prisma.FieldRef<"HabitDefinition", 'String'>
+  readonly trackMode: Prisma.FieldRef<"HabitDefinition", 'String'>
+  readonly countMin: Prisma.FieldRef<"HabitDefinition", 'Int'>
+  readonly countMax: Prisma.FieldRef<"HabitDefinition", 'Int'>
   readonly createdAt: Prisma.FieldRef<"HabitDefinition", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"HabitDefinition", 'DateTime'>
 }

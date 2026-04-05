@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import TransactionsList, { type Account, type Transaction } from '@/components/TransactionsList'
+import { fetchJsonArray } from '@/lib/safe-fetch'
 
 export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -15,12 +16,13 @@ export default function TransactionsPage() {
       scrollY = window.scrollY ?? document.documentElement.scrollTop
     }
     try {
+      const t = Date.now()
       const [accountsRes, transactionsRes] = await Promise.all([
-        fetch(`/api/accounts?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()),
-        fetch(`/api/transactions?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()),
+        fetchJsonArray<Account>(`/api/accounts?t=${t}`),
+        fetchJsonArray<Transaction>(`/api/transactions?t=${t}`),
       ])
-      setAccounts(Array.isArray(accountsRes) ? accountsRes : [])
-      setTransactions(Array.isArray(transactionsRes) ? transactionsRes : [])
+      setAccounts(accountsRes)
+      setTransactions(transactionsRes)
     } catch (e) {
       console.error(e)
     } finally {

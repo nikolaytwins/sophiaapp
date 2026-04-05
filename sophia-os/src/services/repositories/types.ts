@@ -5,7 +5,7 @@ import type {
   EsotericPreview,
   FinanceSummary,
   Goal,
-  Habit,
+  HabitsSnapshot,
   HealthSnapshot,
   QuickPrompt,
   Task,
@@ -31,10 +31,16 @@ export interface GoalsRepository {
   listActive(): Promise<Goal[]>;
 }
 
+export interface HabitToggleOptions {
+  bump?: 1 | -1;
+  setCount?: number;
+}
+
 export interface HabitsRepository {
   /** Календарный день пользователя YYYY-MM-DD (локальная дата устройства). */
-  list(dateKey?: string): Promise<Habit[]>;
-  toggle(habitId: string, dateKey?: string): Promise<Habit[]>;
+  list(dateKey?: string): Promise<HabitsSnapshot>;
+  toggle(habitId: string, dateKey?: string, opts?: HabitToggleOptions): Promise<HabitsSnapshot>;
+  saveReflection(note: string, dateKey?: string): Promise<HabitsSnapshot>;
 }
 
 export interface HealthRepository {

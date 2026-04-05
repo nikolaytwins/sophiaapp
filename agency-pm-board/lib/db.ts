@@ -36,6 +36,11 @@ function ensureDb() {
   } catch {
     /* column may already exist */
   }
+  try {
+    _db.exec(`UPDATE pm_cards SET status = 'design_approval' WHERE status = 'client_approval'`);
+  } catch {
+    /* ignore */
+  }
   return _db;
 }
 
