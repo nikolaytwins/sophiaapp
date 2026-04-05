@@ -5,7 +5,9 @@ import { createJSONStorage, persist } from '@/lib/zustandPersist';
 import type { Habit, HabitPersisted } from '@/entities/models';
 import {
   countCompletionsInWeekRange,
+  counterCountOnDate,
   dailyStreak,
+  dailyStreakCounter,
   hasDailyCompletionOn,
   localDateKey,
   startOfWeekMondayKey,
@@ -13,6 +15,7 @@ import {
 } from '@/features/habits/habitLogic';
 import {
   checkInSlice,
+  counterAdjustSlice,
   createHabitSlice,
   ensureDefaultHabitsSlice,
   HABITS_SEED_ROWS,
@@ -37,16 +40,23 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
       ? countCompletionsInWeekRange(raw.completionDates, weekStart)
       : undefined;
 
+  const isCounterDaily =
+    raw.cadence === 'daily' && raw.checkInKind === 'counter' && raw.dailyTarget != null;
+
   const streak =
     raw.cadence === 'daily'
-      ? dailyStreak(raw.completionDates, todayKey)
+      ? isCounterDaily && raw.dailyTarget != null
+        ? dailyStreakCounter(raw.countsByDate, raw.dailyTarget, todayKey)
+        : dailyStreak(raw.completionDates, todayKey)
       : raw.cadence === 'weekly' && raw.weeklyTarget != null
         ? weeklyStreak(raw.completionDates, raw.weeklyTarget, todayKey)
         : 0;
 
   const todayDone =
     raw.cadence === 'daily'
-      ? hasDailyCompletionOn(raw.completionDates, todayKey)
+      ? isCounterDaily && raw.dailyTarget != null
+        ? counterCountOnDate(raw.countsByDate, todayKey) >= raw.dailyTarget
+        : hasDailyCompletionOn(raw.completionDates, todayKey)
       : countToday(raw.completionDates, todayKey) > 0;
 
   const weekQuotaMet =
@@ -64,6 +74,14 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
     section: raw.section,
     cadence: raw.cadence,
     weeklyTarget: raw.weeklyTarget,
+    ...(raw.checkInKind === 'counter'
+      ? {
+          checkInKind: 'counter' as const,
+          dailyTarget: raw.dailyTarget,
+          countsByDate: { ...(raw.countsByDate ?? {}) },
+          ...(raw.counterUnit ? { counterUnit: raw.counterUnit } : {}),
+        }
+      : {}),
     streak,
     todayDone,
     weeklyCompleted: weeklyDone,
@@ -84,9 +102,13 @@ type State = HabitsPersistSlice & {
     cadence: HabitPersisted['cadence'];
     weeklyTarget?: number;
     section?: HabitPersisted['section'];
+    checkInKind?: HabitPersisted['checkInKind'];
+    dailyTarget?: number;
+    counterUnit?: string;
   }) => void;
   remove: (id: string) => void;
   checkIn: (id: string, dateKey?: string) => void;
+  adjustCounter: (id: string, dateKey: string, delta: 1 | -1) => void;
   undoWeekly: (id: string, dateKey?: string) => void;
   setRequired: (id: string, required: boolean) => void;
 };
@@ -111,6 +133,8 @@ export const useHabitsStore = create<State>()(
       remove: (id) => set((s) => removeHabitSlice(s, id)),
 
       checkIn: (id, dateKey) => set((s) => checkInSlice(s, id, dateKey)),
+
+      adjustCounter: (id, dateKey, delta) => set((s) => counterAdjustSlice(s, id, dateKey, delta)),
 
       undoWeekly: (id, dateKey) => set((s) => undoWeeklySlice(s, id, dateKey)),
 

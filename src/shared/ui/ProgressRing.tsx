@@ -10,6 +10,7 @@ type Props = {
   stroke?: number;
   label?: string;
   sublabel?: string;
+  labelFontSize?: number;
   /** Фон кольца (по умолчанию из темы — на экранах «Ритм» задавайте нейтральный тёмный трек). */
   trackColor?: string;
   /** Дуга прогресса (по умолчанию accent темы). */
@@ -24,6 +25,7 @@ export function ProgressRing({
   stroke = 10,
   label,
   sublabel,
+  labelFontSize,
   trackColor,
   progressColor,
   sublabelColor,
@@ -45,7 +47,7 @@ export function ProgressRing({
         },
         label: {
           ...typography.hero,
-          fontSize: 36,
+          fontSize: labelFontSize ?? 36,
           color: colors.text,
         },
         sub: {
@@ -54,7 +56,7 @@ export function ProgressRing({
           color: sublabelColor ?? colors.textMuted,
         },
       }),
-    [colors, sublabelColor, typography]
+    [colors, labelFontSize, sublabelColor, typography]
   );
 
   const track = trackColor ?? colors.borderStrong;

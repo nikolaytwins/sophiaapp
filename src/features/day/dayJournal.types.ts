@@ -1,6 +1,9 @@
 export type JournalFieldType = 'text' | 'number' | 'toggle';
 export type JournalFieldSection = 'journal' | 'health';
 
+/** Настроение дня в дневнике (эмодзи + цвет в UI). */
+export type JournalMoodId = 'death' | 'sad' | 'neutral' | 'smile' | 'stars';
+
 export type JournalFieldDefinition = {
   id: string;
   label: string;
@@ -17,6 +20,7 @@ export type JournalEntry = {
   dateKey: string;
   values: Record<string, JournalFieldValue>;
   updatedAt: string;
+  mood?: JournalMoodId;
 };
 
 export type JournalDocument = {

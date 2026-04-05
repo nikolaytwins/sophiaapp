@@ -40,21 +40,11 @@ import { useAppTheme } from '@/theme';
 const ACCENT = '#A855F7';
 const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
 const SPHERE_ORDER: SprintSphere[] = ['relationships', 'energy', 'work'];
+
 /** Единые карточки как на «Привычки». */
 const CARD_R = 18;
 const CARD_PAD = 18;
 const SECTION = 28;
-
-/** Как на экране «Привычки»: Ionicons outline, 22px, акцент у активного таба. */
-const SPHERE_TAB: {
-  key: SprintSphere;
-  short: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}[] = [
-  { key: 'relationships', short: 'Отношения', icon: 'heart-outline' },
-  { key: 'energy', short: 'Энергия', icon: 'flash-outline' },
-  { key: 'work', short: 'Работа', icon: 'briefcase-outline' },
-];
 
 function parseGoalNumber(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
@@ -121,8 +111,6 @@ export function SprintScreen() {
   const setGoalHabitLinks = useSprintStore((s) => s.setGoalHabitLinks);
   const setProgressGoalNumbers = useSprintStore((s) => s.setProgressGoalNumbers);
   const active = useMemo(() => sprints.find((x) => x.status === 'active') ?? null, [sprints]);
-
-  const [sphereTab, setSphereTab] = useState<SprintSphere>('relationships');
 
   const [durationPick, setDurationPick] = useState<30 | 60 | 90>(30);
   const [newTitle, setNewTitle] = useState('');
@@ -206,22 +194,6 @@ export function SprintScreen() {
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [active, addGoal, currentStr, goalKind, goalTitle, linkHabitId, resetAddForm, sphere, targetStr]);
 
-  const bySphere = useMemo(() => {
-    if (!active) return null;
-    const m: Record<SprintSphere, SprintGoal[]> = {
-      relationships: [],
-      energy: [],
-      work: [],
-    };
-    for (const g of active.goals) {
-      m[g.sphere].push(g);
-    }
-    for (const k of SPHERE_ORDER) {
-      m[k].sort((a, b) => a.sortOrder - b.sortOrder);
-    }
-    return m;
-  }, [active]);
-
   const dayIdx = active ? sprintElapsedDayIndex(active.startDate, todayKey, active.durationDays) : 0;
   const timeProgress = active && active.durationDays > 0 ? Math.min(1, dayIdx / active.durationDays) : 0;
 
@@ -230,10 +202,10 @@ export function SprintScreen() {
     [active]
   );
 
-  const goalsInTab = useMemo(() => {
-    if (!active || !bySphere) return [];
-    return bySphere[sphereTab];
-  }, [active, bySphere, sphereTab]);
+  const sortedGoals = useMemo(() => {
+    if (!active) return [];
+    return [...active.goals].sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [active]);
 
   const habitName = useCallback(
     (id: string) => habitsQ.data?.find((h) => h.id === id)?.name ?? id,
@@ -472,7 +444,6 @@ export function SprintScreen() {
 
               <Pressable
                 onPress={() => {
-                  setSphere(sphereTab);
                   setAddOpen(true);
                 }}
                 style={({ pressed }) => ({
@@ -499,88 +470,21 @@ export function SprintScreen() {
                   marginBottom: 12,
                 }}
               >
-                СФЕРЫ
+                ЦЕЛИ СПРИНТА
               </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {SPHERE_TAB.map(({ key, short, icon }) => {
-                  const activeTab = sphereTab === key;
-                  return (
-                    <Pressable
-                      key={key}
-                      onPress={() => setSphereTab(key)}
-                      style={{ flex: 1 }}
-                    >
-                      {activeTab ? (
-                        <LinearGradient
-                          colors={['rgba(168,85,247,0.45)', 'rgba(168,85,247,0.12)']}
-                          style={{
-                            borderRadius: CARD_R,
-                            paddingVertical: 14,
-                            paddingHorizontal: 8,
-                            borderWidth: 1,
-                            borderColor: 'rgba(168,85,247,0.55)',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          <Ionicons name={icon} size={22} color={ACCENT} />
-                          <Text
-                            numberOfLines={2}
-                            style={{
-                              textAlign: 'center',
-                              fontSize: 13,
-                              fontWeight: '800',
-                              color: '#FAFAFC',
-                              lineHeight: 17,
-                            }}
-                          >
-                            {short}
-                          </Text>
-                        </LinearGradient>
-                      ) : (
-                        <View
-                          style={{
-                            borderRadius: CARD_R,
-                            paddingVertical: 14,
-                            paddingHorizontal: 8,
-                            borderWidth: 1,
-                            borderColor: 'rgba(255,255,255,0.08)',
-                            backgroundColor: 'rgba(255,255,255,0.03)',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          <Ionicons name={icon} size={22} color="rgba(255,255,255,0.42)" />
-                          <Text
-                            numberOfLines={2}
-                            style={{
-                              textAlign: 'center',
-                              fontSize: 13,
-                              fontWeight: '700',
-                              color: colors.textMuted,
-                              lineHeight: 17,
-                            }}
-                          >
-                            {short}
-                          </Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
 
-              {goalsInTab.length === 0 ? (
-                <Text style={{ fontSize: 15, color: colors.textMuted, marginTop: 18, lineHeight: 22 }}>
-                  В этой сфере пока нет целей. Добавьте цель — она попадёт в выбранную сферу.
+              {sortedGoals.length === 0 ? (
+                <Text style={{ fontSize: 15, color: colors.textMuted, marginTop: 6, lineHeight: 22 }}>
+                  Пока нет целей. Нажми «+ Цель» и добавь первую — сферу можно выбрать в форме.
                 </Text>
               ) : (
-                goalsInTab.map((g) => (
+                sortedGoals.map((g) => (
                   <SurfaceCard key={g.id} style={{ marginTop: 14 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Text style={{ flex: 1, fontSize: 17, fontWeight: '700', color: colors.text, paddingRight: 8, lineHeight: 23 }}>
-                        {g.title}
-                      </Text>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text, lineHeight: 23 }}>{g.title}</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>{SPRINT_SPHERE_LABEL[g.sphere]}</Text>
+                      </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                         {g.kind === 'progress' ? (
                           <Pressable onPress={() => setGoalProgressEdit(g)} hitSlop={10} style={{ padding: 8 }}>

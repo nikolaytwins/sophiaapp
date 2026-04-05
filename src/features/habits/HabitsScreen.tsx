@@ -30,24 +30,24 @@ import type { Habit } from '@/entities/models';
 import {
   chunkMonthIntoWeekRows,
   monthAnchorKey,
-  monthCompletionPercentDays,
+  monthCompletionPercentDaysForHabit,
   monthCompletionPercentWeekly,
   monthGridCells,
   monthGridTitleRu,
   parseYearMonthFromKey,
-  WEEKDAY_LABELS_SHORT,
   weekdayIndexMondayFirst,
   ymToIndex,
-  type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
 import { useSupabaseConfigured } from '@/config/env';
-import { addDays, localDateKey } from '@/features/habits/habitLogic';
+import { addDays, counterCountOnDate, localDateKey } from '@/features/habits/habitLogic';
 import { monthHabitQuota } from '@/features/habits/monthCompletionQuota';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
 import { useSprintStore } from '@/stores/sprint.store';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { HabitHero } from '@/features/habits/HabitHero';
+import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
+import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
@@ -213,83 +213,13 @@ function CheckInControl({
   );
 }
 
-/** ~30% меньше прежних 10 — баланс «крупно, но не календарь на всю карточку». */
-const GRID_ROW_GAP = 7;
-const GRID_COL_GAP = 7;
-
-function DailyContributionCell({
-  cell,
-  todayKey,
-  completedSet,
-  variant = 'daily',
-}: {
-  cell: MonthGridCell;
-  todayKey: string;
-  completedSet: Set<string>;
-  variant?: 'daily' | 'weekly';
-}) {
-  if (!cell.dateKey) {
-    return <View style={{ flex: 1, aspectRatio: 1, minWidth: 0 }} />;
-  }
-  const isFuture = cell.dateKey > todayKey;
-  const done = !isFuture && completedSet.has(cell.dateKey);
-  const isToday = cell.dateKey === todayKey;
-  const isWeekly = variant === 'weekly';
-  const fillDone = isWeekly ? '#B794F6' : '#9D4EDD';
-  const fillToday = isWeekly ? 'rgba(196,181,253,0.14)' : 'rgba(168,85,247,0.11)';
-  const shadowDone = isWeekly ? '#C4B5FD' : '#9D4EDD';
-  const shadowRing = isWeekly ? WEEKLY : ACCENT;
-
-  return (
-    <View
-      style={{ flex: 1, aspectRatio: 1, minWidth: 0, padding: 1.5 }}
-      accessibilityLabel={
-        isFuture ? 'будущий день' : done ? 'отмечено' : isToday ? 'сегодня' : 'без отметки'
-      }
-    >
-      <View
-        style={{
-          flex: 1,
-          borderRadius: 6,
-          backgroundColor: isFuture
-            ? 'rgba(255,255,255,0.02)'
-            : done
-              ? fillDone
-              : isToday
-                ? fillToday
-                : 'rgba(255,255,255,0.055)',
-          opacity: isFuture ? 0.32 : 1,
-          ...(Platform.OS === 'web'
-            ? {}
-            : done && !isFuture
-              ? {
-                  shadowColor: shadowDone,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: isToday ? 0.55 : 0.5,
-                  shadowRadius: isToday ? 12 : 10,
-                  elevation: isToday ? 7 : 6,
-                }
-              : isToday && !done && !isFuture
-                ? {
-                    shadowColor: shadowRing,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.45,
-                    shadowRadius: 10,
-                    elevation: 5,
-                  }
-                : {}),
-        }}
-      />
-    </View>
-  );
-}
-
 function HabitCard({
   habit,
   onCheck,
   onUndo,
   onDelete,
   onToggleRequired,
+  onAdjustCounter,
   todayKey,
 }: {
   habit: Habit;
@@ -297,10 +227,12 @@ function HabitCard({
   onUndo: (dateKey?: string) => void;
   onDelete: () => void;
   onToggleRequired?: () => void;
+  onAdjustCounter: (id: string, dateKey: string, delta: 1 | -1) => void;
   todayKey: string;
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
   const isDaily = habit.cadence === 'daily';
+  const isCounterDaily = isDaily && habit.checkInKind === 'counter' && habit.dailyTarget != null;
   const accent = isDaily ? ACCENT : WEEKLY;
   const target = habit.weeklyTarget ?? 1;
   const doneWeek = habit.weeklyCompleted ?? 0;
@@ -308,8 +240,15 @@ function HabitCard({
 
   const completedDailySet = useMemo(() => {
     if (!isDaily) return new Set<string>();
+    if (isCounterDaily && habit.dailyTarget != null) {
+      const s = new Set<string>();
+      for (const [k, v] of Object.entries(habit.countsByDate ?? {})) {
+        if (v >= habit.dailyTarget) s.add(k);
+      }
+      return s;
+    }
     return new Set(habit.completionDates ?? []);
-  }, [habit.completionDates, isDaily]);
+  }, [habit.completionDates, habit.countsByDate, habit.dailyTarget, isCounterDaily, isDaily]);
 
   const completedWeeklySet = useMemo(() => {
     if (isDaily) return new Set<string>();
@@ -326,8 +265,8 @@ function HabitCard({
   const monthGridTitle = useMemo(() => monthGridTitleRu(gridAnchorKey), [gridAnchorKey]);
   const todayWeekdayIdx = useMemo(() => weekdayIndexMondayFirst(todayKey), [todayKey]);
   const monthPct = useMemo(
-    () => monthCompletionPercentDays(habit.completionDates, viewYm.y, viewYm.m, todayKey),
-    [habit.completionDates, viewYm.y, viewYm.m, todayKey]
+    () => monthCompletionPercentDaysForHabit(habit, viewYm.y, viewYm.m, todayKey),
+    [habit, viewYm.y, viewYm.m, todayKey]
   );
   const monthPctWeekly = useMemo(
     () =>
@@ -350,8 +289,12 @@ function HabitCard({
 
   const statusLine = useMemo(() => {
     if (!isDaily) return '';
+    if (isCounterDaily && habit.dailyTarget != null) {
+      const c = counterCountOnDate(habit.countsByDate, todayKey);
+      return c >= habit.dailyTarget ? 'Цель дня выполнена' : `${c} из ${habit.dailyTarget} сегодня`;
+    }
     return habit.todayDone ? 'Сегодня закрыто' : 'Ждёт отметки сегодня';
-  }, [isDaily, habit.todayDone]);
+  }, [habit.countsByDate, habit.dailyTarget, habit.todayDone, isCounterDaily, isDaily, todayKey]);
 
   const needsAttention = isDaily ? !habit.todayDone : !habit.weekQuotaMet;
 
@@ -568,7 +511,11 @@ function HabitCard({
                     borderColor: 'rgba(168,85,247,0.22)',
                   }}
                 >
-                  <Text style={[typography.caption, { color: accent, fontWeight: '700' }]}>каждый день</Text>
+                  <Text style={[typography.caption, { color: accent, fontWeight: '700' }]}>
+                    {isCounterDaily && habit.dailyTarget != null
+                      ? `счётчик · ${habit.dailyTarget}×`
+                      : 'каждый день'}
+                  </Text>
                 </View>
               </View>
               {onToggleRequired ? (
@@ -628,143 +575,19 @@ function HabitCard({
                     : { alignSelf: 'stretch' }),
                 }}
               >
-                <View style={{ marginBottom: spacing.sm }}>
-                  <Text
-                    style={[
-                      typography.caption,
-                      { color: 'rgba(255,255,255,0.32)', letterSpacing: 1.3, textTransform: 'uppercase' },
-                    ]}
-                  >
-                    МЕСЯЦ
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      marginTop: 6,
-                      gap: 0,
-                    }}
-                  >
-                    <Pressable
-                      onPress={goPrevMonth}
-                      disabled={!canGoPrevMonth}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Предыдущий месяц"
-                      style={({ pressed }) => ({
-                        padding: 4,
-                        opacity: !canGoPrevMonth ? 0.2 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <Ionicons name="chevron-back" size={20} color="rgba(255,255,255,0.55)" />
-                    </Pressable>
-                    <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-                      <Text
-                        style={[
-                          typography.title2,
-                          {
-                            fontSize: 15,
-                            fontWeight: '600',
-                            color: 'rgba(255,255,255,0.78)',
-                            letterSpacing: -0.2,
-                            textAlign: 'center',
-                          },
-                        ]}
-                      >
-                        {monthGridTitle}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: '600',
-                          letterSpacing: 0.2,
-                          color: 'rgba(196,181,253,0.88)',
-                        }}
-                      >
-                        {monthPct}%
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={goNextMonth}
-                      disabled={!canGoNextMonth}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Следующий месяц"
-                      style={({ pressed }) => ({
-                        padding: 4,
-                        opacity: !canGoNextMonth ? 0.2 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.55)" />
-                    </Pressable>
-                  </View>
-                </View>
-                <View
-                  style={{
-                    width: '100%',
-                    borderRadius: radius.xl,
-                    padding: spacing.sm,
-                    backgroundColor: 'rgba(0,0,0,0.35)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.08)',
-                    overflow: 'hidden',
-                    position: 'relative',
-                  }}
-                >
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={['rgba(168,85,247,0.08)', 'transparent']}
-                    style={{ ...StyleSheet.absoluteFillObject, opacity: 0.9 }}
-                  />
-                  <View style={{ width: '100%', zIndex: 1 }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        width: '100%',
-                        gap: GRID_COL_GAP,
-                        marginBottom: GRID_ROW_GAP,
-                      }}
-                    >
-                      {WEEKDAY_LABELS_SHORT.map((label, i) => {
-                        const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
-                        return (
-                          <View key={label} style={{ flex: 1, alignItems: 'center' }}>
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                fontWeight: isTodayCol ? '700' : '500',
-                                letterSpacing: 0.35,
-                                color: isTodayCol ? ACCENT : 'rgba(255,255,255,0.32)',
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                    {monthWeekRows.map((row, ri) => (
-                      <View
-                        key={`w-${ri}`}
-                        style={{
-                          flexDirection: 'row',
-                          width: '100%',
-                          marginBottom: ri < monthWeekRows.length - 1 ? GRID_ROW_GAP : 0,
-                          gap: GRID_COL_GAP,
-                        }}
-                      >
-                        {row.map((cell, ci) => (
-                          <DailyContributionCell
-                            key={cell.dateKey ?? `pad-${ri}-${ci}`}
-                            cell={cell}
-                            todayKey={todayKey}
-                            completedSet={completedDailySet}
-                          />
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                </View>
+                <HabitMonthCalendar
+                  monthTitle={monthGridTitle}
+                  monthStatLine={`${monthPct}% за месяц`}
+                  monthWeekRows={monthWeekRows}
+                  completedSet={completedDailySet}
+                  todayKey={todayKey}
+                  isViewingCurrentMonth={isViewingCurrentMonth}
+                  todayWeekdayIdx={todayWeekdayIdx}
+                  canGoPrevMonth={canGoPrevMonth}
+                  canGoNextMonth={canGoNextMonth}
+                  onPrevMonth={goPrevMonth}
+                  onNextMonth={goNextMonth}
+                />
               </View>
 
               <View
@@ -785,11 +608,22 @@ function HabitCard({
 
             <View style={[{ width: '100%' }, ctaZoneStyle]}>
               {actionDayUi}
-              <CheckInControl
-                active={Boolean(habit.completionDates?.includes(actionDayKey))}
-                onPress={() => onCheck(actionDayKey)}
-                variant="daily"
-              />
+              {isCounterDaily && habit.dailyTarget != null ? (
+                <HabitCounterRingCard
+                  habit={habit}
+                  viewDateKey={actionDayKey}
+                  todayKey={todayKey}
+                  onDelta={(d) => onAdjustCounter(habit.id, actionDayKey, d)}
+                  ringSize={124}
+                  progressColor={accent}
+                />
+              ) : (
+                <CheckInControl
+                  active={Boolean(habit.completionDates?.includes(actionDayKey))}
+                  onPress={() => onCheck(actionDayKey)}
+                  variant="daily"
+                />
+              )}
             </View>
           </>
         ) : (
@@ -887,77 +721,6 @@ function HabitCard({
                     : { alignSelf: 'stretch' }),
                 }}
               >
-                <View style={{ marginBottom: spacing.md }}>
-                  <Text
-                    style={[
-                      typography.caption,
-                      { color: 'rgba(255,255,255,0.32)', letterSpacing: 1.3, textTransform: 'uppercase' },
-                    ]}
-                  >
-                    МЕСЯЦ
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      marginTop: 6,
-                    }}
-                  >
-                    <Pressable
-                      onPress={goPrevMonth}
-                      disabled={!canGoPrevMonth}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Предыдущий месяц"
-                      style={({ pressed }) => ({
-                        padding: 4,
-                        opacity: !canGoPrevMonth ? 0.2 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <Ionicons name="chevron-back" size={20} color="rgba(255,255,255,0.55)" />
-                    </Pressable>
-                    <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                      <Text
-                        style={[
-                          typography.title2,
-                          {
-                            fontSize: 15,
-                            fontWeight: '600',
-                            color: 'rgba(255,255,255,0.78)',
-                            letterSpacing: -0.2,
-                            textAlign: 'center',
-                          },
-                        ]}
-                      >
-                        {monthGridTitle}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: '600',
-                          letterSpacing: 0.2,
-                          color: 'rgba(196,181,253,0.88)',
-                        }}
-                      >
-                        {monthPctWeekly}% месяца
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={goNextMonth}
-                      disabled={!canGoNextMonth}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Следующий месяц"
-                      style={({ pressed }) => ({
-                        padding: 4,
-                        opacity: !canGoNextMonth ? 0.2 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.55)" />
-                    </Pressable>
-                  </View>
-                </View>
-
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
                   <Text style={[typography.caption, { color: 'rgba(255,255,255,0.38)', letterSpacing: 1.2 }]}>
                     ЭТА НЕДЕЛЯ
@@ -985,73 +748,20 @@ function HabitCard({
                   />
                 </View>
 
-                <View
-                  style={{
-                    marginTop: spacing.md,
-                    width: '100%',
-                    borderRadius: radius.xl,
-                    padding: spacing.sm,
-                    backgroundColor: 'rgba(0,0,0,0.35)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.08)',
-                    overflow: 'hidden',
-                    position: 'relative',
-                  }}
-                >
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={['rgba(196,181,253,0.08)', 'transparent']}
-                    style={{ ...StyleSheet.absoluteFillObject, opacity: 0.9 }}
+                <View style={{ marginTop: spacing.md, width: '100%' }}>
+                  <HabitMonthCalendar
+                    monthTitle={monthGridTitle}
+                    monthStatLine={`${monthPctWeekly}% за месяц`}
+                    monthWeekRows={monthWeekRows}
+                    completedSet={completedWeeklySet}
+                    todayKey={todayKey}
+                    isViewingCurrentMonth={isViewingCurrentMonth}
+                    todayWeekdayIdx={todayWeekdayIdx}
+                    canGoPrevMonth={canGoPrevMonth}
+                    canGoNextMonth={canGoNextMonth}
+                    onPrevMonth={goPrevMonth}
+                    onNextMonth={goNextMonth}
                   />
-                  <View style={{ width: '100%', zIndex: 1 }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        width: '100%',
-                        gap: GRID_COL_GAP,
-                        marginBottom: GRID_ROW_GAP,
-                      }}
-                    >
-                      {WEEKDAY_LABELS_SHORT.map((label, i) => {
-                        const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
-                        return (
-                          <View key={label} style={{ flex: 1, alignItems: 'center' }}>
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                fontWeight: isTodayCol ? '700' : '500',
-                                letterSpacing: 0.35,
-                                color: isTodayCol ? accent : 'rgba(255,255,255,0.32)',
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                    {monthWeekRows.map((row, ri) => (
-                      <View
-                        key={`ww-${ri}`}
-                        style={{
-                          flexDirection: 'row',
-                          width: '100%',
-                          marginBottom: ri < monthWeekRows.length - 1 ? GRID_ROW_GAP : 0,
-                          gap: GRID_COL_GAP,
-                        }}
-                      >
-                        {row.map((cell, ci) => (
-                          <DailyContributionCell
-                            key={cell.dateKey ?? `wpad-${ri}-${ci}`}
-                            cell={cell}
-                            todayKey={todayKey}
-                            completedSet={completedWeeklySet}
-                            variant="weekly"
-                          />
-                        ))}
-                      </View>
-                    ))}
-                  </View>
                 </View>
                 {rhythmHint ? (
                   <Text style={[typography.caption, { marginTop: spacing.sm, color: 'rgba(255,255,255,0.42)' }]}>
@@ -1111,6 +821,14 @@ export function HabitsScreen() {
 
   const undoWeekly = useMutation({
     mutationFn: ({ id, dateKey }: { id: string; dateKey?: string }) => repos.habits.undoWeekly(id, dateKey),
+    onSuccess: (list) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
+    },
+  });
+
+  const adjustCounter = useMutation({
+    mutationFn: ({ id, dateKey, delta }: { id: string; dateKey: string; delta: 1 | -1 }) =>
+      repos.habits.adjustCounter(id, dateKey, delta),
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
     },
@@ -1501,6 +1219,9 @@ export function HabitsScreen() {
                               onToggleRequired={() =>
                                 setRequiredMutation.mutate({ id: h.id, required: !h.required })
                               }
+                              onAdjustCounter={(id, dateKey, delta) =>
+                                adjustCounter.mutate({ id, dateKey, delta })
+                              }
                             />
                           )),
                         ];
@@ -1517,6 +1238,9 @@ export function HabitsScreen() {
                         onDelete={() => removeHabit.mutate(h.id)}
                         onToggleRequired={() =>
                           setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
+                        onAdjustCounter={(id, dateKey, delta) =>
+                          adjustCounter.mutate({ id, dateKey, delta })
                         }
                       />
                     ))
@@ -1566,6 +1290,9 @@ export function HabitsScreen() {
                               onToggleRequired={() =>
                                 setRequiredMutation.mutate({ id: h.id, required: !h.required })
                               }
+                              onAdjustCounter={(id, dateKey, delta) =>
+                                adjustCounter.mutate({ id, dateKey, delta })
+                              }
                             />
                           )),
                         ];
@@ -1582,6 +1309,9 @@ export function HabitsScreen() {
                         onDelete={() => removeHabit.mutate(h.id)}
                         onToggleRequired={() =>
                           setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
+                        onAdjustCounter={(id, dateKey, delta) =>
+                          adjustCounter.mutate({ id, dateKey, delta })
                         }
                       />
                     ))
@@ -1671,6 +1401,9 @@ export function HabitsScreen() {
                         onDelete={() => removeHabit.mutate(h.id)}
                         onToggleRequired={() =>
                           setRequiredMutation.mutate({ id: h.id, required: !h.required })
+                        }
+                        onAdjustCounter={(id, dateKey, delta) =>
+                          adjustCounter.mutate({ id, dateKey, delta })
                         }
                       />
                     ))

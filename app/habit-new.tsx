@@ -45,6 +45,10 @@ export default function HabitNewScreen() {
   const [cadence, setCadence] = useState<HabitCadence>('daily');
   const [weeklyTarget, setWeeklyTarget] = useState(3);
   const [icon, setIcon] = useState<string>(ICON_OPTIONS[0]);
+  /** Только для ежедневных: одна галочка или счётчик за день. */
+  const [dailyCheckMode, setDailyCheckMode] = useState<'once' | 'counter'>('once');
+  const [counterTarget, setCounterTarget] = useState(8);
+  const [counterUnit, setCounterUnit] = useState('');
 
   const { mutate, isPending, isError } = useMutation({
     mutationFn: () =>
@@ -53,6 +57,13 @@ export default function HabitNewScreen() {
         icon,
         cadence,
         weeklyTarget: cadence === 'weekly' ? weeklyTarget : undefined,
+        ...(cadence === 'daily' && dailyCheckMode === 'counter'
+          ? {
+              checkInKind: 'counter' as const,
+              dailyTarget: counterTarget,
+              ...(counterUnit.trim() ? { counterUnit: counterUnit.trim() } : {}),
+            }
+          : {}),
       }),
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
@@ -203,6 +214,59 @@ export default function HabitNewScreen() {
               : 'Цель на неделю (пн–вс): N выполнений. Стрик — недели подряд, где цель достигнута.'}
           </Text>
         </View>
+
+        {cadence === 'daily' ? (
+          <View style={{ marginTop: spacing.lg }}>
+            <Text style={[typography.caption, { marginBottom: spacing.sm }]}>ОТМЕТКА ЗА ДЕНЬ</Text>
+            <SegmentedControl
+              value={dailyCheckMode}
+              onChange={setDailyCheckMode}
+              options={[
+                { value: 'once', label: 'Раз в день' },
+                { value: 'counter', label: 'Несколько раз' },
+              ]}
+            />
+            <Text style={[typography.caption, { marginTop: spacing.sm, opacity: 0.85 }]}>
+              {dailyCheckMode === 'once'
+                ? 'Одна галочка закрывает день (как раньше).'
+                : 'В течение дня набираешь нужное число чек-инов (например стаканы воды).'}
+            </Text>
+            {dailyCheckMode === 'counter' ? (
+              <GlassCard style={{ marginTop: spacing.lg }} glow>
+                <Text style={typography.caption}>ЦЕЛЬ НА ДЕНЬ (ЧИСЛО ЧЕК-ИНОВ)</Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: spacing.sm,
+                    marginTop: spacing.md,
+                  }}
+                >
+                  {[2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((n) => {
+                    const on = n === counterTarget;
+                    return (
+                      <Pressable
+                        key={n}
+                        onPress={() => setCounterTarget(n)}
+                        style={[styles.chip, on && styles.chipOn]}
+                      >
+                        <Text style={[typography.title2, { color: on ? VIOLET : colors.text }]}>{n}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={[typography.caption, { marginTop: spacing.md }]}>ПОДПИСЬ (НЕОБЯЗАТЕЛЬНО)</Text>
+                <TextInput
+                  value={counterUnit}
+                  onChangeText={setCounterUnit}
+                  placeholder="стаканов, раз, минут…"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+              </GlassCard>
+            ) : null}
+          </View>
+        ) : null}
 
         {cadence === 'weekly' ? (
           <GlassCard style={{ marginTop: spacing.lg }} glow>

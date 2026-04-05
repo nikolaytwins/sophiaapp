@@ -53,6 +53,9 @@ export interface Goal {
 
 export type HabitCadence = 'daily' | 'weekly';
 
+/** `binary` — одна отметка на день; `counter` — несколько чек-инов до dailyTarget (только ежедневные). */
+export type HabitCheckInKind = 'binary' | 'counter';
+
 /**
  * `media` — вкладка «Медийка и работа».
  * `money` | `body` | `life` — группировка в основном ритме (профиль nikolaytwins).
@@ -65,6 +68,14 @@ export interface HabitPersisted {
   name: string;
   icon: string;
   cadence: HabitCadence;
+  /** По умолчанию binary; counter — только при cadence === 'daily'. */
+  checkInKind?: HabitCheckInKind;
+  /** Для counter: сколько чек-инов нужно за день (≥2). */
+  dailyTarget?: number;
+  /** Для counter: фактические отметки по датам YYYY-MM-DD. */
+  countsByDate?: Record<string, number>;
+  /** Подпись под кольцом: «стаканов», «раз» и т.п. */
+  counterUnit?: string;
   /** 1–7 when cadence === 'weekly' */
   weeklyTarget?: number;
   /** Опционально: отдельная секция на экране привычек. */
@@ -85,6 +96,10 @@ export interface Habit {
   streak: number;
   icon: string;
   section?: HabitListSection;
+  checkInKind?: HabitCheckInKind;
+  dailyTarget?: number;
+  countsByDate?: Record<string, number>;
+  counterUnit?: string;
   /** Daily: completed today. Weekly: at least one check-in today. */
   todayDone: boolean;
   cadence: HabitCadence;

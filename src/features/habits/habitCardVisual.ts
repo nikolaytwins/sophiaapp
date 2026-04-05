@@ -1,3 +1,4 @@
+import type { Habit } from '@/entities/models';
 import { addDays, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 
 export type MonthGridCell = { dateKey: string | null };
@@ -58,6 +59,31 @@ export function monthCompletionPercentDays(
     if (set.has(dk)) num++;
   }
   return Math.min(100, Math.round((num / denom) * 100));
+}
+
+/** Как `monthCompletionPercentDays`, но для привычки-счётчика (день засчитан при count ≥ dailyTarget). */
+export function monthCompletionPercentDaysForHabit(
+  h: Habit,
+  y: number,
+  m: number,
+  todayKey: string
+): number {
+  if (h.checkInKind === 'counter' && h.cadence === 'daily' && h.dailyTarget != null) {
+    const counts = h.countsByDate ?? {};
+    const target = h.dailyTarget;
+    const [ty, tm, td] = todayKey.split('-').map(Number);
+    const dim = new Date(y, m, 0).getDate();
+    const isCurrent = y === ty && m === tm;
+    const denom = isCurrent ? Math.min(td, dim) : dim;
+    if (denom <= 0) return 0;
+    let num = 0;
+    for (let d = 1; d <= denom; d++) {
+      const dk = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if ((counts[dk] ?? 0) >= target) num++;
+    }
+    return Math.min(100, Math.round((num / denom) * 100));
+  }
+  return monthCompletionPercentDays(h.completionDates, y, m, todayKey);
 }
 
 /** Строки по 7 ячеек (недели) для contribution-style layout. */

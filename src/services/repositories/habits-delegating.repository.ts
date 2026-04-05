@@ -35,6 +35,11 @@ export const delegatingHabitsRepository: HabitsRepository = {
     return localHabitsRepository.checkIn(id, dateKey);
   },
 
+  async adjustCounter(id, dateKey, delta) {
+    if (await useCloudHabits()) return supabaseRepo.adjustCounter(id, dateKey, delta);
+    return localHabitsRepository.adjustCounter(id, dateKey, delta);
+  },
+
   async undoWeekly(id, dateKey) {
     if (await useCloudHabits()) return supabaseRepo.undoWeekly(id, dateKey);
     return localHabitsRepository.undoWeekly(id, dateKey);

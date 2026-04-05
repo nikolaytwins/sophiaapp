@@ -21,6 +21,7 @@ import type {
   JournalFieldSection,
   JournalFieldType,
   JournalFieldValue,
+  JournalMoodId,
 } from '@/features/day/dayJournal.types';
 
 const STORAGE_KEY = 'sophia-os-day-journal-v3';
@@ -33,6 +34,7 @@ type State = {
   doc: JournalDocument;
   getEntry: (dateKey: string) => JournalEntry;
   setFieldValue: (dateKey: string, fieldId: string, value: JournalFieldValue) => void;
+  setMood: (dateKey: string, mood: JournalMoodId | null) => void;
   addField: (input: {
     label: string;
     prompt?: string;
@@ -67,6 +69,31 @@ export const useDayJournalStore = create<State>()(
                   values: { ...current.values, [fieldId]: value },
                   updatedAt: new Date().toISOString(),
                 },
+              },
+            },
+          };
+        });
+      },
+
+      setMood: (dateKey, mood) => {
+        set((state) => {
+          const doc = touch(state.doc);
+          const current = doc.entries[dateKey] ?? normalizeJournalEntry(dateKey, undefined, doc.fields);
+          const next: JournalEntry = {
+            ...current,
+            updatedAt: new Date().toISOString(),
+          };
+          if (mood == null) {
+            delete next.mood;
+          } else {
+            next.mood = mood;
+          }
+          return {
+            doc: {
+              ...doc,
+              entries: {
+                ...doc.entries,
+                [dateKey]: next,
               },
             },
           };

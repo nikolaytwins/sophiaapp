@@ -6,11 +6,18 @@ import {
   type JournalFieldSection,
   type JournalFieldType,
   type JournalFieldValue,
+  type JournalMoodId,
 } from '@/features/day/dayJournal.types';
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_TYPE_SET: JournalFieldType[] = ['text', 'number', 'toggle'];
 const FIELD_SECTION_SET: JournalFieldSection[] = ['journal', 'health'];
+const VALID_MOODS = new Set<JournalMoodId>(['death', 'sad', 'neutral', 'smile', 'stars']);
+
+function normalizeMood(raw: unknown): JournalMoodId | undefined {
+  if (raw === null || raw === '') return undefined;
+  return typeof raw === 'string' && VALID_MOODS.has(raw as JournalMoodId) ? (raw as JournalMoodId) : undefined;
+}
 
 export function newJournalFieldId(): string {
   return `jf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -78,6 +85,8 @@ export function normalizeJournalEntry(
     base.values[field.id] = normalizeFieldValue(field.type, valuesRaw[field.id]);
   }
   base.updatedAt = typeof o.updatedAt === 'string' ? o.updatedAt : new Date().toISOString();
+  const mood = normalizeMood(o.mood);
+  if (mood) base.mood = mood;
   return base;
 }
 
@@ -123,6 +132,7 @@ export function normalizeJournalDocument(raw: unknown): JournalDocument {
 
 export function journalEntryHasContent(entry: JournalEntry | undefined, fields: JournalFieldDefinition[]): boolean {
   if (!entry) return false;
+  if (entry.mood) return true;
   for (const field of fields) {
     const value = entry.values[field.id];
     if (field.type === 'text' && typeof value === 'string' && value.trim()) return true;
@@ -152,7 +162,7 @@ export type JournalNarrativeExportDoc = {
   schema: 'sophia.journal.narrative.v1';
   exportedAt: string;
   fields: JournalFieldDefinition[];
-  entries: Array<{ dateKey: string; values: Record<string, JournalFieldValue> }>;
+  entries: Array<{ dateKey: string; mood?: JournalMoodId; values: Record<string, JournalFieldValue> }>;
 };
 
 export type JournalHealthExportDoc = {
@@ -168,12 +178,15 @@ export function buildNarrativeExport(doc: JournalDocument): JournalNarrativeExpo
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
     .map((entry) => ({
       dateKey: entry.dateKey,
+      ...(entry.mood ? { mood: entry.mood } : {}),
       values: Object.fromEntries(fields.map((f) => [f.id, entry.values[f.id] ?? normalizeFieldValue(f.type, undefined)])),
     }))
-    .filter((row) =>
-      Object.values(row.values).some((v) =>
-        typeof v === 'string' ? v.trim().length > 0 : typeof v === 'number' ? Number.isFinite(v) : v === true
-      )
+    .filter(
+      (row) =>
+        Boolean(row.mood) ||
+        Object.values(row.values).some((v) =>
+          typeof v === 'string' ? v.trim().length > 0 : typeof v === 'number' ? Number.isFinite(v) : v === true
+        )
     );
   return {
     schema: 'sophia.journal.narrative.v1',

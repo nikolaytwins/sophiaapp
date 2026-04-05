@@ -13,7 +13,6 @@ const TAB_HREF: Record<string, Href> = {
   day: '/day',
   journal: '/journal' as Href,
   sprint: '/sprint' as Href,
-  goals: '/goals' as Href,
   habits: '/habits',
 };
 
@@ -21,7 +20,6 @@ const LABELS: Record<string, string> = {
   day: 'День',
   journal: 'Дневник',
   sprint: 'Спринт',
-  goals: 'Цели',
   habits: 'Привычки',
 };
 
@@ -29,7 +27,6 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
   journal: 'book-outline',
   sprint: 'flag-outline',
-  goals: 'layers-outline',
   /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
   habits: 'repeat-outline',
 };

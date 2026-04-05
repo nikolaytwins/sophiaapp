@@ -25,10 +25,11 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasContent, getFieldsBySection } from '@/features/day/dayJournal.logic';
-import type { JournalFieldDefinition } from '@/features/day/dayJournal.types';
+import type { JournalFieldDefinition, JournalMoodId } from '@/features/day/dayJournal.types';
 import { mergeNikolayJournalFields } from '@/features/accounts/nikolayJournalFields';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { findJournalHabit } from '@/features/journal/journalHabit';
+import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { getSupabase } from '@/lib/supabase';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
 import { repos } from '@/services/repositories';
@@ -53,12 +54,6 @@ function formatWeekday(dateKey: string): string {
   const dt = new Date(y, m - 1, d);
   const s = dt.toLocaleDateString('ru-RU', { weekday: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function shortDayLabel(dateKey: string): string {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
 function JournalMultilineInput({
@@ -215,21 +210,13 @@ export function JournalScreen() {
 
   const doc = useDayJournalStore((s) => s.doc);
   const setFieldValue = useDayJournalStore((s) => s.setFieldValue);
+  const setMood = useDayJournalStore((s) => s.setMood);
   const getEntry = useDayJournalStore((s) => s.getEntry);
   const habitsQ = useHabitsQuery();
   const todayKey = localDateKey();
 
   const journalFields = useMemo(() => getFieldsBySection(doc.fields, 'journal'), [doc.fields]);
   const healthFields = useMemo(() => getFieldsBySection(doc.fields, 'health'), [doc.fields]);
-  const historyDayKeys = useMemo(
-    () =>
-      Object.keys(doc.entries)
-        .filter((k) => journalEntryHasContent(doc.entries[k], doc.fields))
-        .sort()
-        .reverse()
-        .slice(0, 60),
-    [doc.entries, doc.fields]
-  );
   const journalHabit = useMemo(() => findJournalHabit(habitsQ.data ?? []), [habitsQ.data]);
 
   useEffect(() => {
@@ -275,6 +262,21 @@ export function JournalScreen() {
       !habitDoneOnDate(journalHabit, viewDateKey)
     ) {
       const nextHabits = await repos.habits.checkIn(journalHabit.id, viewDateKey);
+      qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
+    }
+  };
+
+  const pickMood = async (dateKey: string, mood: JournalMoodId | null) => {
+    const before = getEntry(dateKey);
+    setMood(dateKey, mood);
+    const after = useDayJournalStore.getState().getEntry(dateKey);
+    if (
+      journalHabit &&
+      !journalEntryHasContent(before, doc.fields) &&
+      journalEntryHasContent(after, doc.fields) &&
+      !habitDoneOnDate(journalHabit, dateKey)
+    ) {
+      const nextHabits = await repos.habits.checkIn(journalHabit.id, dateKey);
       qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
     }
   };
@@ -441,31 +443,26 @@ export function JournalScreen() {
           </Pressable>
         </View>
 
-        {historyDayKeys.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4, marginBottom: spacing.lg }}>
-            {historyDayKeys.map((k) => {
-              const on = k === viewDateKey;
-              return (
-                <Pressable
-                  key={k}
-                  onPress={() => setViewDateKey(k)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: on ? brand.surfaceBorderStrong : brand.surfaceBorder,
-                    backgroundColor: on ? brand.primaryMuted : 'rgba(255,255,255,0.04)',
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: on ? colors.text : 'rgba(255,255,255,0.65)' }}>
-                    {shortDayLabel(k)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
+        <JournalMoodStrip
+          viewDateKey={viewDateKey}
+          todayKey={todayKey}
+          onViewDateChange={setViewDateKey}
+          entries={doc.entries}
+          onPickMood={(dk, mood) => void pickMood(dk, mood)}
+        />
+
+        <Pressable
+          onPress={() => router.push('/journal-mood-stats' as Href)}
+          style={({ pressed }) => ({
+            alignSelf: 'flex-start',
+            marginBottom: spacing.lg,
+            paddingVertical: 8,
+            paddingHorizontal: 2,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '700', color: brand.primarySoft }}>Статистика настроений →</Text>
+        </Pressable>
 
         <View
           style={{

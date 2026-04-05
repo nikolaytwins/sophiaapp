@@ -56,6 +56,10 @@ function isRitualHabit(h: HabitPersisted): boolean {
 
 function habitDoneOnDate(h: HabitPersisted, dateKey: string): boolean {
   if (h.cadence === 'daily') {
+    if (h.checkInKind === 'counter' && h.dailyTarget != null && h.dailyTarget >= 1) {
+      const c = h.countsByDate?.[dateKey] ?? 0;
+      return c >= h.dailyTarget;
+    }
     return h.completionDates.includes(dateKey);
   }
   return h.completionDates.some((d) => d === dateKey);
@@ -82,6 +86,9 @@ export type CreateHabitPersistInput = {
   section?: HabitPersisted['section'];
   /** По умолчанию true — в ритме (ежедневные). */
   required?: boolean;
+  checkInKind?: HabitPersisted['checkInKind'];
+  dailyTarget?: number;
+  counterUnit?: string;
 };
 
 export function ensureDefaultHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice {
@@ -101,6 +108,13 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
   const wt =
     input.cadence === 'weekly' ? Math.min(7, Math.max(1, input.weeklyTarget ?? 3)) : undefined;
   const sec = input.section;
+  const isCounterDaily =
+    input.cadence === 'daily' && input.checkInKind === 'counter';
+  const dailyTarget = isCounterDaily
+    ? Math.max(2, Math.min(99, Math.round(input.dailyTarget ?? 8)))
+    : undefined;
+  const counterUnit =
+    isCounterDaily && input.counterUnit?.trim() ? input.counterUnit.trim().slice(0, 24) : undefined;
   const row: HabitPersisted = {
     id,
     name: input.name.trim(),
@@ -111,6 +125,14 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
     ...(sec === 'media' || sec === 'money' || sec === 'body' || sec === 'life' ? { section: sec } : {}),
     createdAt: new Date().toISOString(),
     completionDates: [],
+    ...(isCounterDaily && dailyTarget != null
+      ? {
+          checkInKind: 'counter' as const,
+          dailyTarget,
+          countsByDate: {},
+          ...(counterUnit ? { counterUnit } : {}),
+        }
+      : {}),
   };
   return { ...s1, habits: [...s1.habits, row], defaultsSeeded: true };
 }
@@ -136,14 +158,53 @@ export function removeHabitSlice(s: HabitsPersistSlice, id: string): HabitsPersi
   };
 }
 
+function applyCounterDelta(h: HabitPersisted, dk: string, delta: 1 | -1): HabitPersisted {
+  if (h.cadence !== 'daily' || h.checkInKind !== 'counter' || h.dailyTarget == null) return h;
+  const target = Math.max(1, h.dailyTarget);
+  const counts = { ...(h.countsByDate ?? {}) };
+  const cur = counts[dk] ?? 0;
+  const nextVal = delta === 1 ? Math.min(target, cur + 1) : Math.max(0, cur - 1);
+  if (nextVal <= 0) {
+    delete counts[dk];
+  } else {
+    counts[dk] = nextVal;
+  }
+  return { ...h, countsByDate: counts };
+}
+
 export function checkInSlice(s: HabitsPersistSlice, id: string, dateKey?: string): HabitsPersistSlice {
   const dk = dateKey ?? localDateKey();
   const nextHabits = s.habits.map((h) => {
     if (h.id !== id) return h;
     if (h.cadence === 'daily') {
+      if (h.checkInKind === 'counter' && h.dailyTarget != null) {
+        return applyCounterDelta(h, dk, 1);
+      }
       return { ...h, completionDates: toggleDailyCompletion(h.completionDates, dk) };
     }
     return { ...h, completionDates: appendWeeklyCompletion(h.completionDates, dk) };
+  });
+
+  return {
+    ...s,
+    habits: nextHabits,
+    heroHistory: { ...s.heroHistory, [dk]: ritualScoreForDayPersisted(nextHabits, dk) },
+  };
+}
+
+export function counterAdjustSlice(
+  s: HabitsPersistSlice,
+  id: string,
+  dateKey: string,
+  delta: 1 | -1
+): HabitsPersistSlice {
+  const dk = dateKey;
+  const nextHabits = s.habits.map((h) => {
+    if (h.id !== id) return h;
+    if (h.cadence === 'daily' && h.checkInKind === 'counter' && h.dailyTarget != null) {
+      return applyCounterDelta(h, dk, delta);
+    }
+    return h;
   });
 
   return {

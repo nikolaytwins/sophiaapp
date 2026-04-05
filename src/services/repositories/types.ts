@@ -50,6 +50,10 @@ export type CreateHabitInput = {
   section?: HabitListSection;
   /** По умолчанию true — входит в ритм дня и в месячный счёт (ежедневные). */
   required?: boolean;
+  /** Только для ежедневных: несколько чек-инов за день. */
+  checkInKind?: 'binary' | 'counter';
+  dailyTarget?: number;
+  counterUnit?: string;
 };
 
 export interface HabitsRepository {
@@ -57,6 +61,8 @@ export interface HabitsRepository {
   create(input: CreateHabitInput): Promise<Habit[]>;
   /** Если dateKey не указан — используется сегодня (localDateKey). */
   checkIn(id: string, dateKey?: string): Promise<Habit[]>;
+  /** Счётчик: +1 / −1 за выбранный день (не ниже 0, не выше dailyTarget). */
+  adjustCounter(id: string, dateKey: string, delta: 1 | -1): Promise<Habit[]>;
   /** Удаляет последнюю отметку за dateKey (по умолчанию — сегодня). */
   undoWeekly(id: string, dateKey?: string): Promise<Habit[]>;
   remove(id: string): Promise<Habit[]>;

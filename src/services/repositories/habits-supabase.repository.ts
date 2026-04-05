@@ -9,6 +9,7 @@ import {
 } from '@/features/sprint/sprintHabitBridge';
 import {
   checkInSlice,
+  counterAdjustSlice,
   createHabitSlice,
   ensureDefaultHabitsSlice,
   normalizeHabitsSlice,
@@ -161,6 +162,18 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
       return toList(slice);
     },
 
+    async adjustCounter(id: string, dateKey: string, delta: 1 | -1) {
+      let slice = await loadNormalized();
+      const prev = slice.habits.find((h) => h.id === id);
+      slice = counterAdjustSlice(slice, id, dateKey, delta);
+      const next = slice.habits.find((h) => h.id === id);
+      if (prev && next) {
+        applySprintAfterHabitCheckIn(id, prev, next, dateKey);
+      }
+      await putState(slice);
+      return toList(slice);
+    },
+
     async undoWeekly(id: string, dateKey?: string) {
       let slice = await loadNormalized();
       const prev = slice.habits.find((h) => h.id === id);
@@ -191,7 +204,11 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
       const slice = await loadNormalized();
       return {
         exportedAt: new Date().toISOString(),
-        habits: slice.habits.map((h) => ({ ...h, completionDates: [...h.completionDates] })),
+        habits: slice.habits.map((h) => ({
+          ...h,
+          completionDates: [...h.completionDates],
+          ...(h.countsByDate ? { countsByDate: { ...h.countsByDate } } : {}),
+        })),
         heroHistory: { ...slice.heroHistory },
       };
     },

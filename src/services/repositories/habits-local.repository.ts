@@ -50,6 +50,17 @@ export const localHabitsRepository: HabitsRepository = {
     return delay(useHabitsStore.getState().listView());
   },
 
+  async adjustCounter(id: string, dateKey: string, delta: 1 | -1) {
+    await ensureHabitsStoreHydrated();
+    const prev = useHabitsStore.getState().habits.find((h) => h.id === id);
+    useHabitsStore.getState().adjustCounter(id, dateKey, delta);
+    const next = useHabitsStore.getState().habits.find((h) => h.id === id);
+    if (prev && next) {
+      applySprintAfterHabitCheckIn(id, prev, next, dateKey);
+    }
+    return delay(useHabitsStore.getState().listView());
+  },
+
   async undoWeekly(id: string, dateKey?: string) {
     await ensureHabitsStoreHydrated();
     const prev = useHabitsStore.getState().habits.find((h) => h.id === id);
@@ -78,7 +89,11 @@ export const localHabitsRepository: HabitsRepository = {
     const slice = getHabitsPersistSlice();
     return {
       exportedAt: new Date().toISOString(),
-      habits: slice.habits.map((h) => ({ ...h, completionDates: [...h.completionDates] })),
+      habits: slice.habits.map((h) => ({
+        ...h,
+        completionDates: [...h.completionDates],
+        ...(h.countsByDate ? { countsByDate: { ...h.countsByDate } } : {}),
+      })),
       heroHistory: { ...slice.heroHistory },
     };
   },

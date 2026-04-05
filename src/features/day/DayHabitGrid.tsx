@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 
 import type { Habit } from '@/entities/models';
 import {
@@ -12,6 +11,7 @@ import {
   habitDoneOnDate,
   WEEKDAY_SHORT_RU,
 } from '@/features/day/dayHabitUi';
+import { promptDeleteHabit } from '@/features/day/promptDeleteHabit';
 import { countCompletionsInWeekRange, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import { useAppTheme } from '@/theme';
 
@@ -35,20 +35,6 @@ const CARD_GRADIENTS: [string, string][] = [
   ['rgba(249,115,22,0.12)', 'rgba(234,88,12,0.05)'],
   ['rgba(139,92,246,0.12)', 'rgba(109,40,217,0.05)'],
 ];
-
-function promptDeleteHabit(h: Habit, onConfirm: () => void) {
-  if (Platform.OS !== 'web') {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-  }
-  Alert.alert(
-    'Удалить привычку?',
-    `«${h.name}» исчезнет везде: День, Спринт, вкладка «Привычки». Связи целей со спринтом сбросятся.`,
-    [
-      { text: 'Отмена', style: 'cancel' },
-      { text: 'Удалить', style: 'destructive', onPress: onConfirm },
-    ]
-  );
-}
 
 function HabitCard({
   habit: h,

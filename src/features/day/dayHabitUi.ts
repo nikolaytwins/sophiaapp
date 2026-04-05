@@ -9,9 +9,14 @@ export function getWeekDayKeys(anchorDateKey: string): string[] {
 
 /** Отметка на конкретный день (для UI выбранного дня в календаре «Дня»). */
 export function habitDoneOnDate(h: Habit, dayKey: string): boolean {
-  const dates = h.completionDates ?? [];
-  if (h.cadence === 'daily') return dates.includes(dayKey);
-  return dates.some((d) => d === dayKey);
+  if (h.cadence === 'daily') {
+    if (h.checkInKind === 'counter' && h.dailyTarget != null) {
+      const c = h.countsByDate?.[dayKey] ?? 0;
+      return c >= h.dailyTarget;
+    }
+    return (h.completionDates ?? []).includes(dayKey);
+  }
+  return (h.completionDates ?? []).some((d) => d === dayKey);
 }
 
 export function habitCadenceLabel(h: Habit): string {

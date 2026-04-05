@@ -45,6 +45,38 @@ export function dailyStreak(completionDates: string[], todayKey: string): number
   return streak;
 }
 
+/** Стрик по дням, где счётчик за день достиг dailyTarget. */
+export function dailyStreakCounter(
+  countsByDate: Record<string, number> | undefined,
+  dailyTarget: number,
+  todayKey: string
+): number {
+  const target = Math.max(1, dailyTarget);
+  const met = new Set<string>();
+  for (const [k, v] of Object.entries(countsByDate ?? {})) {
+    if (v >= target) met.add(k);
+  }
+  let anchor: string | null = null;
+  if (met.has(todayKey)) anchor = todayKey;
+  else {
+    const y = addDays(todayKey, -1);
+    if (met.has(y)) anchor = y;
+  }
+  if (anchor == null) return 0;
+  let streak = 0;
+  let d = anchor;
+  while (met.has(d)) {
+    streak++;
+    d = addDays(d, -1);
+  }
+  return streak;
+}
+
+export function counterCountOnDate(countsByDate: Record<string, number> | undefined, dateKey: string): number {
+  const n = countsByDate?.[dateKey];
+  return typeof n === 'number' && n > 0 ? n : 0;
+}
+
 export function countCompletionsInWeekRange(
   completionDates: string[],
   weekStartKey: string
