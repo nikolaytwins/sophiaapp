@@ -50,11 +50,13 @@ export function HabitCounterRingCard({
   };
 
   const pad = compact ? spacing.md : spacing.lg;
+  const compactWidth = compact ? (Platform.OS === 'web' ? 248 : 168) : undefined;
 
   return (
     <View
       style={{
-        width: compact ? 168 : undefined,
+        width: compactWidth,
+        minWidth: compactWidth,
         flex: compact ? undefined : 1,
         borderRadius: radius.xl,
         padding: pad,

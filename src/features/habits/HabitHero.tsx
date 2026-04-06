@@ -32,7 +32,7 @@ export function HabitHero({
   imageSource = DEFAULT_HERO_IMAGE,
   isTodayContext = true,
 }: HabitHeroProps) {
-  const { radius } = useAppTheme();
+  const { radius, spacing } = useAppTheme();
   const cardRadius = radius.xl;
   const { width: windowWidth } = useWindowDimensions();
   const isEmpty = totalCount === 0;
@@ -43,7 +43,7 @@ export function HabitHero({
   const imgPosition = stackLayout ? HERO_IMAGE_POSITION_STACK : HERO_IMAGE_POSITION_ROW;
 
   return (
-    <View style={[styles.banner, { borderRadius: cardRadius }]}>
+    <View style={[styles.banner, { borderRadius: cardRadius, marginBottom: spacing.lg }]}>
       <LinearGradient
         pointerEvents="none"
         colors={['#141018', '#0a090f', '#06060a']}
