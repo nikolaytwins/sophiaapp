@@ -67,6 +67,16 @@ export default function RootLayout() {
                   : undefined,
             }}
           />
+          <Stack.Screen
+            name="habit-edit"
+            options={{
+              presentation: Platform.OS === 'web' ? 'card' : 'modal',
+              contentStyle:
+                Platform.OS === 'web'
+                  ? { flex: 1, zIndex: 10000, position: 'relative' as const }
+                  : undefined,
+            }}
+          />
         </Stack>
       </AppProviders>
     </GestureHandlerRootView>

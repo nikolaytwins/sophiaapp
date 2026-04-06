@@ -23,7 +23,9 @@ import {
   removeHabitSlice,
   setRequiredSlice,
   type HabitsPersistSlice,
+  type UpdateHabitPersistInput,
   undoWeeklySlice,
+  updateHabitSlice,
 } from '@/features/habits/habitsPersistReducer';
 
 function countToday(completionDates: string[], todayKey: string): number {
@@ -105,6 +107,7 @@ type State = HabitsPersistSlice & {
     cadence: HabitPersisted['cadence'];
     weeklyTarget?: number;
     section?: HabitPersisted['section'];
+    required?: boolean;
     checkInKind?: HabitPersisted['checkInKind'];
     dailyTarget?: number;
     counterUnit?: string;
@@ -114,6 +117,7 @@ type State = HabitsPersistSlice & {
   adjustCounter: (id: string, dateKey: string, delta: 1 | -1) => void;
   undoWeekly: (id: string, dateKey?: string) => void;
   setRequired: (id: string, required: boolean) => void;
+  update: (id: string, patch: UpdateHabitPersistInput) => void;
 };
 
 export const useHabitsStore = create<State>()(
@@ -142,6 +146,8 @@ export const useHabitsStore = create<State>()(
       undoWeekly: (id, dateKey) => set((s) => undoWeeklySlice(s, id, dateKey)),
 
       setRequired: (id, required) => set((s) => setRequiredSlice(s, id, required)),
+
+      update: (id, patch) => set((s) => updateHabitSlice(s, id, patch)),
     }),
     {
       name: STORAGE_KEY,

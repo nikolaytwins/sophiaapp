@@ -6,7 +6,7 @@ import {
 } from '@/features/sprint/sprintHabitBridge';
 import { getHabitsPersistSlice, useHabitsStore } from '@/stores/habits.store';
 
-import type { HabitsAnalyticsExport, HabitsRepository } from './types';
+import type { HabitsAnalyticsExport, HabitsRepository, UpdateHabitInput } from './types';
 
 function delay<T>(value: T, ms = 24): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -35,6 +35,12 @@ export const localHabitsRepository: HabitsRepository = {
   async create(input) {
     await ensureHabitsStoreHydrated();
     useHabitsStore.getState().create(input);
+    return delay(useHabitsStore.getState().listView());
+  },
+
+  async update(id: string, patch: UpdateHabitInput) {
+    await ensureHabitsStoreHydrated();
+    useHabitsStore.getState().update(id, patch);
     return delay(useHabitsStore.getState().listView());
   },
 

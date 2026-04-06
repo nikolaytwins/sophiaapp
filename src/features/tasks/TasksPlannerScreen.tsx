@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type Href, Link, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -24,24 +24,18 @@ import {
   adjustPlannerCompletedCount,
   createPlannerTask,
   deletePlannerTask,
-  getPlannerDayFocus,
   getPlannerUserStats,
   listPlannerTasks,
   purgeOldPlannerTasks,
   updatePlannerTask,
-  upsertPlannerDayFocus,
 } from '@/features/tasks/plannerApi';
 import type { PlannerTaskRow } from '@/features/tasks/planner.types';
-import {
-  PLANNER_FOCUS_QUERY_KEY,
-  PLANNER_STATS_QUERY_KEY,
-  PLANNER_TASKS_QUERY_KEY,
-} from '@/features/tasks/queryKeys';
+import { PLANNER_STATS_QUERY_KEY, PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
+import { sortPlannerTasksForDisplay } from '@/features/tasks/plannerSort';
 import {
   PLANNER_PRIORITY_OPTIONS,
   cardSurfaceForPriority,
   priorityBadgeStyle,
-  priorityRank,
   priorityStripStyle,
 } from '@/features/tasks/taskPriorityUi';
 import { WEEKDAY_SHORT_RU } from '@/features/day/dayHabitUi';
@@ -75,15 +69,6 @@ function weekdayShortRu(dateKey: string): string {
   return WEEKDAY_SHORT_RU[idx] ?? '';
 }
 
-function sortPlannerTasks(list: PlannerTaskRow[]): PlannerTaskRow[] {
-  return [...list].sort((a, b) => {
-    if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
-    const pr = priorityRank(a.priority as BacklogPriority) - priorityRank(b.priority as BacklogPriority);
-    if (pr !== 0) return pr;
-    return b.sort_order - a.sort_order;
-  });
-}
-
 export function TasksPlannerScreen() {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -97,13 +82,13 @@ export function TasksPlannerScreen() {
 
   const [draftTitle, setDraftTitle] = useState('');
   const [draftPriority, setDraftPriority] = useState<BacklogPriority>('medium');
-  const [focusDraft, setFocusDraft] = useState('');
-  const focusDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftAsFocus, setDraftAsFocus] = useState(false);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<PlannerTaskRow | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPriority, setEditPriority] = useState<BacklogPriority>('medium');
+  const [editIsFocus, setEditIsFocus] = useState(false);
   const [editDayKey, setEditDayKey] = useState(todayKey);
 
   useEffect(() => {
@@ -136,12 +121,6 @@ export function TasksPlannerScreen() {
     enabled,
   });
 
-  const focusQ = useQuery({
-    queryKey: [...PLANNER_FOCUS_QUERY_KEY, selectedDay],
-    queryFn: () => getPlannerDayFocus(selectedDay),
-    enabled,
-  });
-
   const statsQ = useQuery({
     queryKey: [...PLANNER_STATS_QUERY_KEY],
     queryFn: getPlannerUserStats,
@@ -149,57 +128,14 @@ export function TasksPlannerScreen() {
   });
 
   useEffect(() => {
-    if (focusDebounceRef.current) {
-      clearTimeout(focusDebounceRef.current);
-      focusDebounceRef.current = null;
-    }
+    setDraftAsFocus(false);
   }, [selectedDay]);
-
-  useEffect(() => {
-    setFocusDraft(focusQ.data?.focus_text ?? '');
-  }, [selectedDay, focusQ.data?.focus_text]);
-
-  const flushFocus = useCallback(() => {
-    if (focusDebounceRef.current) {
-      clearTimeout(focusDebounceRef.current);
-      focusDebounceRef.current = null;
-    }
-    void upsertPlannerDayFocus(selectedDay, focusDraft).then(
-      () => {
-        void qc.invalidateQueries({ queryKey: [...PLANNER_FOCUS_QUERY_KEY, selectedDay] });
-      },
-      (e: Error) => alertInfo('Фокус дня', e.message)
-    );
-  }, [focusDraft, qc, selectedDay]);
-
-  const onFocusChange = useCallback(
-    (text: string) => {
-      setFocusDraft(text);
-      if (focusDebounceRef.current) clearTimeout(focusDebounceRef.current);
-      focusDebounceRef.current = setTimeout(() => {
-        void upsertPlannerDayFocus(selectedDay, text).then(
-          () => {
-            void qc.invalidateQueries({ queryKey: [...PLANNER_FOCUS_QUERY_KEY, selectedDay] });
-          },
-          (e: Error) => alertInfo('Фокус дня', e.message)
-        );
-      }, 650);
-    },
-    [qc, selectedDay]
-  );
-
-  useEffect(
-    () => () => {
-      if (focusDebounceRef.current) clearTimeout(focusDebounceRef.current);
-    },
-    []
-  );
 
   const stripKeys = useMemo(() => {
     return Array.from({ length: 14 }, (_, i) => addDays(selectedDay, i - 5));
   }, [selectedDay]);
 
-  const sortedTasks = useMemo(() => sortPlannerTasks(tasksQ.data ?? []), [tasksQ.data]);
+  const sortedTasks = useMemo(() => sortPlannerTasksForDisplay(tasksQ.data ?? []), [tasksQ.data]);
 
   const invalidateDay = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, selectedDay] });
@@ -207,10 +143,16 @@ export function TasksPlannerScreen() {
 
   const addMut = useMutation({
     mutationFn: () =>
-      createPlannerTask({ day_date: selectedDay, title: draftTitle, priority: draftPriority }),
+      createPlannerTask({
+        day_date: selectedDay,
+        title: draftTitle,
+        priority: draftPriority,
+        is_focus: draftAsFocus || undefined,
+      }),
     onSuccess: () => {
       setDraftTitle('');
       setDraftPriority('medium');
+      setDraftAsFocus(false);
       invalidateDay();
       if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
@@ -248,6 +190,7 @@ export function TasksPlannerScreen() {
     setEditingTask(t);
     setEditTitle(t.title);
     setEditPriority(t.priority as BacklogPriority);
+    setEditIsFocus(Boolean(t.is_focus));
     setEditDayKey(t.day_date);
     setEditorOpen(true);
   }, []);
@@ -268,13 +211,17 @@ export function TasksPlannerScreen() {
       toDay: string;
       title: string;
       priority: BacklogPriority;
+      isFocus: boolean;
+      wasFocus: boolean;
     }) => {
       const patch: {
         title: string;
         priority: BacklogPriority;
         day_date?: string;
+        is_focus?: boolean;
       } = { title: p.title, priority: p.priority };
       if (p.toDay !== p.fromDay) patch.day_date = p.toDay;
+      if (p.isFocus !== p.wasFocus) patch.is_focus = p.isFocus;
       return updatePlannerTask(p.id, patch);
     },
     onSuccess: (_d, p) => {
@@ -508,59 +455,6 @@ export function TasksPlannerScreen() {
               </View>
 
               <View style={{ marginTop: spacing.xl }}>
-                <LinearGradient
-                  colors={['rgba(168,85,247,0.35)', 'rgba(109,40,217,0.12)', 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{
-                    borderRadius: radius.xl + 4,
-                    padding: 2,
-                  }}
-                >
-                  <View
-                    style={{
-                      borderRadius: radius.xl,
-                      backgroundColor: colors.bg,
-                      padding: spacing.lg,
-                      borderWidth: 1,
-                      borderColor: 'rgba(168,85,247,0.2)',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '900',
-                        letterSpacing: 2,
-                        color: 'rgba(196,181,253,0.95)',
-                        textTransform: 'uppercase',
-                        marginBottom: spacing.sm,
-                      }}
-                    >
-                      Фокус дня
-                    </Text>
-                    <TextInput
-                      value={focusDraft}
-                      onChangeText={onFocusChange}
-                      onBlur={() => flushFocus()}
-                      placeholder="Главное на сегодня — одна-две строки"
-                      placeholderTextColor={colors.textMuted}
-                      multiline
-                      maxLength={500}
-                      style={{
-                        fontSize: 24,
-                        fontWeight: '800',
-                        color: colors.text,
-                        lineHeight: 30,
-                        minHeight: 72,
-                        textAlignVertical: 'top',
-                        padding: 0,
-                      }}
-                    />
-                  </View>
-                </LinearGradient>
-              </View>
-
-              <View style={{ marginTop: spacing.xl }}>
                 <Text
                   style={{
                     fontSize: 11,
@@ -658,8 +552,33 @@ export function TasksPlannerScreen() {
                     </Pressable>
                   </View>
                 </View>
+                <View
+                  style={{
+                    marginTop: spacing.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 4,
+                  }}
+                >
+                  <View style={{ flex: 1, paddingRight: spacing.md }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Фокус дня</Text>
+                    <Text style={{ marginTop: 2, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+                      Одна главная задача — в списке ниже, сверху
+                    </Text>
+                  </View>
+                  <Switch
+                    value={draftAsFocus}
+                    onValueChange={(v) => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                      setDraftAsFocus(v);
+                    }}
+                    trackColor={{ false: colors.border, true: 'rgba(168,85,247,0.45)' }}
+                    thumbColor={draftAsFocus ? ACCENT : colors.textMuted}
+                  />
+                </View>
                 <Text style={{ marginTop: 8, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
-                  Полоски слева при добавлении: важный · средний · низкий приоритет
+                  Полоски справа: важный · средний · низкий приоритет
                 </Text>
               </View>
 
@@ -808,6 +727,27 @@ export function TasksPlannerScreen() {
               })}
             </View>
 
+            <View
+              style={{
+                marginTop: spacing.lg,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={[typography.caption, { color: colors.textMuted }]}>Фокус дня</Text>
+              <Switch
+                value={editIsFocus}
+                onValueChange={(v) => {
+                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  setEditIsFocus(v);
+                }}
+                trackColor={{ false: colors.border, true: 'rgba(168,85,247,0.45)' }}
+                thumbColor={editIsFocus ? ACCENT : colors.textMuted}
+              />
+            </View>
+
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.lg }]}>
               День
             </Text>
@@ -910,6 +850,8 @@ export function TasksPlannerScreen() {
                     toDay: editDayKey,
                     title: t,
                     priority: editPriority,
+                    isFocus: editIsFocus,
+                    wasFocus: Boolean(editingTask.is_focus),
                   });
                 }}
                 disabled={saveTaskEditMut.isPending}
@@ -958,6 +900,7 @@ function PlannerTaskCard({
   const prOpt = PLANNER_PRIORITY_OPTIONS.find((p) => p.id === pr);
   const titleSize = pr === 'high' ? 18 : 16;
   const titleWeight = pr === 'high' ? ('900' as const) : ('800' as const);
+  const isFocus = Boolean(task.is_focus);
 
   return (
     <View
@@ -968,6 +911,16 @@ function PlannerTaskCard({
         overflow: 'hidden',
         marginBottom: spacing.md,
         ...surface,
+        ...(isFocus
+          ? {
+              borderWidth: 1,
+              borderColor: 'rgba(168,85,247,0.5)',
+              shadowColor: '#A855F7',
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 2 },
+            }
+          : {}),
       }}
     >
       <View style={{ width: strip.width, backgroundColor: strip.backgroundColor }} />
@@ -1018,6 +971,24 @@ function PlannerTaskCard({
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, minWidth: 0, paddingRight: spacing.sm }}>
+            {isFocus ? (
+              <View
+                style={{
+                  alignSelf: 'flex-start',
+                  marginBottom: 6,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: radius.md,
+                  backgroundColor: 'rgba(168,85,247,0.2)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(168,85,247,0.4)',
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: ACCENT }}>
+                  ФОКУС ДНЯ
+                </Text>
+              </View>
+            ) : null}
             <Text
               style={[
                 typography.title2,

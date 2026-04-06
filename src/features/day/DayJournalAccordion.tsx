@@ -15,8 +15,9 @@ import {
   journalEntryHasContent,
   journalEntryHasFieldContent,
 } from '@/features/day/dayJournal.logic';
-import type { JournalFieldDefinition } from '@/features/day/dayJournal.types';
+import type { JournalFieldDefinition, JournalMoodId } from '@/features/day/dayJournal.types';
 import { findJournalHabit } from '@/features/journal/journalHabit';
+import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
@@ -33,9 +34,20 @@ type Props = {
   viewDateKey: string;
   todayKey: string;
   sessionEmail: string | null;
+  /** На экране «День»: смена дня в полоске настроения переключает весь экран. */
+  linkMoodToScreenDay?: boolean;
+  onMoodStripChangeDay?: (dk: string) => void;
+  onPickMood?: (dk: string, mood: JournalMoodId | null) => void;
 };
 
-export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Props) {
+export function DayJournalAccordion({
+  viewDateKey,
+  todayKey,
+  sessionEmail,
+  linkMoodToScreenDay = false,
+  onMoodStripChangeDay,
+  onPickMood,
+}: Props) {
   const { colors, spacing, brand, radius } = useAppTheme();
   const qc = useQueryClient();
   const habitsQ = useHabitsQuery();
@@ -44,11 +56,19 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const setFieldValue = useDayJournalStore((s) => s.setFieldValue);
   const getEntry = useDayJournalStore((s) => s.getEntry);
 
+  const [innerDay, setInnerDay] = useState(viewDateKey);
+  useEffect(() => {
+    setInnerDay(viewDateKey);
+  }, [viewDateKey]);
+
+  const editingDay = linkMoodToScreenDay ? viewDateKey : innerDay;
+  const navigateMoodDay = linkMoodToScreenDay ? onMoodStripChangeDay ?? (() => {}) : setInnerDay;
+
   const journalFields = useMemo(() => getFieldsBySection(doc.fields, 'journal'), [doc.fields]);
   const healthFields = useMemo(() => getFieldsBySection(doc.fields, 'health'), [doc.fields]);
   const journalHabit = useMemo(() => findJournalHabit(habitsQ.data ?? []), [habitsQ.data]);
 
-  const dayKeyRef = useRef(viewDateKey);
+  const dayKeyRef = useRef(editingDay);
   const [expanded, setExpanded] = useState(() => {
     const st = useDayJournalStore.getState();
     return !journalEntryHasContent(st.getEntry(viewDateKey), st.doc.fields);
@@ -57,12 +77,12 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const [exportHint, setExportHint] = useState<string | null>(null);
 
   useEffect(() => {
-    if (dayKeyRef.current !== viewDateKey) {
-      dayKeyRef.current = viewDateKey;
+    if (dayKeyRef.current !== editingDay) {
+      dayKeyRef.current = editingDay;
       const st = useDayJournalStore.getState();
-      setExpanded(!journalEntryHasContent(st.getEntry(viewDateKey), st.doc.fields));
+      setExpanded(!journalEntryHasContent(st.getEntry(editingDay), st.doc.fields));
     }
-  }, [viewDateKey]);
+  }, [editingDay]);
 
   useEffect(() => {
     if (!isNikolayPrimaryAccount(sessionEmail)) return;
@@ -73,18 +93,18 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
     }
   }, [sessionEmail]);
 
-  const entry = getEntry(viewDateKey);
+  const entry = getEntry(editingDay);
   const entryHasContent = journalEntryHasContent(entry, doc.fields);
   const entryHasFieldContent = journalEntryHasFieldContent(entry, doc.fields);
   const habitDone =
-    journalHabit && viewDateKey <= todayKey ? habitDoneOnDate(journalHabit, viewDateKey) : false;
+    journalHabit && editingDay <= todayKey ? habitDoneOnDate(journalHabit, editingDay) : false;
   const showDoneBadge = entryHasFieldContent && habitDone;
 
   const commitFieldValue = useCallback(
     (field: JournalFieldDefinition, value: string | number | boolean | null) => {
-      setFieldValue(viewDateKey, field.id, value);
+      setFieldValue(editingDay, field.id, value);
     },
-    [setFieldValue, viewDateKey]
+    [setFieldValue, editingDay]
   );
 
   const exportDoc = async (kind: 'journal' | 'health') => {
@@ -98,15 +118,15 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const saveJournal = async () => {
     try {
       await pushDayJournalToCloud();
-      const entryAfter = useDayJournalStore.getState().getEntry(viewDateKey);
+      const entryAfter = useDayJournalStore.getState().getEntry(editingDay);
       const filledForHabit = journalEntryHasFieldContent(entryAfter, doc.fields);
       if (
         journalHabit &&
         filledForHabit &&
-        viewDateKey <= todayKey &&
-        !habitDoneOnDate(journalHabit, viewDateKey)
+        editingDay <= todayKey &&
+        !habitDoneOnDate(journalHabit, editingDay)
       ) {
-        const nextHabits = await repos.habits.checkIn(journalHabit.id, viewDateKey);
+        const nextHabits = await repos.habits.checkIn(journalHabit.id, editingDay);
         qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
       }
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -185,7 +205,7 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
               ? 'Сохранено — привычка отмечена.'
               : entryHasFieldContent
                 ? 'Нажми «Сохранить», чтобы отметить привычку за этот день.'
-                : 'Заполни поля «Записи» или «Здоровье» и сохрани — привычка засчитается. Настроение сверху — отдельно.'}
+                : 'Раскрой блок: настроение, записи и здоровье. После заполнения нажми «Сохранить».'}
           </Text>
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
@@ -193,6 +213,31 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
 
       {expanded ? (
         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+          {onPickMood ? (
+            <>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '900',
+                  letterSpacing: 1.4,
+                  color: 'rgba(249,115,22,0.95)',
+                  textTransform: 'uppercase',
+                  marginBottom: 8,
+                  marginTop: 8,
+                }}
+              >
+                Настроение
+              </Text>
+              <JournalMoodStrip
+                viewDateKey={editingDay}
+                todayKey={todayKey}
+                onViewDateChange={navigateMoodDay}
+                entries={doc.entries}
+                onPickMood={onPickMood}
+              />
+            </>
+          ) : null}
+
           <Text
             style={{
               fontSize: 11,
@@ -201,13 +246,13 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
               color: 'rgba(196,181,253,0.9)',
               textTransform: 'uppercase',
               marginBottom: 8,
-              marginTop: 8,
+              marginTop: onPickMood ? 16 : 8,
             }}
           >
             Записи
           </Text>
           {journalFields.map((field) => (
-            <JournalFieldCard key={field.id} field={field} dateKey={viewDateKey} onValueCommit={commitFieldValue} />
+            <JournalFieldCard key={field.id} field={field} dateKey={editingDay} onValueCommit={commitFieldValue} />
           ))}
 
           <Text
@@ -224,7 +269,7 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
             Здоровье
           </Text>
           {healthFields.map((field) => (
-            <JournalFieldCard key={field.id} field={field} dateKey={viewDateKey} onValueCommit={commitFieldValue} />
+            <JournalFieldCard key={field.id} field={field} dateKey={editingDay} onValueCommit={commitFieldValue} />
           ))}
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>

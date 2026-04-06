@@ -4,7 +4,7 @@ import type { HabitsPersistSlice } from '@/features/habits/habitsPersistReducer'
 import { normalizeHabitsSlice } from '@/features/habits/habitsPersistReducer';
 
 /** Поднимите версию, если меняете набор привычек / правила миграции. */
-export const NIKOLAY_HABITS_PROFILE_VERSION = 1;
+export const NIKOLAY_HABITS_PROFILE_VERSION = 2;
 
 const REMOVE_IDS = new Set([
   'seed_steps_10k',
@@ -41,10 +41,14 @@ function blueprintRows(): HabitPersisted[] {
       name: '3–5 действий на привлечение клиентов (будни; в выходной — по желанию)',
       icon: 'megaphone-outline',
       cadence: 'daily',
+      checkInKind: 'counter',
+      dailyTarget: 3,
+      counterUnit: 'действий',
       section: 'money',
       required: false,
       createdAt: t,
       completionDates: [],
+      countsByDate: {},
     },
     {
       id: 'nikolay_journal_braindump',
@@ -97,7 +101,18 @@ export function applyNikolayHabitsProfile(
       ids.add(row.id);
     }
   }
-  habits = habits.map(patchNikolaySections);
+  habits = habits.map((h) => {
+    const patched = patchNikolaySections(h);
+    if (patched.id !== 'nikolay_client_outreach') return patched;
+    if (patched.checkInKind === 'counter' && patched.dailyTarget != null) return patched;
+    return {
+      ...patched,
+      checkInKind: 'counter' as const,
+      dailyTarget: 3,
+      counterUnit: 'действий',
+      countsByDate: patched.countsByDate ?? {},
+    };
+  });
 
   return normalizeHabitsSlice({
     ...slice,

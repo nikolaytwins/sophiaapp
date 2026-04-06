@@ -134,11 +134,19 @@ export function appendWeeklyCompletion(completionDates: string[], todayKey: stri
   return [...completionDates, todayKey];
 }
 
-export function undoLastWeeklyIfToday(completionDates: string[], todayKey: string): string[] {
-  for (let i = completionDates.length - 1; i >= 0; i--) {
-    if (completionDates[i] === todayKey) {
-      return completionDates.filter((_, idx) => idx !== i);
-    }
+/** Одна отметка на календарный день; повторный тап снимает отметку за этот день. */
+export function toggleWeeklyCompletionForDay(completionDates: string[], dayKey: string): string[] {
+  if (completionDates.includes(dayKey)) {
+    return completionDates.filter((d) => d !== dayKey);
   }
-  return completionDates;
+  return [...completionDates, dayKey].sort();
+}
+
+/** Убирает все вхождения дня (на случай дублей в старых данных). */
+export function removeWeeklyCompletionOnDay(completionDates: string[], dayKey: string): string[] {
+  return completionDates.filter((d) => d !== dayKey);
+}
+
+export function undoLastWeeklyIfToday(completionDates: string[], todayKey: string): string[] {
+  return removeWeeklyCompletionOnDay(completionDates, todayKey);
 }

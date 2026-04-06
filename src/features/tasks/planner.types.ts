@@ -6,14 +6,10 @@ export type PlannerTaskRow = {
   title: string;
   priority: BacklogPriority;
   is_done: boolean;
+  /** Ровно одна на (user, day_date): главная задача дня. */
+  is_focus: boolean;
   sort_order: number;
   created_at: string;
-  updated_at: string;
-};
-
-export type PlannerDayFocusRow = {
-  day_date: string;
-  focus_text: string;
   updated_at: string;
 };
 

@@ -40,12 +40,15 @@ import { getSupabase } from '@/lib/supabase';
 import { HabitsMonthlyCompletionsChart } from '@/features/habits/HabitsMonthlyCompletionsChart';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
+import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { JournalMoodCalendarPanel } from '@/features/journal/JournalMoodCalendarPanel';
+import { HabitsPlannerTodayCard } from '@/features/tasks/HabitsPlannerTodayCard';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
+import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -805,20 +808,25 @@ export function HabitsScreen() {
 
   const supabaseOn = useSupabaseConfigured;
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const setMood = useDayJournalStore((s) => s.setMood);
 
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) {
       setAccountEmail(null);
+      setUserId(null);
       return undefined;
     }
     void sb.auth.getSession().then(({ data: { session } }) => {
       setAccountEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
     });
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((_event, session) => {
       setAccountEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -1120,6 +1128,14 @@ export function HabitsScreen() {
                   В еженедельных пока нет привычек
                 </Text>
               ) : null}
+
+              <DayJournalAccordion
+                viewDateKey={todayKey}
+                todayKey={todayKey}
+                sessionEmail={accountEmail}
+                onPickMood={(dk, mood) => setMood(dk, mood)}
+              />
+              <HabitsPlannerTodayCard todayKey={todayKey} userId={userId} />
             </View>
           </>
         )}

@@ -56,12 +56,23 @@ export type CreateHabitInput = {
   counterUnit?: string;
 };
 
+/** Правка существующей привычки (настройки / тип отметки). */
+export type UpdateHabitInput = {
+  name: string;
+  icon: string;
+  required: boolean;
+  dailyTrackMode?: 'once' | 'counter';
+  dailyTarget?: number;
+  counterUnit?: string;
+};
+
 export interface HabitsRepository {
   list(): Promise<Habit[]>;
   create(input: CreateHabitInput): Promise<Habit[]>;
+  update(id: string, patch: UpdateHabitInput): Promise<Habit[]>;
   /** Если dateKey не указан — используется сегодня (localDateKey). */
   checkIn(id: string, dateKey?: string): Promise<Habit[]>;
-  /** Счётчик: +1 / −1 за выбранный день (не ниже 0, не выше dailyTarget). */
+  /** Счётчик: +1 / −1 за выбранный день (не ниже 0; выше цели можно, до 99). */
   adjustCounter(id: string, dateKey: string, delta: 1 | -1): Promise<Habit[]>;
   /** Удаляет последнюю отметку за dateKey (по умолчанию — сегодня). */
   undoWeekly(id: string, dateKey?: string): Promise<Habit[]>;

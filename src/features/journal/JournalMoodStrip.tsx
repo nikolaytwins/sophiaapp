@@ -14,8 +14,9 @@ import type { JournalEntry, JournalMoodId } from '@/features/day/dayJournal.type
 import { JOURNAL_MOODS, getMoodMeta, journalMoodStripDayKeys } from '@/features/journal/journalMood';
 import { useAppTheme } from '@/theme';
 
-const LIME_SELECTED = '#A3E635';
-const LIME_SELECTED_TEXT = '#0F1410';
+/** Акцент выбранного дня — оранжевый, в духе блока «Задачи». */
+const STRIP_SELECTED_BG = '#F97316';
+const STRIP_SELECTED_TEXT = '#1A0A02';
 
 type Props = {
   viewDateKey: string;
@@ -76,7 +77,7 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
                   paddingVertical: 10,
                   paddingHorizontal: 6,
                   borderRadius: 14,
-                  backgroundColor: selected ? LIME_SELECTED : 'rgba(255,255,255,0.06)',
+                  backgroundColor: selected ? STRIP_SELECTED_BG : 'rgba(255,255,255,0.06)',
                   borderWidth: StyleSheet.hairlineWidth,
                   borderColor: selected ? 'transparent' : 'rgba(255,255,255,0.1)',
                   opacity: future ? 0.35 : 1,
@@ -87,7 +88,7 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
                     fontSize: 10,
                     fontWeight: '700',
                     letterSpacing: 0.3,
-                    color: selected ? LIME_SELECTED_TEXT : 'rgba(255,255,255,0.55)',
+                    color: selected ? STRIP_SELECTED_TEXT : 'rgba(255,255,255,0.55)',
                     textAlign: 'center',
                   }}
                   numberOfLines={1}
@@ -99,7 +100,7 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
                     marginTop: 4,
                     fontSize: 17,
                     fontWeight: '800',
-                    color: selected ? LIME_SELECTED_TEXT : colors.text,
+                    color: selected ? STRIP_SELECTED_TEXT : colors.text,
                     textAlign: 'center',
                     fontVariant: ['tabular-nums'],
                   }}

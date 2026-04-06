@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
 import { type Href, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -21,6 +22,10 @@ import { useAppTheme } from '@/theme';
 const VIOLET = '#A855F7';
 export const HABIT_NEW_HREF = '/habit-new' as Href;
 
+export function habitEditHref(id: string): Href {
+  return `/habit-edit?id=${encodeURIComponent(id)}` as Href;
+}
+
 type Props = {
   /** Отступ снизу под таббар / safe area */
   paddingBottom?: number;
@@ -37,6 +42,14 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
     onSuccess: (list, id) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
       useSprintStore.getState().removeHabitFromAllGoalLinks(id);
+    },
+  });
+
+  const setRequired = useMutation({
+    mutationFn: ({ id, required }: { id: string; required: boolean }) =>
+      repos.habits.setRequired(id, required),
+    onSuccess: (list) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
     },
   });
 
@@ -139,9 +152,54 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
                 </Text>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
                   {habitCadenceLabel(h)}
+                  {h.checkInKind === 'counter' && h.dailyTarget != null
+                    ? ` · ${h.dailyTarget}+/день`
+                    : ''}
                   {h.section === 'media' ? ' · медийка' : ''}
                 </Text>
               </View>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  setRequired.mutate({ id: h.id, required: !h.required });
+                }}
+                disabled={setRequired.isPending && setRequired.variables?.id === h.id}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={h.required ? 'Не учитывать в ритме дня' : 'В ритме дня'}
+                style={({ pressed }) =>
+                  StyleSheet.flatten([
+                    styles.trashBtn,
+                    webCursor,
+                    { opacity: pressed ? 0.75 : 1 },
+                  ])
+                }
+              >
+                {setRequired.isPending && setRequired.variables?.id === h.id ? (
+                  <ActivityIndicator color={VIOLET} size="small" />
+                ) : (
+                  <Ionicons
+                    name={h.required ? 'star' : 'star-outline'}
+                    size={22}
+                    color={h.required ? VIOLET : 'rgba(255,255,255,0.28)'}
+                  />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(habitEditHref(h.id))}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Изменить ${h.name}`}
+                style={({ pressed }) =>
+                  StyleSheet.flatten([
+                    styles.trashBtn,
+                    webCursor,
+                    { opacity: pressed ? 0.75 : 1 },
+                  ])
+                }
+              >
+                <Ionicons name="create-outline" size={22} color={VIOLET} />
+              </Pressable>
               <Pressable
                 onPress={() =>
                   confirmDestructive({

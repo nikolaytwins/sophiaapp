@@ -30,6 +30,11 @@ export const delegatingHabitsRepository: HabitsRepository = {
     return localHabitsRepository.create(input);
   },
 
+  async update(id, patch) {
+    if (await useCloudHabits()) return supabaseRepo.update(id, patch);
+    return localHabitsRepository.update(id, patch);
+  },
+
   async checkIn(id, dateKey) {
     if (await useCloudHabits()) return supabaseRepo.checkIn(id, dateKey);
     return localHabitsRepository.checkIn(id, dateKey);

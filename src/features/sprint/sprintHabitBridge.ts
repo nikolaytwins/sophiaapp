@@ -17,6 +17,13 @@ function completionDeltaForCheckIn(prev: HabitPersisted, next: HabitPersisted, d
     if (was && !now) return -1;
     return 0;
   }
+  if (prev.cadence === 'weekly') {
+    const was = prev.completionDates.includes(dateKey);
+    const now = next.completionDates.includes(dateKey);
+    if (!was && now) return 1;
+    if (was && !now) return -1;
+    return 0;
+  }
   return next.completionDates.length - prev.completionDates.length;
 }
 

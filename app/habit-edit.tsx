@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
-import { router, Stack, type Href } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { Stack, router, useLocalSearchParams, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -18,12 +17,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { HabitCadence } from '@/entities/models';
+import { habitCadenceLabel } from '@/features/day/dayHabitUi';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
+import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { repos } from '@/services/repositories';
 import { GlassCard } from '@/shared/ui/GlassCard';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { useAppTheme } from '@/theme';
+
+const VIOLET = '#A855F7';
+const SETTINGS_HABITS = '/settings?tab=habits' as Href;
 
 const ICON_OPTIONS = [
   'sparkles-outline',
@@ -34,99 +37,132 @@ const ICON_OPTIONS = [
   'moon-outline',
   'book-outline',
   'heart-outline',
+  'megaphone-outline',
+  'document-text-outline',
+  'heart-circle-outline',
 ] as const;
 
-const VIOLET = '#A855F7';
-const HABITS_TAB = '/habits' as Href;
-
-export default function HabitNewScreen() {
+export default function HabitEditScreen() {
   const { colors, spacing, typography, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const rawId = params.id;
+  const habitId = Array.isArray(rawId) ? rawId[0] : rawId;
+
+  const habits = useHabitsQuery();
+  const habit = useMemo(
+    () => (habitId ? (habits.data ?? []).find((h) => h.id === habitId) : undefined),
+    [habits.data, habitId]
+  );
+
   const [name, setName] = useState('');
-  const [cadence, setCadence] = useState<HabitCadence>('daily');
-  const [weeklyTarget, setWeeklyTarget] = useState(3);
   const [icon, setIcon] = useState<string>(ICON_OPTIONS[0]);
-  /** Только для ежедневных: одна галочка или счётчик за день. */
+  const [requiredForProgress, setRequiredForProgress] = useState(true);
   const [dailyCheckMode, setDailyCheckMode] = useState<'once' | 'counter'>('once');
-  const [counterTarget, setCounterTarget] = useState(8);
+  const [counterTarget, setCounterTarget] = useState(3);
   const [counterUnit, setCounterUnit] = useState('');
-  /** Вкл — входит в X/Y на экране «День» (вместе с задачами). */
-  const [countInDayProgress, setCountInDayProgress] = useState(true);
+  const [weeklyTarget, setWeeklyTarget] = useState(3);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!habit) return;
+    setName(habit.name);
+    setIcon(
+      ICON_OPTIONS.includes(habit.icon as (typeof ICON_OPTIONS)[number])
+        ? habit.icon
+        : ICON_OPTIONS[0]
+    );
+    setRequiredForProgress(habit.required);
+    if (habit.cadence === 'weekly') {
+      setWeeklyTarget(habit.weeklyTarget ?? 3);
+    } else if (habit.checkInKind === 'counter' && habit.dailyTarget != null) {
+      setDailyCheckMode('counter');
+      setCounterTarget(habit.dailyTarget);
+      setCounterUnit(habit.counterUnit ?? '');
+    } else {
+      setDailyCheckMode('once');
+      setCounterTarget(3);
+      setCounterUnit('');
+    }
+    setHydrated(true);
+  }, [habit]);
 
   const { mutate, isPending, isError } = useMutation({
-    mutationFn: () =>
-      repos.habits.create({
-        name: name.trim() || 'Привычка',
+    mutationFn: () => {
+      if (!habitId || !habit) throw new Error('Нет привычки');
+      const base = {
+        name: name.trim() || habit.name,
         icon,
-        cadence,
-        required: countInDayProgress,
-        weeklyTarget: cadence === 'weekly' ? weeklyTarget : undefined,
-        ...(cadence === 'daily' && dailyCheckMode === 'counter'
-          ? {
-              checkInKind: 'counter' as const,
-              dailyTarget: counterTarget,
-              ...(counterUnit.trim() ? { counterUnit: counterUnit.trim() } : {}),
-            }
-          : {}),
-      }),
+        required: requiredForProgress,
+      };
+      if (habit.cadence === 'weekly') {
+        return repos.habits.update(habitId, base);
+      }
+      if (dailyCheckMode === 'counter') {
+        return repos.habits.update(habitId, {
+          ...base,
+          dailyTrackMode: 'counter',
+          dailyTarget: counterTarget,
+          counterUnit: counterUnit.trim() || undefined,
+        });
+      }
+      return repos.habits.update(habitId, {
+        ...base,
+        dailyTrackMode: 'once',
+      });
+    },
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
       Keyboard.dismiss();
-      /** Web: replace надёжнее, чем back(). Native: dismiss для modal stack. */
       if (Platform.OS === 'web') {
-        router.replace(HABITS_TAB);
+        router.replace(SETTINGS_HABITS);
         return;
       }
-      if (router.canDismiss()) {
-        router.dismiss();
-      } else if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace(HABITS_TAB);
-      }
+      if (router.canDismiss()) router.dismiss();
+      else if (router.canGoBack()) router.back();
+      else router.replace(SETTINGS_HABITS);
     },
   });
 
-  /** Пустое имя → «Привычка» в mutation; визуальная подсказка в шапке. */
-  const canSave = name.trim().length > 0;
-
   const submit = useCallback(() => {
-    if (isPending) return;
+    if (isPending || !habitId || !habit) return;
     mutate();
-  }, [isPending, mutate]);
+  }, [habit, habitId, isPending, mutate]);
+
+  const canSave = name.trim().length > 0;
 
   const screenOptions = useMemo(
     () => ({
       headerShown: true as const,
-      headerTitle: 'Новая привычка',
+      headerTitle: 'Привычка',
       headerStyle: { backgroundColor: colors.bg },
       headerTintColor: colors.text,
       headerRight: () => (
         <Pressable
           onPress={submit}
-          disabled={isPending}
+          disabled={isPending || !habit || !hydrated}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Создать привычку"
+          accessibilityLabel="Сохранить"
         >
           {isPending ? (
             <ActivityIndicator color={VIOLET} />
           ) : (
             <Text
               style={{
-                color: canSave ? VIOLET : colors.textMuted,
+                color: canSave && habit && hydrated ? VIOLET : colors.textMuted,
                 fontWeight: '700',
                 fontSize: 16,
               }}
             >
-              Создать
+              Сохранить
             </Text>
           )}
         </Pressable>
       ),
     }),
-    [canSave, colors.bg, colors.text, colors.textMuted, isPending, submit]
+    [canSave, colors.bg, colors.text, colors.textMuted, habit, hydrated, isPending, submit]
   );
 
   const styles = useMemo(
@@ -169,6 +205,41 @@ export default function HabitNewScreen() {
 
   const webCursor = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
 
+  if (!habitId) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: true, title: 'Ошибка' }} />
+        <View style={{ flex: 1, padding: spacing.xl, backgroundColor: colors.bg }}>
+          <Text style={[typography.body, { color: colors.textMuted }]}>Не передан id привычки.</Text>
+        </View>
+      </>
+    );
+  }
+
+  if (habits.isLoading || !hydrated) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: true, title: 'Загрузка…' }} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }}>
+          <ActivityIndicator color={VIOLET} />
+        </View>
+      </>
+    );
+  }
+
+  if (!habit) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: true, title: 'Нет данных' }} />
+        <View style={{ flex: 1, padding: spacing.xl, backgroundColor: colors.bg }}>
+          <Text style={[typography.body, { color: colors.textMuted }]}>
+            Привычка не найдена. Вернись в настройки.
+          </Text>
+        </View>
+      </>
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
@@ -187,7 +258,7 @@ export default function HabitNewScreen() {
             { color: VIOLET, letterSpacing: 1.2, marginBottom: spacing.md, textTransform: 'uppercase' },
           ]}
         >
-          Фокус на ритме
+          Редактирование
         </Text>
 
         <GlassCard glow>
@@ -195,7 +266,7 @@ export default function HabitNewScreen() {
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Например: утренний протокол"
+            placeholder="Название привычки"
             placeholderTextColor={colors.textMuted}
             style={styles.input}
             onSubmitEditing={submit}
@@ -203,24 +274,35 @@ export default function HabitNewScreen() {
           />
         </GlassCard>
 
+        <GlassCard style={{ marginTop: spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, paddingRight: spacing.md }}>
+              <Text style={[typography.title2, { color: colors.text, fontSize: 16 }]}>В прогрессе дня</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, lineHeight: 18 }]}>
+                Входит в счётчик на экране «День» вместе с задачами. Недельные можно не включать, если не хочешь
+                видеть их в числе каждый день.
+              </Text>
+            </View>
+            <Switch
+              value={requiredForProgress}
+              onValueChange={setRequiredForProgress}
+              trackColor={{ false: colors.border, true: 'rgba(168,85,247,0.45)' }}
+              thumbColor={requiredForProgress ? VIOLET : colors.textMuted}
+            />
+          </View>
+        </GlassCard>
+
         <View style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, { marginBottom: spacing.sm }]}>ТИП</Text>
-          <SegmentedControl
-            value={cadence}
-            onChange={setCadence}
-            options={[
-              { value: 'daily', label: 'Каждый день' },
-              { value: 'weekly', label: 'Недельный ритм' },
-            ]}
-          />
+          <Text style={[typography.body, { color: colors.text, fontWeight: '700' }]}>
+            {habitCadenceLabel(habit)}
+          </Text>
           <Text style={[typography.caption, { marginTop: spacing.sm, opacity: 0.85 }]}>
-            {cadence === 'daily'
-              ? 'Стрик — подряд идущие дни с отметкой.'
-              : 'Цель на неделю (пн–вс): N выполнений. Стрик — недели подряд, где цель достигнута.'}
+            Ритм (каждый день / неделя) при создании не меняется. Ниже — только способ отметки для ежедневных.
           </Text>
         </View>
 
-        {cadence === 'daily' ? (
+        {habit.cadence === 'daily' ? (
           <View style={{ marginTop: spacing.lg }}>
             <Text style={[typography.caption, { marginBottom: spacing.sm }]}>ОТМЕТКА ЗА ДЕНЬ</Text>
             <SegmentedControl
@@ -228,17 +310,16 @@ export default function HabitNewScreen() {
               onChange={setDailyCheckMode}
               options={[
                 { value: 'once', label: 'Раз в день' },
-                { value: 'counter', label: 'Несколько раз' },
+                { value: 'counter', label: 'Количество (+)' },
               ]}
             />
             <Text style={[typography.caption, { marginTop: spacing.sm, opacity: 0.85 }]}>
-              {dailyCheckMode === 'once'
-                ? 'Одна галочка закрывает день (как раньше).'
-                : 'В течение дня набираешь нужное число чек-инов (например стаканы воды).'}
+              Количественная: на экране «День» кольцо и кнопки +/−. Цель — когда «выполнено»; можно набрать больше
+              (например 5/3).
             </Text>
             {dailyCheckMode === 'counter' ? (
               <GlassCard style={{ marginTop: spacing.lg }} glow>
-                <Text style={typography.caption}>ЦЕЛЬ НА ДЕНЬ (ЧИСЛО ЧЕК-ИНОВ)</Text>
+                <Text style={typography.caption}>ЦЕЛЬ НА ДЕНЬ (ДЛЯ «СДЕЛАНО»)</Text>
                 <View
                   style={{
                     flexDirection: 'row',
@@ -250,11 +331,7 @@ export default function HabitNewScreen() {
                   {[2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((n) => {
                     const on = n === counterTarget;
                     return (
-                      <Pressable
-                        key={n}
-                        onPress={() => setCounterTarget(n)}
-                        style={[styles.chip, on && styles.chipOn]}
-                      >
+                      <Pressable key={n} onPress={() => setCounterTarget(n)} style={[styles.chip, on && styles.chipOn]}>
                         <Text style={[typography.title2, { color: on ? VIOLET : colors.text }]}>{n}</Text>
                       </Pressable>
                     );
@@ -264,41 +341,24 @@ export default function HabitNewScreen() {
                 <TextInput
                   value={counterUnit}
                   onChangeText={setCounterUnit}
-                  placeholder="стаканов, раз, минут…"
+                  placeholder="действий, раз, стаканов…"
                   placeholderTextColor={colors.textMuted}
                   style={styles.input}
                 />
               </GlassCard>
             ) : null}
           </View>
-        ) : null}
-
-        {cadence === 'weekly' ? (
+        ) : (
           <GlassCard style={{ marginTop: spacing.lg }} glow>
-            <Text style={typography.caption}>СКОЛЬКО РАЗ ЗА НЕДЕЛЮ</Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: spacing.sm,
-                marginTop: spacing.md,
-              }}
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((n) => {
-                const on = n === weeklyTarget;
-                return (
-                  <Pressable
-                    key={n}
-                    onPress={() => setWeeklyTarget(n)}
-                    style={[styles.chip, on && styles.chipOn]}
-                  >
-                    <Text style={[typography.title2, { color: on ? VIOLET : colors.text }]}>{n}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Text style={typography.caption}>СКОЛЬКО РАЗ ЗА НЕДЕЛЮ (СПРАВОЧНО)</Text>
+            <Text style={[typography.caption, { marginTop: spacing.sm, opacity: 0.85 }]}>
+              Число недели задаётся при создании. Чтобы изменить цель недели, удали привычку и создай заново.
+            </Text>
+            <Text style={[typography.title2, { marginTop: spacing.md, color: colors.text }]}>
+              {weeklyTarget}× / нед.
+            </Text>
           </GlassCard>
-        ) : null}
+        )}
 
         <GlassCard style={{ marginTop: spacing.lg }}>
           <Text style={typography.caption}>ИКОНКА</Text>
@@ -336,35 +396,6 @@ export default function HabitNewScreen() {
           </View>
         </GlassCard>
 
-        <GlassCard style={{ marginTop: spacing.lg }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: spacing.md,
-            }}
-          >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={typography.caption}>ПРОГРЕСС НА ЭКРАНЕ «ДЕНЬ»</Text>
-              <Text
-                style={[typography.body, { color: colors.textMuted, marginTop: 6, lineHeight: 20 }]}
-              >
-                Учитывать в прогрессе на экране «День» (вместе с задачами)
-              </Text>
-            </View>
-            <Switch
-              value={countInDayProgress}
-              onValueChange={(v) => {
-                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                setCountInDayProgress(v);
-              }}
-              trackColor={{ false: colors.border, true: `${VIOLET}88` }}
-              thumbColor={countInDayProgress ? VIOLET : colors.textMuted}
-            />
-          </View>
-        </GlassCard>
-
         {isError ? (
           <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.md }]}>
             Не удалось сохранить. Попробуй ещё раз.
@@ -377,13 +408,13 @@ export default function HabitNewScreen() {
           disabled={isPending}
           style={[styles.primaryBtn, webCursor]}
           accessibilityRole="button"
-          accessibilityLabel="Создать привычку"
+          accessibilityLabel="Сохранить привычку"
         >
           {isPending ? (
             <ActivityIndicator color={VIOLET} />
           ) : (
             <Text style={{ color: VIOLET, fontWeight: '800', fontSize: 16 }}>
-              Создать привычку
+              Сохранить изменения
             </Text>
           )}
         </TouchableOpacity>

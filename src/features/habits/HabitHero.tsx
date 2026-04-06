@@ -8,8 +8,10 @@ import { useAppTheme } from '@/theme';
 const DEFAULT_HERO_IMAGE = require('../../assets/images/habit-hero-sophia.png');
 
 export type HabitHeroProps = {
-  totalHabits: number;
-  doneToday: number;
+  /** Выполнено: обязательные привычки за день + закрытые задачи дня. */
+  doneCount: number;
+  /** Всего слотов: те же привычки + все задачи на дату. */
+  totalCount: number;
   imageSource?: ImageSourcePropType;
   /** false — подпись «день в календаре», не «сегодня» (экран «День» с прошлой датой). */
   isTodayContext?: boolean;
@@ -25,16 +27,16 @@ const HERO_IMAGE_POSITION_ROW = { top: '14%', right: '0%' } as const;
 const HERO_IMAGE_POSITION_STACK = { top: '10%', right: '0%' } as const;
 
 export function HabitHero({
-  totalHabits,
-  doneToday,
+  doneCount,
+  totalCount,
   imageSource = DEFAULT_HERO_IMAGE,
   isTodayContext = true,
 }: HabitHeroProps) {
   const { radius } = useAppTheme();
   const cardRadius = radius.xl;
   const { width: windowWidth } = useWindowDimensions();
-  const isEmpty = totalHabits === 0;
-  const progress = isEmpty ? 0 : Math.min(1, doneToday / totalHabits);
+  const isEmpty = totalCount === 0;
+  const progress = isEmpty ? 0 : Math.min(1, doneCount / totalCount);
   const stackLayout = windowWidth < STACK_BREAKPOINT;
   const pctDay = Math.round(progress * 100);
 
@@ -67,26 +69,20 @@ export function HabitHero({
       <View style={[styles.contentRow, stackLayout && styles.contentRowStack]}>
         <View style={[styles.copyZone, stackLayout && styles.copyZoneStack]}>
           <Text style={styles.overline}>
-            {isEmpty ? 'НАЧНИ СЕЙЧАС' : isTodayContext ? 'СЕГОДНЯ В РИТМЕ' : 'ДЕНЬ В КАЛЕНДАРЕ'}
+            {isEmpty ? 'НАЧНИ СЕЙЧАС' : isTodayContext ? 'СЕГОДНЯ' : 'ДЕНЬ В КАЛЕНДАРЕ'}
           </Text>
           {isEmpty ? (
             <>
-              <Text style={styles.headline}>Начни свой ритм</Text>
+              <Text style={styles.headline}>План дня</Text>
               <Text style={styles.microcopy}>
-                Добавь первую привычку — дисциплина начинается с одного шага.
+                Добавь задачи на вкладке «Задачи» и отметь привычки, которые хочешь видеть в прогрессе (звезда в
+                настройках).
               </Text>
             </>
           ) : (
-            <>
-              <Text style={styles.headline}>
-                {doneToday} / {totalHabits} привычек выполнено
-              </Text>
-              <Text style={styles.microcopy}>
-                {doneToday === totalHabits
-                  ? 'Отличный день — ритм в твоих руках.'
-                  : 'Осталось немного — доведи ритм до конца.'}
-              </Text>
-            </>
+            <Text style={styles.headline}>
+              {doneCount} / {totalCount} сделано
+            </Text>
           )}
 
           <View style={styles.trackWrap}>

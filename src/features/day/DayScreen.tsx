@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSupabaseConfigured } from '@/config/env';
 import type { Habit } from '@/entities/models';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { DayDateCalendarModal } from '@/features/day/DayDateCalendarModal';
+import { DayPlannerTasksBlock } from '@/features/day/DayPlannerTasksBlock';
 import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { journalEntryHasContent } from '@/features/day/dayJournal.logic';
 import type { JournalMoodId } from '@/features/day/dayJournal.types';
-import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { WEEKDAY_SHORT_RU, getWeekDayKeys, habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { DayHabitTimelineList } from '@/features/day/DayHabitTimelineList';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
@@ -22,6 +23,8 @@ import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { listPlannerTasks } from '@/features/tasks/plannerApi';
+import { PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
 import { habitIsDiaryLinked } from '@/features/journal/journalHabit';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
@@ -89,7 +92,9 @@ export function DayScreen() {
   const [viewDateKey, setViewDateKey] = useState(todayKey);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [greetingName, setGreetingName] = useState('ты');
+  const supabaseOn = useSupabaseConfigured;
 
   const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
   const nikolayMoneyGoals = useMemo(
@@ -101,17 +106,20 @@ export function DayScreen() {
     const sb = getSupabase();
     if (!sb) {
       setAccountEmail(null);
+      setUserId(null);
       setGreetingName('ты');
       return undefined;
     }
     void sb.auth.getSession().then(({ data: { session } }) => {
       setAccountEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
       setGreetingName(displayNameFromSession(session));
     });
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((_event, session) => {
       setAccountEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
       setGreetingName(displayNameFromSession(session));
     });
     return () => subscription.unsubscribe();
@@ -157,13 +165,6 @@ export function DayScreen() {
     },
   });
 
-  const undoWeekly = useMutation({
-    mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.undoWeekly(id, dk),
-    onSuccess: (list) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-    },
-  });
-
   const removeHabit = useMutation({
     mutationFn: (id: string) => repos.habits.remove(id),
     onSuccess: (list, id) => {
@@ -186,17 +187,9 @@ export function DayScreen() {
       if (Platform.OS !== 'web') {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      if (h.cadence === 'daily') {
-        checkIn.mutate({ id: h.id, dateKey: viewDateKey });
-        return;
-      }
-      if (habitDoneOnDate(h, viewDateKey)) {
-        undoWeekly.mutate({ id: h.id, dateKey: viewDateKey });
-      } else {
-        checkIn.mutate({ id: h.id, dateKey: viewDateKey });
-      }
+      checkIn.mutate({ id: h.id, dateKey: viewDateKey });
     },
-    [checkIn, todayKey, undoWeekly, viewDateKey]
+    [checkIn, viewDateKey]
   );
 
   const goPrevDay = useCallback(() => {
@@ -233,6 +226,22 @@ export function DayScreen() {
     }).length;
     return { done, total: list.length };
   }, [data, journalDoc.entries, journalDoc.fields, viewDateKey]);
+
+  const plannerTasksQ = useQuery({
+    queryKey: [...PLANNER_TASKS_QUERY_KEY, viewDateKey],
+    queryFn: () => listPlannerTasks(viewDateKey),
+    enabled: Boolean(supabaseOn && userId),
+  });
+
+  const heroScore = useMemo(() => {
+    const tasks = plannerTasksQ.data ?? [];
+    const taskDone = tasks.filter((t) => t.is_done).length;
+    const taskTotal = tasks.length;
+    return {
+      done: ritualScoreViewDay.done + taskDone,
+      total: ritualScoreViewDay.total + taskTotal,
+    };
+  }, [plannerTasksQ.data, ritualScoreViewDay.done, ritualScoreViewDay.total]);
 
   return (
     <ScreenCanvas>
@@ -411,32 +420,10 @@ export function DayScreen() {
         />
 
         <HabitHero
-          totalHabits={ritualScoreViewDay.total}
-          doneToday={ritualScoreViewDay.done}
+          doneCount={heroScore.done}
+          totalCount={heroScore.total}
           isTodayContext={viewDateKey === todayKey}
         />
-
-        <View style={{ marginTop: spacing.xl, marginBottom: spacing.lg }}>
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: '900',
-              letterSpacing: 1.4,
-              color: 'rgba(196,181,253,0.9)',
-              textTransform: 'uppercase',
-              marginBottom: 10,
-            }}
-          >
-            Настроение
-          </Text>
-          <JournalMoodStrip
-            viewDateKey={viewDateKey}
-            todayKey={todayKey}
-            onViewDateChange={setViewDateKey}
-            entries={journalDoc.entries}
-            onPickMood={(dk, mood) => void pickMood(dk, mood)}
-          />
-        </View>
 
         {isNikolay ? (
           <>
@@ -448,78 +435,155 @@ export function DayScreen() {
           </>
         ) : null}
 
-        {counterHabits.length > 0 ? (
-          <View style={{ marginBottom: spacing.lg }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: spacing.sm,
-              }}
-            >
-              <View>
+        <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
+
+        <View style={{ marginBottom: spacing.lg }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: spacing.md,
+            }}
+          >
+            <View>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '900',
+                  letterSpacing: 1.4,
+                  color: 'rgba(196,181,253,0.9)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Привычки
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 19,
+                  fontWeight: '900',
+                  letterSpacing: -0.4,
+                  color: colors.text,
+                }}
+              >
+                Привычки дня
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Link href={HABITS_MANAGE_HREF} asChild>
+                <Pressable
+                  style={({ pressed }) => ({
+                    paddingVertical: 4,
+                    paddingHorizontal: 2,
+                    opacity: pressed ? 0.85 : 1,
+                    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+                  })}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Привычки</Text>
+                </Pressable>
+              </Link>
+              <Link href={HABITS_HREF} asChild>
+                <Pressable
+                  style={({ pressed }) => ({
+                    paddingVertical: 4,
+                    paddingHorizontal: 2,
+                    opacity: pressed ? 0.85 : 1,
+                    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+                  })}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Аналитика</Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+
+          {counterHabits.length > 0 ? (
+            <View style={{ marginBottom: spacing.md }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: spacing.sm,
+                }}
+              >
                 <Text
                   style={{
-                    fontSize: 11,
-                    fontWeight: '900',
-                    letterSpacing: 1.4,
-                    color: 'rgba(196,181,253,0.9)',
-                    textTransform: 'uppercase',
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: colors.textMuted,
                   }}
                 >
                   Счётчики
                 </Text>
-                <Text
+                <View
                   style={{
-                    marginTop: 4,
-                    fontSize: 19,
-                    fontWeight: '900',
-                    letterSpacing: -0.4,
-                    color: colors.text,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(255,255,255,0.1)',
                   }}
                 >
-                  Чекины
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '800',
+                      color: colors.textMuted,
+                      fontVariant: ['tabular-nums'],
+                    }}
+                  >
+                    {counterDoneCount}/{counterBadgeTotal}
+                  </Text>
+                </View>
               </View>
-              <View
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 999,
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: 'rgba(255,255,255,0.1)',
-                }}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={{ flexDirection: 'row', gap: 12, paddingRight: 8, paddingBottom: 4 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
-                  {counterDoneCount}/{counterBadgeTotal}
-                </Text>
-              </View>
+                {counterHabits.map((h, i) => (
+                  <HabitCounterRingCard
+                    key={h.id}
+                    habit={h}
+                    viewDateKey={viewDateKey}
+                    todayKey={todayKey}
+                    compact
+                    ringSize={100}
+                    progressColor={COUNTER_RING_COLORS[i % COUNTER_RING_COLORS.length]!}
+                    onDelta={(d) => adjustCounter.mutate({ id: h.id, dateKey: viewDateKey, delta: d })}
+                  />
+                ))}
+              </ScrollView>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              nestedScrollEnabled
-              contentContainerStyle={{ flexDirection: 'row', gap: 12, paddingRight: 8, paddingBottom: 4 }}
-            >
-              {counterHabits.map((h, i) => (
-                <HabitCounterRingCard
-                  key={h.id}
-                  habit={h}
-                  viewDateKey={viewDateKey}
-                  todayKey={todayKey}
-                  compact
-                  ringSize={100}
-                  progressColor={COUNTER_RING_COLORS[i % COUNTER_RING_COLORS.length]!}
-                  onDelta={(d) => adjustCounter.mutate({ id: h.id, dateKey: viewDateKey, delta: d })}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
+          ) : null}
 
-        <DayJournalAccordion viewDateKey={viewDateKey} todayKey={todayKey} sessionEmail={accountEmail} />
+          <DayHabitTimelineList
+            habits={timelineHabits}
+            loading={habits.isLoading}
+            emptyHint={
+              timelineHabits.length === 0 && counterHabits.length > 0
+                ? 'Обычные привычки добавь через «Привычки» в шапке блока.'
+                : 'Пока нет привычек — нажми «Привычки» справа и создай новую.'
+            }
+            viewDateKey={viewDateKey}
+            todayKey={todayKey}
+            onToggle={onHabitIcon}
+            onRequestDelete={(h) => removeHabit.mutate(h.id)}
+          />
+        </View>
+
+        <DayJournalAccordion
+          viewDateKey={viewDateKey}
+          todayKey={todayKey}
+          sessionEmail={accountEmail}
+          linkMoodToScreenDay
+          onMoodStripChangeDay={setViewDateKey}
+          onPickMood={(dk, mood) => void pickMood(dk, mood)}
+        />
 
         {shouldShowJournalReminder ? (
           <AppSurfaceCard glow style={{ marginBottom: spacing.md }}>
@@ -527,85 +591,10 @@ export function DayScreen() {
               Вечер — не забудь дневник
             </Text>
             <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textMuted }}>
-              Раскрой плашку «Дневник» выше и заполни поля за сегодня.
+              Раскрой плашку «Дневник» ниже и заполни поля за сегодня.
             </Text>
           </AppSurfaceCard>
         ) : null}
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: spacing.md,
-            marginTop: spacing.md,
-          }}
-        >
-          <View>
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: '900',
-                letterSpacing: 1.4,
-                color: 'rgba(196,181,253,0.9)',
-                textTransform: 'uppercase',
-              }}
-            >
-              План дня
-            </Text>
-            <Text
-              style={{
-                marginTop: 4,
-                fontSize: 19,
-                fontWeight: '900',
-                letterSpacing: -0.4,
-                color: colors.text,
-              }}
-            >
-              Привычки дня
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Link href={HABITS_MANAGE_HREF} asChild>
-              <Pressable
-                style={({ pressed }) => ({
-                  paddingVertical: 4,
-                  paddingHorizontal: 2,
-                  opacity: pressed ? 0.85 : 1,
-                  ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-                })}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Привычки</Text>
-              </Pressable>
-            </Link>
-            <Link href={HABITS_HREF} asChild>
-              <Pressable
-                style={({ pressed }) => ({
-                  paddingVertical: 4,
-                  paddingHorizontal: 2,
-                  opacity: pressed ? 0.85 : 1,
-                  ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-                })}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Аналитика</Text>
-              </Pressable>
-            </Link>
-          </View>
-        </View>
-
-        <DayHabitTimelineList
-          habits={timelineHabits}
-          loading={habits.isLoading}
-          emptyHint={
-            timelineHabits.length === 0 && counterHabits.length > 0
-              ? 'Счётчики — в блоке «Чекины» выше. Обычные привычки добавь через «Привычки» в шапке блока.'
-              : 'Пока нет привычек — нажми «Привычки» справа и создай новую.'
-          }
-          viewDateKey={viewDateKey}
-          todayKey={todayKey}
-          onToggle={onHabitIcon}
-          onRequestDelete={(h) => removeHabit.mutate(h.id)}
-        />
       </ScrollView>
     </ScreenCanvas>
   );

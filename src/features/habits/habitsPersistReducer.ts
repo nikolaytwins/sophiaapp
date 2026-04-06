@@ -1,10 +1,10 @@
 import type { HabitPersisted } from '@/entities/models';
 import { DEFAULT_HABIT_SEEDS } from '@/features/habits/defaultHabits';
 import {
-  appendWeeklyCompletion,
   localDateKey,
+  removeWeeklyCompletionOnDay,
   toggleDailyCompletion,
-  undoLastWeeklyIfToday,
+  toggleWeeklyCompletionForDay,
 } from '@/features/habits/habitLogic';
 
 export type HabitsPersistSlice = {
@@ -145,6 +145,94 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
   return { ...s1, habits: [...s1.habits, row], defaultsSeeded: true };
 }
 
+export type UpdateHabitPersistInput = {
+  name: string;
+  icon: string;
+  required: boolean;
+  /** Только для ежедневных: одна галочка или количественная. */
+  dailyTrackMode?: 'once' | 'counter';
+  dailyTarget?: number;
+  counterUnit?: string;
+};
+
+function toDailyOnceRow(h: HabitPersisted): HabitPersisted {
+  const { checkInKind: _ck, dailyTarget: _dt, countsByDate: _cbd, counterUnit: _cu, ...rest } = h;
+  return {
+    ...rest,
+    completionDates: rest.completionDates ?? [],
+  };
+}
+
+function toDailyCounterRow(h: HabitPersisted, dailyTarget: number, counterUnit?: string): HabitPersisted {
+  const dt = Math.max(2, Math.min(99, Math.round(dailyTarget)));
+  const unit =
+    counterUnit !== undefined ? counterUnit.trim().slice(0, 24) || undefined : h.counterUnit;
+  const next: HabitPersisted = {
+    ...h,
+    checkInKind: 'counter',
+    dailyTarget: dt,
+    countsByDate: h.countsByDate ?? {},
+  };
+  if (unit) return { ...next, counterUnit: unit };
+  const { counterUnit: _u, ...rest } = next;
+  return rest as HabitPersisted;
+}
+
+export function updateHabitSlice(
+  s: HabitsPersistSlice,
+  id: string,
+  patch: UpdateHabitPersistInput
+): HabitsPersistSlice {
+  const s1 = ensureDefaultHabitsSlice(s);
+  const today = localDateKey();
+  const nextHabits = s1.habits.map((h) => {
+    if (h.id !== id) return h;
+    const name = patch.name.trim() || h.name;
+    let next: HabitPersisted = {
+      ...h,
+      name,
+      icon: patch.icon,
+      required: patch.required,
+    };
+
+    const wasCounter = next.checkInKind === 'counter' && next.dailyTarget != null;
+
+    if (next.cadence === 'daily' && patch.dailyTrackMode !== undefined) {
+      if (patch.dailyTrackMode === 'once') {
+        if (wasCounter) next = toDailyOnceRow(next);
+      } else {
+        const tgt = patch.dailyTarget ?? next.dailyTarget ?? 3;
+        const base = wasCounter ? next : toDailyOnceRow(next);
+        next = toDailyCounterRow(base, tgt, patch.counterUnit);
+      }
+    } else if (
+      next.cadence === 'daily' &&
+      wasCounter &&
+      (patch.dailyTarget !== undefined || patch.counterUnit !== undefined)
+    ) {
+      if (patch.dailyTarget !== undefined) {
+        next = { ...next, dailyTarget: Math.max(2, Math.min(99, Math.round(patch.dailyTarget))) };
+      }
+      if (patch.counterUnit !== undefined) {
+        const unit = patch.counterUnit.trim().slice(0, 24);
+        if (unit) next = { ...next, counterUnit: unit };
+        else {
+          const { counterUnit: _u, ...r } = next;
+          next = r as HabitPersisted;
+        }
+      }
+    }
+
+    return normalizeHabitRow(next);
+  });
+
+  return {
+    ...s1,
+    habits: nextHabits,
+    heroHistory: { ...s1.heroHistory, [today]: ritualScoreForDayPersisted(nextHabits, today) },
+  };
+}
+
 export function setRequiredSlice(s: HabitsPersistSlice, id: string, required: boolean): HabitsPersistSlice {
   const s1 = ensureDefaultHabitsSlice(s);
   const nextHabits = s1.habits.map((h) => (h.id === id ? { ...h, required } : h));
@@ -166,12 +254,14 @@ export function removeHabitSlice(s: HabitsPersistSlice, id: string): HabitsPersi
   };
 }
 
+/** Верхняя граница + за день (можно перебрать цель, напр. 5/3). */
+const COUNTER_DAY_MAX = 99;
+
 function applyCounterDelta(h: HabitPersisted, dk: string, delta: 1 | -1): HabitPersisted {
   if (h.cadence !== 'daily' || h.checkInKind !== 'counter' || h.dailyTarget == null) return h;
-  const target = Math.max(1, h.dailyTarget);
   const counts = { ...(h.countsByDate ?? {}) };
   const cur = counts[dk] ?? 0;
-  const nextVal = delta === 1 ? Math.min(target, cur + 1) : Math.max(0, cur - 1);
+  const nextVal = delta === 1 ? Math.min(COUNTER_DAY_MAX, cur + 1) : Math.max(0, cur - 1);
   if (nextVal <= 0) {
     delete counts[dk];
   } else {
@@ -190,7 +280,7 @@ export function checkInSlice(s: HabitsPersistSlice, id: string, dateKey?: string
       }
       return { ...h, completionDates: toggleDailyCompletion(h.completionDates, dk) };
     }
-    return { ...h, completionDates: appendWeeklyCompletion(h.completionDates, dk) };
+    return { ...h, completionDates: toggleWeeklyCompletionForDay(h.completionDates, dk) };
   });
 
   return {
@@ -226,7 +316,7 @@ export function undoWeeklySlice(s: HabitsPersistSlice, id: string, dateKey?: str
   const dk = dateKey ?? localDateKey();
   const nextHabits = s.habits.map((h) =>
     h.id === id && h.cadence === 'weekly'
-      ? { ...h, completionDates: undoLastWeeklyIfToday(h.completionDates, dk) }
+      ? { ...h, completionDates: removeWeeklyCompletionOnDay(h.completionDates, dk) }
       : h
   );
 

@@ -1,6 +1,6 @@
 import { addDays } from '@/features/habits/habitLogic';
 import type { BacklogPriority } from '@/features/tasks/backlog.types';
-import type { PlannerDayFocusRow, PlannerTaskRow, PlannerUserStatsRow } from '@/features/tasks/planner.types';
+import type { PlannerTaskRow, PlannerUserStatsRow } from '@/features/tasks/planner.types';
 import { getSupabase } from '@/lib/supabase';
 
 async function requireUserId(): Promise<string> {
@@ -41,13 +41,32 @@ export async function purgeOldPlannerTasks(): Promise<void> {
   if (e2) throw e2;
 }
 
+/** Снимает фокус со всех задач дня, кроме `exceptTaskId` (если передан). */
+async function clearPlannerFocusExcept(
+  userId: string,
+  dayDate: string,
+  exceptTaskId?: string
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  let q = sb
+    .from('planner_tasks')
+    .update({ is_focus: false, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('day_date', dayDate)
+    .eq('is_focus', true);
+  if (exceptTaskId) q = q.neq('id', exceptTaskId);
+  const { error } = await q;
+  if (error) throw error;
+}
+
 export async function listPlannerTasks(dayDate: string): Promise<PlannerTaskRow[]> {
   const sb = getSupabase();
   if (!sb) return [];
   const userId = await requireUserId();
   const { data, error } = await sb
     .from('planner_tasks')
-    .select('id,day_date,title,priority,is_done,sort_order,created_at,updated_at')
+    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
     .eq('user_id', userId)
     .eq('day_date', dayDate)
     .order('is_done', { ascending: true })
@@ -61,12 +80,15 @@ export async function createPlannerTask(input: {
   day_date: string;
   title: string;
   priority: BacklogPriority;
+  /** Одна задача с фокусом на день; остальные на этот день сбрасываются. */
+  is_focus?: boolean;
 }): Promise<PlannerTaskRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
   const userId = await requireUserId();
   const title = input.title.trim();
   if (!title) throw new Error('Введи текст задачи');
+  if (input.is_focus) await clearPlannerFocusExcept(userId, input.day_date);
   const { data, error } = await sb
     .from('planner_tasks')
     .insert({
@@ -74,10 +96,11 @@ export async function createPlannerTask(input: {
       day_date: input.day_date,
       title,
       priority: input.priority,
+      is_focus: Boolean(input.is_focus),
       sort_order: Date.now() % 1_000_000_000,
       updated_at: new Date().toISOString(),
     })
-    .select('id,day_date,title,priority,is_done,sort_order,created_at,updated_at')
+    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
     .single();
   if (error) throw error;
   return data as PlannerTaskRow;
@@ -85,17 +108,41 @@ export async function createPlannerTask(input: {
 
 export async function updatePlannerTask(
   id: string,
-  patch: { title?: string; priority?: BacklogPriority; is_done?: boolean; day_date?: string }
+  patch: {
+    title?: string;
+    priority?: BacklogPriority;
+    is_done?: boolean;
+    day_date?: string;
+    is_focus?: boolean;
+  }
 ): Promise<PlannerTaskRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
-  await requireUserId();
+  const userId = await requireUserId();
+  const { data: cur, error: e0 } = await sb
+    .from('planner_tasks')
+    .select('day_date,is_focus')
+    .eq('id', id)
+    .single();
+  if (e0) throw e0;
+  const finalDay = patch.day_date !== undefined ? patch.day_date : cur.day_date;
+  const willRemainOrBecomeFocus =
+    patch.is_focus === true || (patch.is_focus === undefined && Boolean(cur.is_focus));
+  if (willRemainOrBecomeFocus) {
+    await clearPlannerFocusExcept(userId, finalDay, id);
+  }
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) row.title = patch.title.trim();
   if (patch.priority !== undefined) row.priority = patch.priority;
   if (patch.is_done !== undefined) row.is_done = patch.is_done;
   if (patch.day_date !== undefined) row.day_date = patch.day_date;
-  const { data, error } = await sb.from('planner_tasks').update(row).eq('id', id).select().single();
+  if (patch.is_focus !== undefined) row.is_focus = patch.is_focus;
+  const { data, error } = await sb
+    .from('planner_tasks')
+    .update(row)
+    .eq('id', id)
+    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
+    .single();
   if (error) throw error;
   return data as PlannerTaskRow;
 }
@@ -106,51 +153,6 @@ export async function deletePlannerTask(id: string): Promise<void> {
   await requireUserId();
   const { error } = await sb.from('planner_tasks').delete().eq('id', id);
   if (error) throw error;
-}
-
-export async function getPlannerDayFocus(dayDate: string): Promise<PlannerDayFocusRow | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const userId = await requireUserId();
-  const { data, error } = await sb
-    .from('planner_day_focus')
-    .select('day_date,focus_text,updated_at')
-    .eq('user_id', userId)
-    .eq('day_date', dayDate)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  return data as PlannerDayFocusRow;
-}
-
-export async function upsertPlannerDayFocus(dayDate: string, focusText: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) throw new Error('Supabase не настроен');
-  const userId = await requireUserId();
-  const text = focusText.slice(0, 500);
-  const now = new Date().toISOString();
-  const { data: row } = await sb
-    .from('planner_day_focus')
-    .select('user_id')
-    .eq('user_id', userId)
-    .eq('day_date', dayDate)
-    .maybeSingle();
-  if (row) {
-    const { error } = await sb
-      .from('planner_day_focus')
-      .update({ focus_text: text, updated_at: now })
-      .eq('user_id', userId)
-      .eq('day_date', dayDate);
-    if (error) throw error;
-  } else {
-    const { error } = await sb.from('planner_day_focus').insert({
-      user_id: userId,
-      day_date: dayDate,
-      focus_text: text,
-      updated_at: now,
-    });
-    if (error) throw error;
-  }
 }
 
 export async function getPlannerUserStats(): Promise<PlannerUserStatsRow> {

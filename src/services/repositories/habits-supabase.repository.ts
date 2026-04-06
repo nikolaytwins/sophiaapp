@@ -17,12 +17,13 @@ import {
   setRequiredSlice,
   totalCompletionCount,
   undoWeeklySlice,
+  updateHabitSlice,
   type HabitsPersistSlice,
 } from '@/features/habits/habitsPersistReducer';
 import { habitRowToView } from '@/stores/habits.store';
 
 import { ensureHabitsStoreHydrated } from './habits-local.repository';
-import type { CreateHabitInput, HabitsAnalyticsExport, HabitsRepository } from './types';
+import type { CreateHabitInput, HabitsAnalyticsExport, HabitsRepository, UpdateHabitInput } from './types';
 
 function normalizePayload(data: unknown): HabitsPersistSlice {
   if (!data || typeof data !== 'object') {
@@ -145,6 +146,13 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     async create(input: CreateHabitInput) {
       let slice = await loadNormalized();
       slice = createHabitSlice(slice, input);
+      await putState(slice);
+      return toList(slice);
+    },
+
+    async update(id: string, patch: UpdateHabitInput) {
+      let slice = await loadNormalized();
+      slice = updateHabitSlice(slice, id, patch);
       await putState(slice);
       return toList(slice);
     },

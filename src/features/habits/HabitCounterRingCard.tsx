@@ -7,6 +7,8 @@ import { counterCountOnDate } from '@/features/habits/habitLogic';
 import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { useAppTheme } from '@/theme';
 
+const COUNTER_DAY_MAX = 99;
+
 type Props = {
   habit: Habit;
   viewDateKey: string;
@@ -35,12 +37,12 @@ export function HabitCounterRingCard({
   const future = viewDateKey > todayKey;
   const value01 = target > 0 ? Math.min(1, cur / target) : 0;
   const atMin = cur <= 0;
-  const atMax = cur >= target;
+  const atCeiling = cur >= COUNTER_DAY_MAX;
 
   const fire = (delta: 1 | -1) => {
     if (future) return;
     if (delta === -1 && atMin) return;
-    if (delta === 1 && atMax) return;
+    if (delta === 1 && atCeiling) return;
     if (Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -124,13 +126,13 @@ export function HabitCounterRingCard({
         <View style={{ width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.12)' }} />
         <Pressable
           onPress={() => fire(1)}
-          disabled={future || atMax}
+          disabled={future || atCeiling}
           style={({ pressed }) => ({
             flex: 1,
             paddingVertical: 12,
             alignItems: 'center',
-            opacity: future || atMax ? 0.25 : pressed ? 0.75 : 1,
-            ...(Platform.OS === 'web' && !future && !atMax ? { cursor: 'pointer' as const } : {}),
+            opacity: future || atCeiling ? 0.25 : pressed ? 0.75 : 1,
+            ...(Platform.OS === 'web' && !future && !atCeiling ? { cursor: 'pointer' as const } : {}),
           })}
           accessibilityRole="button"
           accessibilityLabel="Плюс один"
