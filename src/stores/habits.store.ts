@@ -41,12 +41,15 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
       : undefined;
 
   const isCounterDaily =
-    raw.cadence === 'daily' && raw.checkInKind === 'counter' && raw.dailyTarget != null;
+    raw.cadence === 'daily' &&
+    raw.checkInKind === 'counter' &&
+    raw.dailyTarget != null &&
+    raw.dailyTarget >= 1;
 
   const streak =
     raw.cadence === 'daily'
-      ? isCounterDaily && raw.dailyTarget != null
-        ? dailyStreakCounter(raw.countsByDate, raw.dailyTarget, todayKey)
+      ? isCounterDaily
+        ? dailyStreakCounter(raw.countsByDate, raw.dailyTarget!, todayKey)
         : dailyStreak(raw.completionDates, todayKey)
       : raw.cadence === 'weekly' && raw.weeklyTarget != null
         ? weeklyStreak(raw.completionDates, raw.weeklyTarget, todayKey)
@@ -54,8 +57,8 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
 
   const todayDone =
     raw.cadence === 'daily'
-      ? isCounterDaily && raw.dailyTarget != null
-        ? counterCountOnDate(raw.countsByDate, todayKey) >= raw.dailyTarget
+      ? isCounterDaily
+        ? counterCountOnDate(raw.countsByDate, todayKey) >= (raw.dailyTarget ?? 1)
         : hasDailyCompletionOn(raw.completionDates, todayKey)
       : countToday(raw.completionDates, todayKey) > 0;
 

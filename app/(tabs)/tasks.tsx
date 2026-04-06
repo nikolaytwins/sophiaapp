@@ -1,5 +1,5 @@
-import { TasksScreen } from '@/features/tasks/TasksScreen';
+import { TasksPlannerScreen } from '@/features/tasks/TasksPlannerScreen';
 
 export default function TasksTab() {
-  return <TasksScreen />;
+  return <TasksPlannerScreen />;
 }

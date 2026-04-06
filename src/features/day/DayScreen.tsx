@@ -19,8 +19,10 @@ import { DayHabitTimelineList } from '@/features/day/DayHabitTimelineList';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
+import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { habitIsDiaryLinked } from '@/features/journal/journalHabit';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
@@ -124,7 +126,10 @@ export function DayScreen() {
     [data]
   );
   const timelineHabits = useMemo(
-    () => data.filter((h) => !(h.cadence === 'daily' && h.checkInKind === 'counter')),
+    () =>
+      data.filter(
+        (h) => !(h.cadence === 'daily' && h.checkInKind === 'counter') && !habitIsDiaryLinked(h)
+      ),
     [data]
   );
   const counterRitual = useMemo(
@@ -218,9 +223,16 @@ export function DayScreen() {
 
   const ritualScoreViewDay = useMemo(() => {
     const list = data.filter((h) => h.required !== false);
-    const done = list.filter((h) => habitDoneOnDate(h, viewDateKey)).length;
+    const entry = journalDoc.entries[viewDateKey];
+    const done = list.filter((h) => {
+      if (!habitIsDiaryLinked(h)) return habitDoneOnDate(h, viewDateKey);
+      return (
+        habitDoneOnDate(h, viewDateKey) &&
+        journalEntryHasFieldContent(entry, journalDoc.fields)
+      );
+    }).length;
     return { done, total: list.length };
-  }, [data, viewDateKey]);
+  }, [data, journalDoc.entries, journalDoc.fields, viewDateKey]);
 
   return (
     <ScreenCanvas>

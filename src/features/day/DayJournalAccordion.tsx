@@ -10,7 +10,11 @@ import { mergeNikolayJournalFields } from '@/features/accounts/nikolayJournalFie
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { JournalFieldCard } from '@/features/day/DayJournalFieldCards';
-import { getFieldsBySection, journalEntryHasContent } from '@/features/day/dayJournal.logic';
+import {
+  getFieldsBySection,
+  journalEntryHasContent,
+  journalEntryHasFieldContent,
+} from '@/features/day/dayJournal.logic';
 import type { JournalFieldDefinition } from '@/features/day/dayJournal.types';
 import { findJournalHabit } from '@/features/journal/journalHabit';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
@@ -69,10 +73,12 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
     }
   }, [sessionEmail]);
 
-  const entryHasContent = journalEntryHasContent(getEntry(viewDateKey), doc.fields);
+  const entry = getEntry(viewDateKey);
+  const entryHasContent = journalEntryHasContent(entry, doc.fields);
+  const entryHasFieldContent = journalEntryHasFieldContent(entry, doc.fields);
   const habitDone =
     journalHabit && viewDateKey <= todayKey ? habitDoneOnDate(journalHabit, viewDateKey) : false;
-  const showDoneBadge = entryHasContent && habitDone;
+  const showDoneBadge = entryHasFieldContent && habitDone;
 
   const commitFieldValue = useCallback(
     (field: JournalFieldDefinition, value: string | number | boolean | null) => {
@@ -92,11 +98,11 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const saveJournal = async () => {
     try {
       await pushDayJournalToCloud();
-      const entry = useDayJournalStore.getState().getEntry(viewDateKey);
-      const filled = journalEntryHasContent(entry, doc.fields);
+      const entryAfter = useDayJournalStore.getState().getEntry(viewDateKey);
+      const filledForHabit = journalEntryHasFieldContent(entryAfter, doc.fields);
       if (
         journalHabit &&
-        filled &&
+        filledForHabit &&
         viewDateKey <= todayKey &&
         !habitDoneOnDate(journalHabit, viewDateKey)
       ) {
@@ -177,9 +183,9 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
           <Text style={{ marginTop: 4, fontSize: 13, color: colors.textMuted }} numberOfLines={2}>
             {showDoneBadge
               ? 'Сохранено — привычка отмечена.'
-              : entryHasContent
+              : entryHasFieldContent
                 ? 'Нажми «Сохранить», чтобы отметить привычку за этот день.'
-                : 'Заполни поля и сохрани — тогда привычка засчитается (настроение — полоска выше).'}
+                : 'Заполни поля «Записи» или «Здоровье» и сохрани — привычка засчитается. Настроение сверху — отдельно.'}
           </Text>
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />

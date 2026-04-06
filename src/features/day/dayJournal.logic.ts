@@ -142,6 +142,24 @@ export function journalEntryHasContent(entry: JournalEntry | undefined, fields: 
   return false;
 }
 
+/**
+ * Только поля дневника/здоровья (без настроения). Нужно, чтобы привычка «дневник» не засчитывалась
+ * от одной только полоски настроения и не дублировала смысл с блоком «Дневник».
+ */
+export function journalEntryHasFieldContent(
+  entry: JournalEntry | undefined,
+  fields: JournalFieldDefinition[]
+): boolean {
+  if (!entry) return false;
+  for (const field of fields) {
+    const value = entry.values[field.id];
+    if (field.type === 'text' && typeof value === 'string' && value.trim()) return true;
+    if (field.type === 'number' && typeof value === 'number' && Number.isFinite(value)) return true;
+    if (field.type === 'toggle' && value === true) return true;
+  }
+  return false;
+}
+
 export function isJournalDocumentEmpty(doc: JournalDocument): boolean {
   const keys = Object.keys(doc.entries);
   if (keys.length === 0) return true;

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type Href, Link } from 'expo-router';
+import { type Href, Link, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -31,122 +31,32 @@ import {
   updateBacklogTask,
 } from '@/features/tasks/backlogApi';
 import { BACKLOG_TASKS_QUERY_KEY, BACKLOG_TYPES_QUERY_KEY } from '@/features/tasks/queryKeys';
+import {
+  PLANNER_PRIORITY_OPTIONS,
+  cardSurfaceForPriority,
+  priorityBadgeStyle,
+  priorityStripStyle,
+} from '@/features/tasks/taskPriorityUi';
 import { getSupabase } from '@/lib/supabase';
 import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
 const ACCENT = '#A855F7';
 
-type MainTabId = 'backlog' | 'board';
-
 type PriorityFilter = 'all' | BacklogPriority;
 /** `none` — только задачи без типа; иначе id типа */
 type TypeFilter = 'all' | 'none' | string;
 
-const MAIN_TABS: { id: MainTabId; label: string; soon?: boolean }[] = [
-  { id: 'backlog', label: 'Бэклог' },
-  { id: 'board', label: 'Доска', soon: true },
-];
+const PRIORITY_OPTIONS = PLANNER_PRIORITY_OPTIONS;
 
-const PRIORITY_OPTIONS: { id: BacklogPriority; label: string; short: string }[] = [
-  { id: 'high', label: 'Высокий', short: 'Важно' },
-  { id: 'medium', label: 'Средний', short: 'Средн.' },
-  { id: 'low', label: 'Низкий', short: 'Низкий' },
-];
-
-/** Полоска слева — главный сигнал важности (не путать с фиолетовым типом). */
-function priorityStripStyle(priority: BacklogPriority, isLight: boolean): { backgroundColor: string; width: number } {
-  switch (priority) {
-    case 'high':
-      return { backgroundColor: isLight ? '#EA580C' : '#FB923C', width: 5 };
-    case 'medium':
-      return { backgroundColor: isLight ? 'rgba(124,58,237,0.7)' : 'rgba(196,181,253,0.85)', width: 4 };
-    default:
-      return { backgroundColor: isLight ? 'rgba(15,17,24,0.15)' : 'rgba(255,255,255,0.14)', width: 3 };
-  }
-}
-
-function priorityBadgeStyle(
-  priority: BacklogPriority,
-  isLight: boolean
-): { backgroundColor: string; borderColor: string; color: string } {
-  switch (priority) {
-    case 'high':
-      return {
-        backgroundColor: isLight ? 'rgba(234,88,12,0.18)' : 'rgba(251,146,60,0.22)',
-        borderColor: isLight ? 'rgba(234,88,12,0.55)' : 'rgba(251,146,60,0.65)',
-        color: isLight ? '#9A3412' : '#FDBA74',
-      };
-    case 'medium':
-      return {
-        backgroundColor: isLight ? 'rgba(124,58,237,0.14)' : 'rgba(168,85,247,0.2)',
-        borderColor: isLight ? 'rgba(124,58,237,0.4)' : 'rgba(196,181,253,0.45)',
-        color: isLight ? '#5B21B6' : 'rgba(233,213,255,0.95)',
-      };
-    default:
-      return {
-        backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.06)',
-        borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.12)',
-        color: isLight ? 'rgba(15,17,24,0.55)' : 'rgba(255,255,255,0.5)',
-      };
-  }
-}
-
-function cardSurfaceForPriority(priority: BacklogPriority, isLight: boolean) {
-  if (isLight) {
-    switch (priority) {
-      case 'high':
-        return {
-          backgroundColor: 'rgba(254,243,232,0.85)',
-          borderColor: 'rgba(234,88,12,0.22)',
-          borderWidth: 1,
-        };
-      case 'medium':
-        return {
-          backgroundColor: 'rgba(124,58,237,0.06)',
-          borderColor: 'rgba(124,58,237,0.2)',
-          borderWidth: 1,
-        };
-      default:
-        return {
-          backgroundColor: 'rgba(15,17,24,0.03)',
-          borderColor: 'rgba(15,17,24,0.08)',
-          borderWidth: 1,
-        };
-    }
-  }
-  switch (priority) {
-    case 'high':
-      return {
-        backgroundColor: 'rgba(251,146,60,0.08)',
-        borderColor: 'rgba(251,146,60,0.22)',
-        borderWidth: 1,
-      };
-    case 'medium':
-      return {
-        backgroundColor: 'rgba(168,85,247,0.08)',
-        borderColor: 'rgba(168,85,247,0.22)',
-        borderWidth: 1,
-      };
-    default:
-      return {
-        backgroundColor: 'rgba(255,255,255,0.035)',
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-      };
-  }
-}
-
-export function TasksScreen() {
+export function BacklogTasksScreen() {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const supabaseOn = useSupabaseConfigured;
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [mainTab, setMainTab] = useState<MainTabId>('backlog');
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -302,8 +212,20 @@ export function TasksScreen() {
 
   const webCursor = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
 
+  const headerOpts = useMemo(
+    () => ({
+      headerShown: true as const,
+      title: 'Бэклог',
+      headerBackTitle: 'План',
+      headerStyle: { backgroundColor: colors.bg },
+      headerTintColor: colors.text,
+    }),
+    [colors.bg, colors.text]
+  );
+
   return (
     <ScreenCanvas>
+      <Stack.Screen options={headerOpts} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -314,24 +236,26 @@ export function TasksScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: spacing.md }}>
-            <Text
-              style={[
-                typography.caption,
-                {
-                  color: colors.textMuted,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  marginBottom: spacing.xs,
-                },
-              ]}
-            >
-              Рабочий стол
-            </Text>
-            <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Задачи</Text>
-          </View>
-          <HeaderProfileAvatar marginTop={4} />
+        <View style={{ marginBottom: spacing.sm }}>
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: colors.textMuted,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+                marginBottom: spacing.xs,
+              },
+            ]}
+          >
+            Рабочий стол
+          </Text>
+          <Text style={[typography.hero, { fontSize: 28, letterSpacing: -0.8, color: colors.text }]}>
+            Идеи без даты
+          </Text>
+          <Text style={[typography.body, { marginTop: spacing.sm, color: colors.textMuted, lineHeight: 22 }]}>
+            Задачи без привязки к дню. Дневной план — на вкладке «Задачи».
+          </Text>
         </View>
 
         {!supabaseOn ? (
@@ -361,56 +285,6 @@ export function TasksScreen() {
           </View>
         ) : (
           <>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginTop: spacing.lg, flexGrow: 0 }}
-              contentContainerStyle={{ flexDirection: 'row', gap: 10, paddingVertical: 4 }}
-            >
-              {MAIN_TABS.map((tab) => {
-                const active = mainTab === tab.id;
-                const disabled = tab.soon === true;
-                return (
-                  <Pressable
-                    key={tab.id}
-                    disabled={disabled}
-                    onPress={() => {
-                      if (disabled) return;
-                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      setMainTab(tab.id);
-                    }}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 18,
-                      paddingVertical: 11,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      opacity: disabled ? 0.42 : 1,
-                      backgroundColor: active
-                        ? 'rgba(168,85,247,0.16)'
-                        : pressed
-                          ? 'rgba(255,255,255,0.06)'
-                          : 'rgba(255,255,255,0.04)',
-                      borderColor: active ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
-                      ...webCursor,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: active ? '800' : '600',
-                        color: active ? colors.text : colors.textMuted,
-                      }}
-                    >
-                      {tab.label}
-                      {tab.soon ? ' · скоро' : ''}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {mainTab === 'backlog' ? (
-              <>
                 <Pressable
                   onPress={openCreate}
                   style={({ pressed }) => ({
@@ -760,8 +634,6 @@ export function TasksScreen() {
                     })}
                   </View>
                 )}
-              </>
-            ) : null}
           </>
         )}
       </ScrollView>

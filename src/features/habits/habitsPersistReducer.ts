@@ -17,6 +17,7 @@ export type HabitsPersistSlice = {
 
 const REMOVED_HABIT_IDS = new Set(['seed_no_comps']);
 const WALK_WITHOUT_GOAL_ID = 'seed_walk_without_goal';
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const HABITS_SEED_ROWS: HabitPersisted[] = DEFAULT_HABIT_SEEDS.map((h) => ({
   ...h,
@@ -24,10 +25,16 @@ export const HABITS_SEED_ROWS: HabitPersisted[] = DEFAULT_HABIT_SEEDS.map((h) =>
 }));
 
 function normalizeHabitRow(row: HabitPersisted): HabitPersisted {
+  let next: HabitPersisted = row;
   if (row.id === 'seed_no_tarot_astro') {
-    return { ...row, name: 'Без планирования' };
+    next = { ...row, name: 'Без планирования' };
   }
-  return row;
+  const rawDates = next.completionDates ?? [];
+  const dates = [...new Set(rawDates.filter((d) => typeof d === 'string' && DATE_KEY_RE.test(d)))].sort();
+  if (dates.length !== rawDates.length) {
+    next = { ...next, completionDates: dates };
+  }
+  return next;
 }
 
 export function normalizeHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice {
@@ -56,9 +63,10 @@ function isRitualHabit(h: HabitPersisted): boolean {
 
 function habitDoneOnDate(h: HabitPersisted, dateKey: string): boolean {
   if (h.cadence === 'daily') {
-    if (h.checkInKind === 'counter' && h.dailyTarget != null && h.dailyTarget >= 1) {
+    const target = h.dailyTarget;
+    if (h.checkInKind === 'counter' && target != null && target >= 1) {
       const c = h.countsByDate?.[dateKey] ?? 0;
-      return c >= h.dailyTarget;
+      return c >= target;
     }
     return h.completionDates.includes(dateKey);
   }

@@ -6,6 +6,15 @@ import type { HabitsPersistSlice } from '@/features/habits/habitsPersistReducer'
 export const JOURNAL_HABIT_EMAIL = NIKOLAY_ACCOUNT_EMAIL_PRIMARY;
 export const JOURNAL_HABIT_ID = 'seed_journal_daily';
 export const JOURNAL_HABIT_NAME = 'Ведение дневника';
+/** Второй дневниковый ритуал в профиле nikolaytwins — не дублируем в таймлайне «План дня». */
+export const NIKOLAY_JOURNAL_BRAINDUMP_ID = 'nikolay_journal_braindump';
+
+/** Привычки, которые ведутся через блок «Дневник» на экране Дня — не показываем в общем списке чек-инов. */
+export function habitIsDiaryLinked(h: { id: string; name: string }): boolean {
+  if (h.id === JOURNAL_HABIT_ID || h.name.trim() === JOURNAL_HABIT_NAME) return true;
+  if (h.id === NIKOLAY_JOURNAL_BRAINDUMP_ID) return true;
+  return false;
+}
 
 export function buildJournalHabitPersisted(): HabitPersisted {
   return {
