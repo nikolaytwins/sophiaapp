@@ -25,7 +25,7 @@ import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { listPlannerTasks } from '@/features/tasks/plannerApi';
 import { PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
-import { habitIsDiaryLinked } from '@/features/journal/journalHabit';
+import { findJournalHabit, habitIsDiaryLinked } from '@/features/journal/journalHabit';
 import { getSupabase } from '@/lib/supabase';
 import { repos } from '@/services/repositories';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
@@ -573,6 +573,13 @@ export function DayScreen() {
             todayKey={todayKey}
             onToggle={onHabitIcon}
             onRequestDelete={(h) => removeHabit.mutate(h.id)}
+            journalRow={{
+              viewDateKey,
+              todayKey,
+              entry: journalDoc.entries[viewDateKey],
+              fields: journalDoc.fields,
+              journalHabit: findJournalHabit(data),
+            }}
           />
         </View>
 

@@ -8,7 +8,10 @@ import {
   habitCadenceLabel,
   habitDoneOnDate,
 } from '@/features/day/dayHabitUi';
+import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
+import type { JournalEntry, JournalFieldDefinition } from '@/features/day/dayJournal.types';
 import { promptDeleteHabit } from '@/features/day/promptDeleteHabit';
+import { JOURNAL_HABIT_NAME } from '@/features/journal/journalHabit';
 import { countCompletionsInWeekRange, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import { useAppTheme } from '@/theme';
 
@@ -21,6 +24,16 @@ const ICON_BG: string[] = [
   'rgba(139,92,246,0.2)',
 ];
 
+/** Строка «Ведение дневника»: только отображение, отметка при сохранении дневника (или по факту записи, если привычки в списке нет). */
+export type DayJournalHabitRowConfig = {
+  viewDateKey: string;
+  todayKey: string;
+  entry: JournalEntry | undefined;
+  fields: JournalFieldDefinition[];
+  /** Если есть — «выполнено» совпадает с отметкой привычки после «Сохранить». */
+  journalHabit?: Habit;
+};
+
 type Props = {
   habits: Habit[];
   loading: boolean;
@@ -29,6 +42,7 @@ type Props = {
   todayKey: string;
   onToggle: (habit: Habit) => void;
   onRequestDelete?: (habit: Habit) => void;
+  journalRow?: DayJournalHabitRowConfig;
 };
 
 function streakSubtitle(h: Habit, viewDateKey: string, todayKey: string): string {
@@ -53,6 +67,150 @@ function rightMeta(h: Habit): string {
   return `${t}×/нед`;
 }
 
+function journalRowDone(cfg: DayJournalHabitRowConfig): boolean {
+  const { viewDateKey, todayKey, entry, fields, journalHabit } = cfg;
+  if (viewDateKey > todayKey) return false;
+  if (journalHabit) return habitDoneOnDate(journalHabit, viewDateKey);
+  return journalEntryHasFieldContent(entry, fields);
+}
+
+function JournalHabitDayRow({
+  cfg,
+  iconBg,
+  afterHabits,
+}: {
+  cfg: DayJournalHabitRowConfig;
+  iconBg: string;
+  afterHabits: boolean;
+}) {
+  const { spacing, colors, radius, isLight } = useAppTheme();
+  const future = cfg.viewDateKey > cfg.todayKey;
+  const done = journalRowDone(cfg);
+  const filled = journalEntryHasFieldContent(cfg.entry, cfg.fields);
+  const subtitle = future
+    ? 'Будущий день'
+    : done
+      ? cfg.journalHabit
+        ? 'Отмечено при сохранении дневника'
+        : 'Поля дневника заполнены'
+      : filled && cfg.journalHabit
+        ? 'Нажми «Сохранить» в блоке дневника ниже'
+        : 'Заполни дневник ниже — отметка поставится сама';
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        marginTop: afterHabits ? spacing.sm + 2 : 0,
+      }}
+    >
+      <View style={{ width: 36, alignItems: 'center' }}>
+        <View
+          accessibilityRole="text"
+          accessibilityLabel={`${JOURNAL_HABIT_NAME}. ${done ? 'Выполнено' : 'Не выполнено'}. Автоматически при заполнении дневника.`}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            borderWidth: done ? 0 : 2,
+            borderColor: 'rgba(255,255,255,0.22)',
+            backgroundColor: done ? colors.accent : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: future ? 0.4 : 1,
+          }}
+        >
+          {done ? (
+            <Ionicons name="checkmark" size={18} color={isLight ? '#FFFFFF' : 'rgba(22,22,28,0.94)'} />
+          ) : null}
+        </View>
+      </View>
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View
+          style={{
+            borderRadius: radius.xl,
+            borderWidth: 1,
+            borderColor: done ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)',
+            backgroundColor: 'rgba(255,255,255,0.045)',
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+          }}
+        >
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: iconBg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="book-outline" size={22} color={done ? colors.text : 'rgba(255,255,255,0.78)'} />
+          </View>
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={2}
+              style={{
+                fontSize: 16,
+                fontWeight: '800',
+                letterSpacing: -0.3,
+                color: colors.text,
+                lineHeight: 21,
+              }}
+            >
+              {JOURNAL_HABIT_NAME}
+            </Text>
+            <Text
+              style={{
+                marginTop: 4,
+                fontSize: 13,
+                fontWeight: '600',
+                color: 'rgba(255,255,255,0.42)',
+              }}
+              numberOfLines={2}
+            >
+              {subtitle}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingLeft: spacing.sm,
+              borderLeftWidth: StyleSheet.hairlineWidth,
+              borderLeftColor: 'rgba(255,255,255,0.12)',
+              alignSelf: 'stretch',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="sparkles-outline" size={16} color="rgba(255,255,255,0.38)" />
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: 'rgba(255,255,255,0.45)',
+                width: 44,
+              }}
+              numberOfLines={2}
+            >
+              Авто
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function DayHabitTimelineList({
   habits,
   loading,
@@ -61,6 +219,7 @@ export function DayHabitTimelineList({
   todayKey,
   onToggle,
   onRequestDelete,
+  journalRow,
 }: Props) {
   const { spacing, colors, radius, brand, isLight } = useAppTheme();
 
@@ -72,14 +231,21 @@ export function DayHabitTimelineList({
     );
   }
 
-  if (habits.length === 0) {
+  const hasJournalAfter = Boolean(journalRow);
+  const journalIconBg = ICON_BG[habits.length % ICON_BG.length]!;
+
+  if (habits.length === 0 && !journalRow) {
     return <Text style={{ color: colors.textMuted, lineHeight: 22 }}>{emptyHint}</Text>;
   }
 
   return (
     <View style={{ gap: 0 }}>
+      {habits.length === 0 ? (
+        <Text style={{ color: colors.textMuted, lineHeight: 22, marginBottom: spacing.sm }}>{emptyHint}</Text>
+      ) : null}
       {habits.map((h, index) => {
-        const isLast = index === habits.length - 1;
+        const isLastRow = index === habits.length - 1 && !hasJournalAfter;
+        const showLineBelow = !isLastRow;
         const future = viewDateKey > todayKey;
         const done = habitDoneOnDate(h, viewDateKey);
         const weekKeys = getWeekDayKeys(viewDateKey);
@@ -92,7 +258,7 @@ export function DayHabitTimelineList({
             style={{
               flexDirection: 'row',
               alignItems: 'stretch',
-              marginBottom: isLast ? 0 : spacing.sm + 2,
+              marginBottom: showLineBelow ? spacing.sm + 2 : 0,
             }}
           >
             <View style={{ width: 36, alignItems: 'center' }}>
@@ -117,7 +283,7 @@ export function DayHabitTimelineList({
                   <Ionicons name="checkmark" size={18} color={isLight ? '#FFFFFF' : 'rgba(22,22,28,0.94)'} />
                 ) : null}
               </Pressable>
-              {!isLast ? (
+              {showLineBelow ? (
                 <View
                   style={{
                     flex: 1,
@@ -276,6 +442,9 @@ export function DayHabitTimelineList({
           </View>
         );
       })}
+      {journalRow ? (
+        <JournalHabitDayRow cfg={journalRow} iconBg={journalIconBg} afterHabits={habits.length > 0} />
+      ) : null}
     </View>
   );
 }
