@@ -62,10 +62,15 @@ export type FinanceBudgetLine = {
   kind: 'personal' | 'business';
 };
 
+/** Группа счёта в UI (как в Twinworks: доступно / заморозка / резервы). */
+export type FinanceAccountBucket = 'available' | 'frozen' | 'reserve';
+
 export type FinanceOverview = {
   totalBalance: number;
   availableBalance: number;
   frozenBalance: number;
+  /** Сумма счетов в группе «Резервы и цели» (по типу счёта). */
+  reserveBalance: number;
   monthIncome: number;
   monthExpense: number;
   /** Упрощённый прогноз: баланс − неоплаченные разовые − дневной лимит × дней до конца месяца. */

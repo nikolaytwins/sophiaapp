@@ -1,5 +1,6 @@
 import type {
   FinanceAccount,
+  FinanceAccountBucket,
   FinanceBudgetLine,
   FinanceExpenseCategory,
   FinanceExpenseSettings,
@@ -19,6 +20,38 @@ export function num(v: unknown): number {
 /** Замороженные активы в Twinworks: тип счёта `other`. */
 export function isFrozenAccountType(type: string): boolean {
   return type === 'other';
+}
+
+/** Типы счетов «резервы и цели» (накопления, не повседневный расчёт). */
+const RESERVE_ACCOUNT_TYPES = new Set([
+  'savings',
+  'investment',
+  'goal',
+  'reserve',
+  'deposit',
+  'capital',
+]);
+
+/**
+ * Три группы как в Twinworks: доступные деньги, замороженные (`other`), резервы и цели.
+ */
+export function accountBucketFromType(type: string): FinanceAccountBucket {
+  const t = String(type ?? '').toLowerCase();
+  if (t === 'other') return 'frozen';
+  if (RESERVE_ACCOUNT_TYPES.has(t)) return 'reserve';
+  return 'available';
+}
+
+/** Какой `type` писать в БД при выборе группы в UI (упрощённо). */
+export function defaultAccountTypeForBucket(bucket: FinanceAccountBucket): string {
+  switch (bucket) {
+    case 'frozen':
+      return 'other';
+    case 'reserve':
+      return 'savings';
+    default:
+      return 'checking';
+  }
 }
 
 function monthRangeISO(): { startISO: string; endISO: string; y: number; m: number } {
@@ -157,8 +190,15 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
   const transactionsRecent = (recentTxRes.data ?? []).map((r) => mapTransaction(r as Record<string, unknown>));
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-  const frozenBalance = accounts.filter((a) => isFrozenAccountType(a.type)).reduce((s, a) => s + a.balance, 0);
-  const availableBalance = accounts.filter((a) => !isFrozenAccountType(a.type)).reduce((s, a) => s + a.balance, 0);
+  const frozenBalance = accounts
+    .filter((a) => accountBucketFromType(a.type) === 'frozen')
+    .reduce((s, a) => s + a.balance, 0);
+  const reserveBalance = accounts
+    .filter((a) => accountBucketFromType(a.type) === 'reserve')
+    .reduce((s, a) => s + a.balance, 0);
+  const availableBalance = accounts
+    .filter((a) => accountBucketFromType(a.type) === 'available')
+    .reduce((s, a) => s + a.balance, 0);
 
   let monthIncome = 0;
   let monthExpense = 0;
@@ -199,6 +239,7 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
     totalBalance,
     availableBalance,
     frozenBalance,
+    reserveBalance,
     monthIncome,
     monthExpense,
     forecastEndOfMonth,
@@ -210,4 +251,238 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
     oneTimeUnpaidTotal,
     snapshots,
   };
+}
+
+export type FinanceCategoryInput = {
+  name: string;
+  type: 'personal' | 'business';
+  expectedMonthly: number;
+};
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+export async function createFinanceExpenseCategory(userId: string, input: FinanceCategoryInput): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const id =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const { error } = await sb.from('finance_expense_categories').insert({
+    id,
+    user_id: userId,
+    name: input.name.trim(),
+    type: input.type,
+    expected_monthly: input.expectedMonthly,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+  if (error) throw error;
+}
+
+export async function updateFinanceExpenseCategory(
+  userId: string,
+  categoryId: string,
+  patch: Partial<FinanceCategoryInput>
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+
+  if (patch.name != null) {
+    const { data: prev, error: selErr } = await sb
+      .from('finance_expense_categories')
+      .select('name')
+      .eq('id', categoryId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    const oldName = prev && typeof (prev as { name?: string }).name === 'string' ? (prev as { name: string }).name : '';
+    const nextName = patch.name.trim();
+    if (oldName && nextName && oldName !== nextName) {
+      const { error: txErr } = await sb
+        .from('finance_transactions')
+        .update({ category: nextName, updated_at: nowIso() })
+        .eq('user_id', userId)
+        .eq('category', oldName);
+      if (txErr) throw txErr;
+    }
+  }
+
+  const row: Record<string, unknown> = { updated_at: nowIso() };
+  if (patch.name != null) row.name = patch.name.trim();
+  if (patch.type != null) row.type = patch.type;
+  if (patch.expectedMonthly != null) row.expected_monthly = patch.expectedMonthly;
+
+  const { error } = await sb
+    .from('finance_expense_categories')
+    .update(row)
+    .eq('id', categoryId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function deleteFinanceExpenseCategory(userId: string, categoryId: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const { data: prev, error: selErr } = await sb
+    .from('finance_expense_categories')
+    .select('name')
+    .eq('id', categoryId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (selErr) throw selErr;
+  const nm = prev && typeof (prev as { name?: string }).name === 'string' ? (prev as { name: string }).name : '';
+  if (nm) {
+    const { error: txErr } = await sb
+      .from('finance_transactions')
+      .update({ category: null, updated_at: nowIso() })
+      .eq('user_id', userId)
+      .eq('category', nm);
+    if (txErr) throw txErr;
+  }
+  const { error } = await sb.from('finance_expense_categories').delete().eq('id', categoryId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function updateFinanceAccount(
+  userId: string,
+  accountId: string,
+  patch: Partial<Pick<FinanceAccount, 'name' | 'balance' | 'type' | 'sortOrder' | 'notes'>>
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const row: Record<string, unknown> = { updated_at: nowIso() };
+  if (patch.name != null) row.name = patch.name;
+  if (patch.balance != null) row.balance = patch.balance;
+  if (patch.type != null) row.type = patch.type;
+  if (patch.sortOrder != null) row.sort_order = patch.sortOrder;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  const { error } = await sb.from('finance_accounts').update(row).eq('id', accountId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+export type CreateFinanceTransactionInput = {
+  type: 'expense' | 'income';
+  amount: number;
+  currency?: string;
+  dateISO: string;
+  category?: string | null;
+  description?: string | null;
+  fromAccountId?: string | null;
+  toAccountId?: string | null;
+};
+
+function newFinanceTransactionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+/** Новая операция + обновление баланса счёта (Twinworks: расход с from, доход на to). */
+export async function createFinanceTransaction(
+  userId: string,
+  input: CreateFinanceTransactionInput
+): Promise<string> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+
+  const amount = input.amount;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Сумма должна быть больше нуля');
+  }
+
+  const currency = input.currency ?? 'RUB';
+  const ts = nowIso();
+  const id = newFinanceTransactionId();
+
+  const rollbackTx = async () => {
+    await sb.from('finance_transactions').delete().eq('id', id).eq('user_id', userId);
+  };
+
+  if (input.type === 'expense') {
+    if (!input.fromAccountId) throw new Error('Выбери счёт списания');
+
+    const { data: accRow, error: selErr } = await sb
+      .from('finance_accounts')
+      .select('balance')
+      .eq('id', input.fromAccountId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (!accRow) throw new Error('Счёт не найден');
+
+    const bal = num((accRow as { balance?: unknown }).balance);
+
+    const { error: insErr } = await sb.from('finance_transactions').insert({
+      id,
+      user_id: userId,
+      date: input.dateISO,
+      type: 'expense',
+      amount,
+      currency,
+      category: input.category != null && String(input.category).trim() ? String(input.category).trim() : null,
+      description:
+        input.description != null && String(input.description).trim() ? String(input.description).trim() : null,
+      from_account_id: input.fromAccountId,
+      to_account_id: null,
+      created_at: ts,
+      updated_at: ts,
+    });
+    if (insErr) throw insErr;
+
+    const { error: upErr } = await sb
+      .from('finance_accounts')
+      .update({ balance: bal - amount, updated_at: ts })
+      .eq('id', input.fromAccountId)
+      .eq('user_id', userId);
+    if (upErr) {
+      await rollbackTx();
+      throw upErr;
+    }
+  } else {
+    if (!input.toAccountId) throw new Error('Выбери счёт зачисления');
+
+    const { data: accRow, error: selErr } = await sb
+      .from('finance_accounts')
+      .select('balance')
+      .eq('id', input.toAccountId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (!accRow) throw new Error('Счёт не найден');
+
+    const bal = num((accRow as { balance?: unknown }).balance);
+
+    const { error: insErr } = await sb.from('finance_transactions').insert({
+      id,
+      user_id: userId,
+      date: input.dateISO,
+      type: 'income',
+      amount,
+      currency,
+      category: input.category != null && String(input.category).trim() ? String(input.category).trim() : null,
+      description:
+        input.description != null && String(input.description).trim() ? String(input.description).trim() : null,
+      from_account_id: null,
+      to_account_id: input.toAccountId,
+      created_at: ts,
+      updated_at: ts,
+    });
+    if (insErr) throw insErr;
+
+    const { error: upErr } = await sb
+      .from('finance_accounts')
+      .update({ balance: bal + amount, updated_at: ts })
+      .eq('id', input.toAccountId)
+      .eq('user_id', userId);
+    if (upErr) {
+      await rollbackTx();
+      throw upErr;
+    }
+  }
+
+  return id;
 }

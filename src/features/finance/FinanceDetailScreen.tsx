@@ -1,25 +1,66 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isFrozenAccountType, loadFinanceOverview } from '@/features/finance/financeApi';
+import { FinanceAccountEditModal } from '@/features/finance/FinanceAccountEditModal';
+import { accountBucketFromType, loadFinanceOverview } from '@/features/finance/financeApi';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
-import type { FinanceAccount } from '@/features/finance/finance.types';
+import type { FinanceAccount, FinanceAccountBucket } from '@/features/finance/finance.types';
 import { useSupabaseConfigured } from '@/config/env';
 import { getSupabase } from '@/lib/supabase';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
+const HERO_BASE_GRADIENT = ['#141018', '#0a090f', '#06060a'] as const;
+const HERO_GLOW_A = ['rgba(76,29,149,0.45)', 'rgba(20,16,28,0.25)', 'transparent'] as const;
+const HERO_GLOW_B = ['transparent', 'rgba(109,40,217,0.14)', 'rgba(167,139,250,0.22)'] as const;
+
 function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
-function AccountRow({ a }: { a: FinanceAccount }) {
-  const { colors, radius, typography } = useAppTheme();
-  const frozen = isFrozenAccountType(a.type);
+const SECTION_META: Record<
+  FinanceAccountBucket,
+  { title: string; icon: keyof typeof Ionicons.glyphMap; accent: string; iconBg: string }
+> = {
+  available: {
+    title: 'Доступные деньги',
+    icon: 'wallet-outline',
+    accent: '#4ADE80',
+    iconBg: 'rgba(74,222,128,0.18)',
+  },
+  frozen: {
+    title: 'Замороженные деньги',
+    icon: 'snow-outline',
+    accent: '#FB7185',
+    iconBg: 'rgba(251,113,133,0.18)',
+  },
+  reserve: {
+    title: 'Резервы и цели',
+    icon: 'flag-outline',
+    accent: '#A855F7',
+    iconBg: 'rgba(168,85,247,0.22)',
+  },
+};
+
+const BUCKET_ORDER: FinanceAccountBucket[] = ['available', 'frozen', 'reserve'];
+
+function AccountRow({
+  a,
+  accent,
+  onEditPress,
+  onAmountPress,
+}: {
+  a: FinanceAccount;
+  accent: string;
+  onEditPress: () => void;
+  onAmountPress: () => void;
+}) {
+  const { colors, radius, typography, brand } = useAppTheme();
   return (
     <View
       style={{
@@ -36,41 +77,61 @@ function AccountRow({ a }: { a: FinanceAccount }) {
     >
       <View
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          backgroundColor: frozen ? 'rgba(251,113,133,0.15)' : 'rgba(74,222,128,0.15)',
+          width: 42,
+          height: 42,
+          borderRadius: 14,
+          backgroundColor: 'rgba(168,85,247,0.1)',
+          borderWidth: 1,
+          borderColor: 'rgba(168,85,247,0.2)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Ionicons
-          name={frozen ? 'snow-outline' : 'wallet-outline'}
-          size={20}
-          color={frozen ? '#FB7185' : '#4ADE80'}
-        />
+        <Ionicons name="layers-outline" size={20} color={accent} />
       </View>
       <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-        <Text style={[typography.body, { fontWeight: '700', color: colors.text }]} numberOfLines={2}>
+        <Text style={[typography.body, { fontWeight: '800', color: colors.text }]} numberOfLines={2}>
           {a.name}
         </Text>
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 3 }]} numberOfLines={1}>
           {a.type} · {a.currency}
         </Text>
       </View>
-      <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
-        {fmtMoney(a.balance)}
-      </Text>
+      <Pressable
+        onPress={onAmountPress}
+        hitSlop={8}
+        style={{ paddingVertical: 6, paddingHorizontal: 10, marginRight: 4 }}
+      >
+        <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text, fontVariant: ['tabular-nums'] }}>
+          {fmtMoney(a.balance)}
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={onEditPress}
+        hitSlop={8}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          backgroundColor: 'rgba(168,85,247,0.14)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="pencil" size={18} color={brand.primary} />
+      </Pressable>
     </View>
   );
 }
 
 export function FinanceDetailScreen() {
-  const { colors, typography, spacing, radius, brand } = useAppTheme();
+  const { colors, typography, spacing, radius, brand, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabaseOn = useSupabaseConfigured;
   const [userId, setUserId] = useState<string | null>(null);
+  const [editAccount, setEditAccount] = useState<FinanceAccount | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -95,12 +156,38 @@ export function FinanceDetailScreen() {
 
   const data = q.data;
 
+  const grouped = useMemo(() => {
+    const g: Record<FinanceAccountBucket, FinanceAccount[]> = {
+      available: [],
+      frozen: [],
+      reserve: [],
+    };
+    if (!data?.accounts) return g;
+    for (const a of data.accounts) {
+      g[accountBucketFromType(a.type)].push(a);
+    }
+    const sortFn = (a: FinanceAccount, b: FinanceAccount) =>
+      a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ru');
+    for (const k of BUCKET_ORDER) g[k].sort(sortFn);
+    return g;
+  }, [data?.accounts]);
+
+  const openEditor = useCallback((a: FinanceAccount) => {
+    setEditAccount(a);
+    setModalVisible(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModalVisible(false);
+    setEditAccount(null);
+  }, []);
+
   return (
     <>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Счета и структура',
+          title: 'Счета',
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
           headerLeft: () => (
@@ -114,10 +201,11 @@ export function FinanceDetailScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            padding: spacing.lg,
+            paddingHorizontal: spacing.lg,
             paddingTop: spacing.md,
-            paddingBottom: insets.bottom + 24,
+            paddingBottom: insets.bottom + 32,
           }}
+          showsVerticalScrollIndicator={false}
         >
           {!supabaseOn || !userId ? (
             <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
@@ -131,50 +219,201 @@ export function FinanceDetailScreen() {
             <>
               <View
                 style={{
-                  padding: spacing.md,
-                  borderRadius: radius.xl,
+                  borderRadius: 26,
+                  overflow: 'hidden',
+                  position: 'relative',
                   borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
+                  borderColor: 'rgba(139,92,246,0.35)',
                   marginBottom: spacing.lg,
                 }}
               >
-                <Text style={[typography.caption, { color: colors.textMuted }]}>ВСЕГО</Text>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, marginTop: 4 }}>
-                  {fmtMoney(data.totalBalance)}
-                </Text>
-                <View style={{ flexDirection: 'row', marginTop: spacing.md, gap: spacing.md }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[typography.caption, { color: '#4ADE80' }]}>Доступно</Text>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, marginTop: 4 }}>
-                      {fmtMoney(data.availableBalance)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[typography.caption, { color: '#FB7185' }]}>Заморожено</Text>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, marginTop: 4 }}>
-                      {fmtMoney(data.frozenBalance)}
-                    </Text>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[...HERO_BASE_GRADIENT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[...HERO_GLOW_A]}
+                  start={{ x: 0, y: 0.4 }}
+                  end={{ x: 0.65, y: 0.6 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[...HERO_GLOW_B]}
+                  start={{ x: 0.4, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
+                />
+                <View style={{ paddingVertical: 22, paddingHorizontal: 20, position: 'relative', zIndex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '800',
+                      letterSpacing: 2,
+                      color: 'rgba(255,255,255,0.82)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    ВСЕГО
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 34,
+                      fontWeight: '900',
+                      color: '#FAFAFC',
+                      textAlign: 'center',
+                      marginTop: 8,
+                      letterSpacing: -0.8,
+                    }}
+                  >
+                    {fmtMoney(data.totalBalance)}
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      marginTop: 20,
+                      paddingTop: 18,
+                      borderTopWidth: StyleSheet.hairlineWidth,
+                      borderTopColor: 'rgba(255,255,255,0.18)',
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.8 }}>
+                        ДОСТУПНО
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '800',
+                          color: '#4ADE80',
+                          marginTop: 6,
+                          fontVariant: ['tabular-nums'],
+                        }}
+                      >
+                        {fmtMoney(data.availableBalance)}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.8 }}>
+                        ЗАМОРОЗКА
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '800',
+                          color: '#FB7185',
+                          marginTop: 6,
+                          fontVariant: ['tabular-nums'],
+                        }}
+                      >
+                        {fmtMoney(data.frozenBalance)}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.8 }}>
+                        РЕЗЕРВЫ
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '800',
+                          color: '#E9D5FF',
+                          marginTop: 6,
+                          fontVariant: ['tabular-nums'],
+                        }}
+                      >
+                        {fmtMoney(data.reserveBalance)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm, lineHeight: 18 }]}>
-                  Заморожено: счета с типом «other» (как в Twinworks). Редактирование счетов в приложении — в
-                  следующих версиях; сейчас данные задаются импортом в Supabase.
-                </Text>
               </View>
 
-              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textMuted, marginBottom: spacing.sm }}>
-                СЧЕТА
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: '800',
+                  color: colors.textMuted,
+                  marginBottom: spacing.sm,
+                  letterSpacing: 0.6,
+                }}
+              >
+                СТРУКТУРА СЧЕТОВ
               </Text>
-              {[...data.accounts]
-                .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-                .map((a) => (
-                  <AccountRow key={a.id} a={a} />
-                ))}
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: colors.textMuted,
+                    marginBottom: spacing.md,
+                    lineHeight: 20,
+                  },
+                ]}
+              >
+                Как в Twinworks: три группы по типу счёта. Нажми сумму или карандаш, чтобы изменить название, баланс или
+                группу.
+              </Text>
+
+              {BUCKET_ORDER.map((bucket) => {
+                const meta = SECTION_META[bucket];
+                const list = grouped[bucket];
+                const subtotal = list.reduce((s, x) => s + x.balance, 0);
+                return (
+                  <View key={bucket} style={{ marginBottom: spacing.xl }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 14,
+                          backgroundColor: isLight ? meta.iconBg : 'rgba(255,255,255,0.06)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name={meta.icon} size={22} color={meta.accent} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text }}>{meta.title}</Text>
+                        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                          Итого: {fmtMoney(subtotal)} · {list.length} сч.
+                        </Text>
+                      </View>
+                    </View>
+                    {list.length === 0 ? (
+                      <Text style={[typography.caption, { color: colors.textMuted, fontStyle: 'italic', marginBottom: 8 }]}>
+                        Нет счетов в этой группе.
+                      </Text>
+                    ) : (
+                      list.map((a) => (
+                        <AccountRow
+                          key={a.id}
+                          a={a}
+                          accent={meta.accent}
+                          onEditPress={() => openEditor(a)}
+                          onAmountPress={() => openEditor(a)}
+                        />
+                      ))
+                    )}
+                  </View>
+                );
+              })}
             </>
           ) : null}
         </ScrollView>
       </ScreenCanvas>
+
+      <FinanceAccountEditModal
+        visible={modalVisible && editAccount != null}
+        account={editAccount}
+        onClose={closeModal}
+        userId={userId ?? ''}
+      />
     </>
   );
 }

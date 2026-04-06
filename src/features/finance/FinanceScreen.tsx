@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -19,7 +20,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured } from '@/config/env';
-import { loadFinanceOverview } from '@/features/finance/financeApi';
+import {
+  deleteFinanceExpenseCategory,
+  loadFinanceOverview,
+  type FinanceCategoryInput,
+} from '@/features/finance/financeApi';
+import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
+import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import type { FinanceBudgetLine, FinanceMonthSnapshot, FinanceTransaction } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
@@ -65,8 +72,21 @@ function PaginationDots({ count, active, isLight }: { count: number; active: num
   );
 }
 
-function BudgetCard({ line }: { line: FinanceBudgetLine }) {
-  const { colors, radius, isLight } = useAppTheme();
+function BudgetCard({
+  line,
+  editable,
+  onEdit,
+  onDelete,
+  onQuickExpense,
+}: {
+  line: FinanceBudgetLine;
+  editable?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  /** Быстрый расход в этой категории (Twinworks). */
+  onQuickExpense?: () => void;
+}) {
+  const { colors, radius, isLight, brand } = useAppTheme();
   const barColor = line.kind === 'personal' ? GREEN_BAR : '#A855F7';
   const iconBg = line.kind === 'personal' ? 'rgba(74,222,128,0.18)' : 'rgba(168,85,247,0.2)';
   const iconName = line.kind === 'personal' ? 'cash-outline' : 'briefcase-outline';
@@ -119,9 +139,59 @@ function BudgetCard({ line }: { line: FinanceBudgetLine }) {
             </Text>
           </View>
         </View>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
-          {fmtMoney(line.spent)}
-        </Text>
+        <View style={{ alignItems: 'flex-end', gap: 8 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
+            {fmtMoney(line.spent)}
+          </Text>
+          {editable && onEdit && onDelete ? (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {onQuickExpense ? (
+                <Pressable
+                  onPress={onQuickExpense}
+                  hitSlop={6}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(74,222,128,0.16)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="add" size={20} color={GREEN_BAR} />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={onEdit}
+                hitSlop={6}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(168,85,247,0.14)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="pencil" size={17} color={brand.primary} />
+              </Pressable>
+              <Pressable
+                onPress={onDelete}
+                hitSlop={6}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(251,113,133,0.14)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="trash-outline" size={17} color={colors.danger} />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </View>
       <View
         style={{
@@ -192,29 +262,121 @@ function TransactionRow({ t }: { t: FinanceTransaction }) {
   );
 }
 
-function HistoryRow({ s }: { s: FinanceMonthSnapshot }) {
-  const { colors, radius, typography } = useAppTheme();
-  const label = new Date(s.year, s.month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-  return (
+function monthSnapshotLabel(s: FinanceMonthSnapshot) {
+  return new Date(s.year, s.month - 1, 1).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
+}
+
+/** Таблица месячной истории в духе Twinworks (monthly_history). */
+function MonthSnapshotsTable({ snapshots }: { snapshots: FinanceMonthSnapshot[] }) {
+  const { colors, typography, radius, isLight } = useAppTheme();
+  const border = colors.border;
+  const headerBg = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)';
+  const line = StyleSheet.hairlineWidth;
+  const tableMinW = Math.max(SCREEN_W - 48, 320);
+
+  const headCell = (text: string, flex: number, align: 'left' | 'right' = 'left', noRight?: boolean) => (
     <View
       style={{
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        marginBottom: 8,
+        flex,
+        minWidth: align === 'left' ? 100 : 86,
+        paddingVertical: 11,
+        paddingHorizontal: 10,
+        borderRightWidth: noRight ? 0 : line,
+        borderRightColor: border,
+        justifyContent: 'center',
       }}
     >
-      <Text style={[typography.title2, { color: colors.text, textTransform: 'capitalize' }]}>{label}</Text>
-      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6 }]}>
-        Баланс (снимок): {fmtMoney(s.totalBalance)}
-      </Text>
-      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-        Личные расходы: {fmtMoney(s.personalExpenses)} · Бизнес: {fmtMoney(s.businessExpenses)}
+      <Text
+        style={[
+          typography.caption,
+          {
+            fontWeight: '800',
+            color: colors.textMuted,
+            textAlign: align,
+            letterSpacing: 0.2,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {text}
       </Text>
     </View>
+  );
+
+  const bodyCell = (content: string, flex: number, align: 'left' | 'right', noRight?: boolean) => (
+    <View
+      style={{
+        flex,
+        minWidth: align === 'left' ? 100 : 86,
+        paddingVertical: 11,
+        paddingHorizontal: 10,
+        borderRightWidth: noRight ? 0 : line,
+        borderRightColor: border,
+        justifyContent: 'center',
+      }}
+    >
+      <Text
+        style={[
+          typography.caption,
+          {
+            color: colors.text,
+            textAlign: align,
+            fontWeight: align === 'left' ? '700' : '600',
+            fontVariant: align === 'right' ? (['tabular-nums'] as const) : undefined,
+            fontSize: align === 'right' ? 13 : 14,
+            textTransform: align === 'left' ? 'capitalize' : undefined,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {content}
+      </Text>
+    </View>
+  );
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
+      <View
+        style={{
+          minWidth: tableMinW,
+          borderWidth: 1,
+          borderColor: border,
+          borderRadius: radius.lg,
+          overflow: 'hidden',
+          backgroundColor: colors.surface,
+        }}
+      >
+        <View style={{ flexDirection: 'row', backgroundColor: headerBg, borderBottomWidth: 1, borderBottomColor: border }}>
+          {headCell('Месяц', 1.15, 'left')}
+          {headCell('Баланс', 1, 'right')}
+          {headCell('Личные расходы', 1, 'right')}
+          {headCell('Бизнес', 1, 'right', true)}
+        </View>
+        {snapshots.map((s, i) => {
+          const zebra = i % 2 === 1;
+          return (
+            <View
+              key={s.id}
+              style={{
+                flexDirection: 'row',
+                borderBottomWidth: i < snapshots.length - 1 ? line : 0,
+                borderBottomColor: border,
+                backgroundColor: zebra
+                  ? isLight
+                    ? 'rgba(15,17,24,0.03)'
+                    : 'rgba(255,255,255,0.04)'
+                  : 'transparent',
+              }}
+            >
+              {bodyCell(monthSnapshotLabel(s), 1.15, 'left')}
+              {bodyCell(fmtMoney(s.totalBalance), 1, 'right')}
+              {bodyCell(fmtMoney(s.personalExpenses), 1, 'right')}
+              {bodyCell(fmtMoney(s.businessExpenses), 1, 'right', true)}
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -222,10 +384,14 @@ export function FinanceScreen() {
   const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const qc = useQueryClient();
   const supabaseOn = useSupabaseConfigured;
   const [userId, setUserId] = useState<string | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [mainTab, setMainTab] = useState<MainTab>('overview');
+  const [catModal, setCatModal] = useState<{ id: string; initial: FinanceCategoryInput } | null>(null);
+  const [addTxOpen, setAddTxOpen] = useState(false);
+  const [addTxPrefill, setAddTxPrefill] = useState<string | null>(null);
 
   const padH = spacing.xl;
   const heroPageW = SCREEN_W - padH * 2;
@@ -271,6 +437,50 @@ export function FinanceScreen() {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
     router.push('/finance-detail' as Href);
   }, [router]);
+
+  const invalidateFinance = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
+  }, [qc]);
+
+  const delCatMut = useMutation({
+    mutationFn: (id: string) => deleteFinanceExpenseCategory(userId!, id),
+    onSuccess: invalidateFinance,
+  });
+
+  const openCategoryEdit = useCallback((line: FinanceBudgetLine) => {
+    setCatModal({
+      id: line.id,
+      initial: {
+        name: line.title,
+        type: line.kind === 'business' ? 'business' : 'personal',
+        expectedMonthly: line.expectedMonthly,
+      },
+    });
+  }, []);
+
+  const confirmDeleteCategory = useCallback(
+    (line: FinanceBudgetLine) => {
+      Alert.alert('Удалить категорию?', `«${line.title}». Транзакции потеряют эту метку категории.`, [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => delCatMut.mutate(line.id),
+        },
+      ]);
+    },
+    [delCatMut]
+  );
+
+  const openCategorySettings = useCallback(() => {
+    router.push('/finance-category-settings' as Href);
+  }, [router]);
+
+  const openAddTransaction = useCallback((categoryTitle?: string | null) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setAddTxPrefill(categoryTitle != null && categoryTitle !== '' ? categoryTitle : null);
+    setAddTxOpen(true);
+  }, []);
 
   return (
     <ScreenCanvas>
@@ -601,18 +811,31 @@ export function FinanceScreen() {
                   <PaginationDots count={2} active={heroIndex} isLight={isLight} />
                 </View>
 
-                <Text
+                <View
                   style={{
-                    fontSize: 20,
-                    fontWeight: '800',
-                    color: colors.text,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                     marginTop: spacing.xl + 4,
                     marginBottom: spacing.md,
-                    letterSpacing: -0.4,
+                    gap: 12,
                   }}
                 >
-                  Месячный бюджет
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 20,
+                      fontWeight: '800',
+                      color: colors.text,
+                      letterSpacing: -0.4,
+                      flex: 1,
+                    }}
+                  >
+                    Месячный бюджет
+                  </Text>
+                  <Pressable onPress={openCategorySettings} hitSlop={8}>
+                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 14 }}>Все категории</Text>
+                  </Pressable>
+                </View>
 
                 {overview.budgetLines.length === 0 ? (
                   <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
@@ -621,16 +844,30 @@ export function FinanceScreen() {
                     <Text style={{ fontWeight: '700' }}>finance_expense_categories</Text> (см. scripts/FINANCE_IMPORT.md).
                   </Text>
                 ) : (
-                  overview.budgetLines.map((line) => <BudgetCard key={line.id} line={line} />)
+                  overview.budgetLines.map((line) => (
+                    <BudgetCard
+                      key={line.id}
+                      line={line}
+                      editable
+                      onEdit={() => openCategoryEdit(line)}
+                      onDelete={() => confirmDeleteCategory(line)}
+                      onQuickExpense={() => openAddTransaction(line.title)}
+                    />
+                  ))
                 )}
               </>
             ) : null}
 
             {mainTab === 'transactions' ? (
               <View style={{ marginTop: spacing.md }}>
-                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
-                  Последние операции
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                  <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
+                    Последние операции
+                  </Text>
+                  <Pressable onPress={() => openAddTransaction(null)} hitSlop={8}>
+                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 14 }}>+ Операция</Text>
+                  </Pressable>
+                </View>
                 {overview.transactionsRecent.length === 0 ? (
                   <Text style={{ color: colors.textMuted, lineHeight: 22 }}>Транзакций пока нет.</Text>
                 ) : (
@@ -641,34 +878,102 @@ export function FinanceScreen() {
 
             {mainTab === 'categories' ? (
               <View style={{ marginTop: spacing.md }}>
-                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
-                  Расходы по категориям за текущий месяц (к плану из Twinworks)
-                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: spacing.sm,
+                    gap: 12,
+                  }}
+                >
+                  <Text style={[typography.caption, { color: colors.textMuted, flex: 1, lineHeight: 20 }]}>
+                    Расходы по категориям за текущий месяц (к плану). Карандаш — лимит и название, корзина — удалить.
+                  </Text>
+                  <Pressable onPress={openCategorySettings} hitSlop={8}>
+                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Настройки</Text>
+                  </Pressable>
+                </View>
                 {overview.budgetLines.length === 0 ? (
                   <Text style={{ color: colors.textMuted }}>Нет категорий.</Text>
                 ) : (
-                  overview.budgetLines.map((line) => <BudgetCard key={`cat-${line.id}`} line={line} />)
+                  overview.budgetLines.map((line) => (
+                    <BudgetCard
+                      key={`cat-${line.id}`}
+                      line={line}
+                      editable
+                      onEdit={() => openCategoryEdit(line)}
+                      onDelete={() => confirmDeleteCategory(line)}
+                      onQuickExpense={() => openAddTransaction(line.title)}
+                    />
+                  ))
                 )}
               </View>
             ) : null}
 
             {mainTab === 'history' ? (
               <View style={{ marginTop: spacing.md }}>
-                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
-                  Месячные снимки (импорт из Twinworks / monthly_history)
+                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 20 }]}>
+                  Месячные снимки (как в Twinworks). При необходимости прокрути таблицу вбок.
                 </Text>
                 {overview.snapshots.length === 0 ? (
                   <Text style={{ color: colors.textMuted, lineHeight: 22 }}>
                     Снимков нет. После импорта таблицы finance_month_snapshots здесь появится история.
                   </Text>
                 ) : (
-                  overview.snapshots.map((s) => <HistoryRow key={s.id} s={s} />)
+                  <MonthSnapshotsTable snapshots={overview.snapshots} />
                 )}
               </View>
             ) : null}
           </>
         ) : null}
       </ScrollView>
+
+      <FinanceCategoryFormModal
+        visible={catModal != null}
+        onClose={() => setCatModal(null)}
+        userId={userId ?? ''}
+        mode="edit"
+        categoryId={catModal?.id}
+        initial={catModal?.initial}
+      />
+
+      {overview && userId ? (
+        <FinanceAddTransactionModal
+          visible={addTxOpen}
+          onClose={() => {
+            setAddTxOpen(false);
+            setAddTxPrefill(null);
+          }}
+          userId={userId}
+          overview={overview}
+          prefillCategoryName={addTxPrefill}
+        />
+      ) : null}
+
+      {overview && userId && mainTab === 'transactions' ? (
+        <Pressable
+          onPress={() => openAddTransaction(null)}
+          style={{
+            position: 'absolute',
+            right: spacing.lg,
+            bottom: insets.bottom + 88,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: brand.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOpacity: 0.22,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 8,
+          }}
+        >
+          <Ionicons name="add" size={30} color="#fff" />
+        </Pressable>
+      ) : null}
     </ScreenCanvas>
   );
 }
