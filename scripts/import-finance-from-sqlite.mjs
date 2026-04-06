@@ -267,14 +267,20 @@ async function main() {
     console.log('finance_transactions: 0');
   }
 
-  const snapRows = monthly.map((r) => ({
-    user_id: userId,
-    year: Number(r.year),
-    month: Number(r.month),
-    total_balance: num(r.totalAccounts),
-    personal_expenses: num(r.personalExpenses),
-    business_expenses: num(r.businessExpenses),
-  }));
+  const snapRows = monthly.map((r) => {
+    const revRaw = r.totalRevenue ?? r.total_revenue ?? r.revenue ?? r.totalIncome ?? null;
+    const profRaw = r.projectProfit ?? r.project_profit ?? r.profit ?? null;
+    return {
+      user_id: userId,
+      year: Number(r.year),
+      month: Number(r.month),
+      total_balance: num(r.totalAccounts),
+      personal_expenses: num(r.personalExpenses),
+      business_expenses: num(r.businessExpenses),
+      total_revenue: revRaw != null && revRaw !== '' ? num(revRaw) : null,
+      project_profit: profRaw != null && profRaw !== '' ? num(profRaw) : null,
+    };
+  });
 
   if (snapRows.length) {
     const { error } = await supabase.from('finance_month_snapshots').upsert(snapRows, {

@@ -22,13 +22,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSupabaseConfigured } from '@/config/env';
 import {
   deleteFinanceExpenseCategory,
+  loadFinanceExpenseAnalytics,
   loadFinanceOverview,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
+import { FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
-import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
-import type { FinanceBudgetLine, FinanceMonthSnapshot, FinanceTransaction } from '@/features/finance/finance.types';
+import { FinanceQuickTransactionBar } from '@/features/finance/FinanceQuickTransactionBar';
+import {
+  enrichMonthSnapshots,
+  MonthHistoryCards,
+  MonthHistoryTableTwin,
+  type MonthHistoryViewMode,
+} from '@/features/finance/FinanceMonthHistoryViews';
+import { FINANCE_QUERY_KEY, financeExpenseAnalyticsKey } from '@/features/finance/queryKeys';
+import type { FinanceBudgetLine, FinanceTransaction } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
@@ -86,24 +95,20 @@ function BudgetCard({
   /** Быстрый расход в этой категории (Twinworks). */
   onQuickExpense?: () => void;
 }) {
-  const { colors, radius, isLight, brand } = useAppTheme();
-  const barColor = line.kind === 'personal' ? GREEN_BAR : '#A855F7';
-  const iconBg = line.kind === 'personal' ? 'rgba(74,222,128,0.18)' : 'rgba(168,85,247,0.2)';
+  const { colors, radius, isLight, brand, shadows } = useAppTheme();
+  const barColor = line.kind === 'personal' ? brand.primary : brand.primarySoft;
+  const iconBg = line.kind === 'personal' ? brand.primaryMuted : 'rgba(167,139,250,0.2)';
   const iconName = line.kind === 'personal' ? 'cash-outline' : 'briefcase-outline';
 
   const shell = isLight
     ? {
-        backgroundColor: '#FFFFFF',
-        borderColor: 'rgba(15,17,24,0.08)',
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 3,
+        backgroundColor: colors.surface,
+        borderColor: brand.surfaceBorderStrong,
+        ...shadows.card,
       }
     : {
-        backgroundColor: 'rgba(18,18,24,0.88)',
-        borderColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: colors.surface,
+        borderColor: brand.surfaceBorderStrong,
       };
 
   return (
@@ -153,12 +158,12 @@ function BudgetCard({
                     width: 36,
                     height: 36,
                     borderRadius: 12,
-                    backgroundColor: 'rgba(74,222,128,0.16)',
+                    backgroundColor: brand.primaryMuted,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Ionicons name="add" size={20} color={GREEN_BAR} />
+                  <Ionicons name="add" size={20} color={brand.primary} />
                 </Pressable>
               ) : null}
               <Pressable
@@ -198,7 +203,7 @@ function BudgetCard({
           marginTop: 16,
           height: 8,
           borderRadius: 8,
-          backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.08)',
+          backgroundColor: isLight ? brand.callout : 'rgba(255,255,255,0.08)',
           overflow: 'hidden',
         }}
       >
@@ -262,124 +267,6 @@ function TransactionRow({ t }: { t: FinanceTransaction }) {
   );
 }
 
-function monthSnapshotLabel(s: FinanceMonthSnapshot) {
-  return new Date(s.year, s.month - 1, 1).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
-}
-
-/** Таблица месячной истории в духе Twinworks (monthly_history). */
-function MonthSnapshotsTable({ snapshots }: { snapshots: FinanceMonthSnapshot[] }) {
-  const { colors, typography, radius, isLight } = useAppTheme();
-  const border = colors.border;
-  const headerBg = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)';
-  const line = StyleSheet.hairlineWidth;
-  const tableMinW = Math.max(SCREEN_W - 48, 320);
-
-  const headCell = (text: string, flex: number, align: 'left' | 'right' = 'left', noRight?: boolean) => (
-    <View
-      style={{
-        flex,
-        minWidth: align === 'left' ? 100 : 86,
-        paddingVertical: 11,
-        paddingHorizontal: 10,
-        borderRightWidth: noRight ? 0 : line,
-        borderRightColor: border,
-        justifyContent: 'center',
-      }}
-    >
-      <Text
-        style={[
-          typography.caption,
-          {
-            fontWeight: '800',
-            color: colors.textMuted,
-            textAlign: align,
-            letterSpacing: 0.2,
-          },
-        ]}
-        numberOfLines={2}
-      >
-        {text}
-      </Text>
-    </View>
-  );
-
-  const bodyCell = (content: string, flex: number, align: 'left' | 'right', noRight?: boolean) => (
-    <View
-      style={{
-        flex,
-        minWidth: align === 'left' ? 100 : 86,
-        paddingVertical: 11,
-        paddingHorizontal: 10,
-        borderRightWidth: noRight ? 0 : line,
-        borderRightColor: border,
-        justifyContent: 'center',
-      }}
-    >
-      <Text
-        style={[
-          typography.caption,
-          {
-            color: colors.text,
-            textAlign: align,
-            fontWeight: align === 'left' ? '700' : '600',
-            fontVariant: align === 'right' ? (['tabular-nums'] as const) : undefined,
-            fontSize: align === 'right' ? 13 : 14,
-            textTransform: align === 'left' ? 'capitalize' : undefined,
-          },
-        ]}
-        numberOfLines={2}
-      >
-        {content}
-      </Text>
-    </View>
-  );
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
-      <View
-        style={{
-          minWidth: tableMinW,
-          borderWidth: 1,
-          borderColor: border,
-          borderRadius: radius.lg,
-          overflow: 'hidden',
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View style={{ flexDirection: 'row', backgroundColor: headerBg, borderBottomWidth: 1, borderBottomColor: border }}>
-          {headCell('Месяц', 1.15, 'left')}
-          {headCell('Баланс', 1, 'right')}
-          {headCell('Личные расходы', 1, 'right')}
-          {headCell('Бизнес', 1, 'right', true)}
-        </View>
-        {snapshots.map((s, i) => {
-          const zebra = i % 2 === 1;
-          return (
-            <View
-              key={s.id}
-              style={{
-                flexDirection: 'row',
-                borderBottomWidth: i < snapshots.length - 1 ? line : 0,
-                borderBottomColor: border,
-                backgroundColor: zebra
-                  ? isLight
-                    ? 'rgba(15,17,24,0.03)'
-                    : 'rgba(255,255,255,0.04)'
-                  : 'transparent',
-              }}
-            >
-              {bodyCell(monthSnapshotLabel(s), 1.15, 'left')}
-              {bodyCell(fmtMoney(s.totalBalance), 1, 'right')}
-              {bodyCell(fmtMoney(s.personalExpenses), 1, 'right')}
-              {bodyCell(fmtMoney(s.businessExpenses), 1, 'right', true)}
-            </View>
-          );
-        })}
-      </View>
-    </ScrollView>
-  );
-}
-
 export function FinanceScreen() {
   const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -392,6 +279,7 @@ export function FinanceScreen() {
   const [catModal, setCatModal] = useState<{ id: string; initial: FinanceCategoryInput } | null>(null);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [addTxPrefill, setAddTxPrefill] = useState<string | null>(null);
+  const [historyViewMode, setHistoryViewMode] = useState<MonthHistoryViewMode>('table');
 
   const padH = spacing.xl;
   const heroPageW = SCREEN_W - padH * 2;
@@ -417,7 +305,18 @@ export function FinanceScreen() {
     enabled: Boolean(supabaseOn && userId),
   });
 
+  const expenseAnalyticsQ = useQuery({
+    queryKey: financeExpenseAnalyticsKey(userId),
+    queryFn: () => loadFinanceExpenseAnalytics(userId!),
+    enabled: Boolean(supabaseOn && userId && mainTab === 'categories'),
+  });
+
   const overview = q.data;
+
+  const monthHistoryRows = useMemo(
+    () => (overview ? enrichMonthSnapshots(overview.snapshots) : []),
+    [overview?.snapshots]
+  );
 
   const onHeroScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -559,6 +458,7 @@ export function FinanceScreen() {
           </Text>
         ) : overview ? (
           <>
+            <FinanceQuickTransactionBar userId={userId} overview={overview} onSaved={invalidateFinance} />
             {mainTab === 'overview' ? (
               <>
                 <View style={{ marginTop: spacing.md, width: heroPageW, alignSelf: 'center' }}>
@@ -894,6 +794,18 @@ export function FinanceScreen() {
                     <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Настройки</Text>
                   </Pressable>
                 </View>
+                {expenseAnalyticsQ.isLoading ? (
+                  <ActivityIndicator color={brand.primary} style={{ marginBottom: spacing.lg }} />
+                ) : expenseAnalyticsQ.isError ? (
+                  <Text style={{ color: colors.danger, marginBottom: spacing.lg }}>
+                    Не удалось загрузить сравнение по месяцам.
+                  </Text>
+                ) : expenseAnalyticsQ.data ? (
+                  <FinanceCategoryMonthMatrix
+                    analytics={expenseAnalyticsQ.data}
+                    budgetCategoryTitles={overview.budgetLines.map((l) => l.title)}
+                  />
+                ) : null}
                 {overview.budgetLines.length === 0 ? (
                   <Text style={{ color: colors.textMuted }}>Нет категорий.</Text>
                 ) : (
@@ -914,14 +826,32 @@ export function FinanceScreen() {
             {mainTab === 'history' ? (
               <View style={{ marginTop: spacing.md }}>
                 <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 20 }]}>
-                  Месячные снимки (как в Twinworks). При необходимости прокрути таблицу вбок.
+                  История по месяцам (новые сверху). Динамика капитала — изменение баланса к предыдущему месяцу в списке.
+                  Выручка и прибыль — если есть в Twinworks: миграция 010_finance_snapshot_revenue.sql в Supabase и при
+                  необходимости повторный импорт.
                 </Text>
                 {overview.snapshots.length === 0 ? (
                   <Text style={{ color: colors.textMuted, lineHeight: 22 }}>
                     Снимков нет. После импорта таблицы finance_month_snapshots здесь появится история.
                   </Text>
                 ) : (
-                  <MonthSnapshotsTable snapshots={overview.snapshots} />
+                  <>
+                    <View style={{ marginBottom: spacing.md }}>
+                      <SegmentedControl<MonthHistoryViewMode>
+                        value={historyViewMode}
+                        onChange={setHistoryViewMode}
+                        options={[
+                          { value: 'table', label: 'Таблица' },
+                          { value: 'cards', label: 'Карточки' },
+                        ]}
+                      />
+                    </View>
+                    {historyViewMode === 'table' ? (
+                      <MonthHistoryTableTwin rows={monthHistoryRows} screenInnerWidth={SCREEN_W - padH * 2} />
+                    ) : (
+                      <MonthHistoryCards rows={monthHistoryRows} />
+                    )}
+                  </>
                 )}
               </View>
             ) : null}

@@ -37,6 +37,7 @@ import {
 import { useSupabaseConfigured } from '@/config/env';
 import { addDays, counterCountOnDate, localDateKey } from '@/features/habits/habitLogic';
 import { getSupabase } from '@/lib/supabase';
+import { FinanceAnalyticsTabPanel } from '@/features/finance/FinanceAnalyticsTabPanel';
 import { HabitsMonthlyCompletionsChart } from '@/features/habits/HabitsMonthlyCompletionsChart';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
@@ -47,6 +48,7 @@ import { HabitsPlannerTodayCard } from '@/features/tasks/HabitsPlannerTodayCard'
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
+import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
@@ -797,6 +799,7 @@ export function HabitsScreen() {
   const focusMood =
     params.focus === 'mood' || (Array.isArray(params.focus) && params.focus[0] === 'mood');
   const [moodPanelY, setMoodPanelY] = useState<number | null>(null);
+  const [analyticsSection, setAnalyticsSection] = useState<'habits' | 'finance'>('habits');
 
   useEffect(() => {
     if (!focusMood || moodPanelY == null) return;
@@ -894,11 +897,26 @@ export function HabitsScreen() {
           <HeaderProfileAvatar marginTop={4} />
         </View>
 
-        <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
+        <View style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>
+          <SegmentedControl
+            value={analyticsSection}
+            onChange={setAnalyticsSection}
+            options={[
+              { value: 'habits', label: 'Привычки' },
+              { value: 'finance', label: 'Финансы' },
+            ]}
+          />
+        </View>
 
-        {data.length > 0 ? <HabitsMonthlyCompletionsChart habits={data} /> : null}
+        {analyticsSection === 'finance' ? (
+          <FinanceAnalyticsTabPanel userId={userId} />
+        ) : (
+          <>
+            <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
 
-        {data.length === 0 ? (
+            {data.length > 0 ? <HabitsMonthlyCompletionsChart habits={data} /> : null}
+
+            {data.length === 0 ? (
           <SurfaceCard
             glow
             style={{
@@ -1137,6 +1155,8 @@ export function HabitsScreen() {
               />
               <HabitsPlannerTodayCard todayKey={todayKey} userId={userId} />
             </View>
+          </>
+        )}
           </>
         )}
       </ScrollView>

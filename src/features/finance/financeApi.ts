@@ -124,6 +124,8 @@ function mapSnapshot(row: Record<string, unknown>): FinanceMonthSnapshot {
     totalBalance: num(row.total_balance),
     personalExpenses: num(row.personal_expenses),
     businessExpenses: num(row.business_expenses),
+    totalRevenue: row.total_revenue != null ? num(row.total_revenue) : null,
+    projectProfit: row.project_profit != null ? num(row.project_profit) : null,
   };
 }
 
@@ -485,4 +487,64 @@ export async function createFinanceTransaction(
   }
 
   return id;
+}
+
+const EXPENSE_ANALYTICS_MONTHS = 12;
+
+export type FinanceCategoryMonthSeries = {
+  category: string;
+  amounts: number[];
+  total: number;
+};
+
+export type FinanceExpenseAnalytics = {
+  monthKeys: string[];
+  monthLabels: string[];
+  monthlyExpenseTotal: number[];
+  categorySeries: FinanceCategoryMonthSeries[];
+};
+
+export async function loadFinanceExpenseAnalytics(userId: string): Promise<FinanceExpenseAnalytics> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (EXPENSE_ANALYTICS_MONTHS - 1), 1, 0, 0, 0, 0);
+  const { data, error } = await sb
+    .from('finance_transactions')
+    .select('date, amount, category')
+    .eq('user_id', userId)
+    .eq('type', 'expense')
+    .gte('date', start.toISOString())
+    .order('date', { ascending: true })
+    .limit(10000);
+  if (error) throw error;
+  const monthKeys: string[] = [];
+  const monthLabels: string[] = [];
+  for (let i = 0; i < EXPENSE_ANALYTICS_MONTHS; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    monthKeys.push(`${y}-${String(m).padStart(2, '0')}`);
+    monthLabels.push(d.toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' }));
+  }
+  const monthlyTotals = new Array(EXPENSE_ANALYTICS_MONTHS).fill(0);
+  const catMap = new Map<string, number[]>();
+  const keyToIndex = (key: string) => monthKeys.indexOf(key);
+  for (const row of data ?? []) {
+    const r = row as { date: string; amount: unknown; category: string | null };
+    const dt = new Date(r.date);
+    if (!Number.isFinite(dt.getTime())) continue;
+    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    const idx = keyToIndex(key);
+    if (idx < 0) continue;
+    const amt = num(r.amount);
+    monthlyTotals[idx] += amt;
+    const cat = (r.category ?? '').trim() || 'Без категории';
+    if (!catMap.has(cat)) catMap.set(cat, new Array(EXPENSE_ANALYTICS_MONTHS).fill(0));
+    catMap.get(cat)![idx] += amt;
+  }
+  const categorySeries: FinanceCategoryMonthSeries[] = Array.from(catMap.entries())
+    .map(([category, amounts]) => ({ category, amounts, total: amounts.reduce((a, b) => a + b, 0) }))
+    .sort((a, b) => b.total - a.total);
+  return { monthKeys, monthLabels, monthlyExpenseTotal: monthlyTotals, categorySeries };
 }

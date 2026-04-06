@@ -49,6 +49,10 @@ export type FinanceMonthSnapshot = {
   totalBalance: number;
   personalExpenses: number;
   businessExpenses: number;
+  /** Общая выручка за месяц (если есть в Twinworks / импорте). */
+  totalRevenue: number | null;
+  /** Прибыль проектов за месяц (если есть в импорте). */
+  projectProfit: number | null;
 };
 
 /** Карточка «месячный бюджет» по категории Twinworks. */
