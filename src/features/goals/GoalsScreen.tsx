@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnnualGoalsScreen } from '@/features/goals/AnnualGoalsScreen';
 import { GlobalVisionScreen } from '@/features/goals/GlobalVisionScreen';
 import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
+import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { ScreenTitle } from '@/shared/ui/ScreenTitle';
 import { useAppTheme } from '@/theme';
@@ -41,7 +42,7 @@ export function GoalsScreen() {
           paddingBottom: spacing.md,
         }}
       >
-        <ScreenTitle eyebrow="Раздел" title="Цели" trailing={<Text style={{ fontSize: 22 }}>✨</Text>} />
+        <ScreenTitle eyebrow="Раздел" title="Цели" trailing={<HeaderProfileAvatar marginTop={0} />} />
       </View>
 
       <View style={{ flex: 1 }}>

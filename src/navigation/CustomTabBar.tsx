@@ -30,8 +30,8 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   sprint: 'flag-outline',
   tasks: 'list-outline',
   finance: 'wallet-outline',
-  /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
-  habits: 'repeat-outline',
+  /** Вкладка «Аналитика»: графики и календари. */
+  habits: 'stats-chart-outline',
 };
 
 /** В нижнем меню только эти вкладки (остальные экраны — вне `(tabs)` или со `href: null`). */

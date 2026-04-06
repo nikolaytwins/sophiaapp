@@ -1,20 +1,25 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import type { Habit } from '@/entities/models';
 import { localDateKey } from '@/features/habits/habitLogic';
 import {
+  chartYMaxFromWindowValues,
   lastNCalendarMonths,
   totalHabitCompletionsInMonth,
-  yAxisMaxForCounts,
 } from '@/features/habits/habitMonthlyCompletions';
 import { useAppTheme } from '@/theme';
 
-const CHART_HEIGHT = 200;
-const MONTHS = 13;
+const CHART_HEIGHT = 168;
+const TOTAL_MONTHS = 30;
+const VISIBLE_MONTHS = 8;
+const STEP_MONTHS = 2;
 
 const BAR_PURPLE: [string, string] = ['#C084FC', '#7C3AED'];
+const ACCENT = '#A855F7';
 
 type Props = {
   habits: Habit[];
@@ -24,20 +29,55 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const todayKey = localDateKey();
 
-  const buckets = useMemo(() => lastNCalendarMonths(MONTHS, todayKey), [todayKey]);
+  const buckets = useMemo(() => lastNCalendarMonths(TOTAL_MONTHS, todayKey), [todayKey]);
   const counts = useMemo(
     () => buckets.map((b) => totalHabitCompletionsInMonth(habits, b.y, b.m, todayKey)),
     [buckets, habits, todayKey]
   );
-  const yMax = useMemo(() => yAxisMaxForCounts(counts), [counts]);
+
+  const maxStart = Math.max(0, buckets.length - VISIBLE_MONTHS);
+  const [startIndex, setStartIndex] = useState(maxStart);
+
+  useEffect(() => {
+    setStartIndex(Math.max(0, buckets.length - VISIBLE_MONTHS));
+  }, [buckets.length]);
+
+  const sliceBuckets = useMemo(
+    () => buckets.slice(startIndex, startIndex + VISIBLE_MONTHS),
+    [buckets, startIndex]
+  );
+  const sliceCounts = useMemo(
+    () => counts.slice(startIndex, startIndex + VISIBLE_MONTHS),
+    [counts, startIndex]
+  );
+
+  const yMax = useMemo(() => chartYMaxFromWindowValues(sliceCounts), [sliceCounts]);
   const ticks = useMemo(() => {
-    const n = 5;
-    return Array.from({ length: n }, (_, i) => Math.round((yMax * (n - 1 - i)) / (n - 1)));
+    if (yMax <= 1) return [0];
+    const mid = Math.round(yMax / 2);
+    return [yMax, mid, 0];
   }, [yMax]);
+
+  const canGoOlder = startIndex > 0;
+  const canGoNewer = startIndex < maxStart;
+
+  const shiftWindow = (delta: number) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setStartIndex((s) => {
+      const next = s + delta;
+      return Math.max(0, Math.min(maxStart, next));
+    });
+  };
 
   const shellBg = isLight ? 'rgba(15,17,24,0.04)' : 'rgba(10,10,14,0.92)';
   const shellBorder = isLight ? colors.border : 'rgba(255,255,255,0.07)';
   const trackBg = 'rgba(255,255,255,0.08)';
+  const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
+
+  const rangeHint =
+    sliceBuckets.length > 0
+      ? `${sliceBuckets[0]!.label} ${sliceBuckets[0]!.y} — ${sliceBuckets[sliceBuckets.length - 1]!.label} ${sliceBuckets[sliceBuckets.length - 1]!.y}`
+      : '';
 
   return (
     <View
@@ -63,89 +103,212 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
       >
         Выполнения по месяцам
       </Text>
-      <Text style={[typography.body, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 }]}>
-        Сумма отметок: каждый день × каждая привычка, если в этот день она выполнена.
+      <Text style={[typography.body, { color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 20 }]}>
+        Сумма отметок за день по всем привычкам. Шкала подстраивается под видимые месяцы.
       </Text>
-
-      <View style={{ flexDirection: 'row', minHeight: CHART_HEIGHT + 28 }}>
-        <View
+      {rangeHint ? (
+        <Text
           style={{
-            width: 30,
-            height: CHART_HEIGHT,
-            justifyContent: 'space-between',
-            paddingRight: 6,
-            paddingTop: 2,
+            fontSize: 11,
+            fontWeight: '700',
+            color: 'rgba(196,181,253,0.75)',
+            marginBottom: spacing.sm,
           }}
+          numberOfLines={1}
         >
-          {ticks.map((t) => (
-            <Text
-              key={t}
+          {rangeHint}
+        </Text>
+      ) : null}
+
+      <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 4 }}>
+        <Pressable
+          onPress={() => shiftWindow(-STEP_MONTHS)}
+          disabled={!canGoOlder}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Более ранние месяцы"
+          style={({ pressed }) => ({
+            width: 36,
+            justifyContent: 'center',
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.08)',
+            backgroundColor: isLight ? 'rgba(15,17,24,0.03)' : 'rgba(255,255,255,0.04)',
+            opacity: !canGoOlder ? 0.28 : pressed ? 0.85 : 1,
+            ...webPointer,
+          })}
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
+        </Pressable>
+
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: 'row', minHeight: CHART_HEIGHT + 52 }}>
+            <View
               style={{
-                fontSize: 10,
-                fontWeight: '600',
-                color: colors.textMuted,
-                fontVariant: ['tabular-nums'],
+                width: 28,
+                height: CHART_HEIGHT,
+                justifyContent: 'space-between',
+                paddingRight: 4,
+                paddingTop: 22,
               }}
             >
-              {t}
-            </Text>
-          ))}
-        </View>
-
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 4 }}>
-          {buckets.map((b, i) => {
-            const v = counts[i] ?? 0;
-            const hRatio = yMax > 0 ? v / yMax : 0;
-            const fillH = Math.max(hRatio * 100, v > 0 ? 8 : 0);
-            return (
-              <View key={`${b.y}-${b.m}`} style={{ flex: 1, height: CHART_HEIGHT, alignItems: 'center' }}>
-                <View
+              {ticks.map((t) => (
+                <Text
+                  key={`tick-${t}`}
                   style={{
-                    flex: 1,
-                    width: '100%',
-                    maxWidth: 28,
-                    justifyContent: 'flex-end',
+                    fontSize: 10,
+                    fontWeight: '600',
+                    color: colors.textMuted,
+                    fontVariant: ['tabular-nums'],
                   }}
                 >
+                  {t}
+                </Text>
+              ))}
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                height: CHART_HEIGHT,
+                paddingTop: 20,
+              }}
+            >
+              {sliceBuckets.map((b, j) => {
+                const v = sliceCounts[j] ?? 0;
+                const hRatio = yMax > 0 ? v / yMax : 0;
+                const fillH = Math.max(hRatio * 100, v > 0 ? 6 : 0);
+                const showYear = j === 0 || b.y !== sliceBuckets[j - 1]!.y;
+                return (
                   <View
+                    key={`${b.y}-${b.m}`}
                     style={{
                       flex: 1,
-                      width: '100%',
-                      borderRadius: 999,
-                      backgroundColor: trackBg,
-                      overflow: 'hidden',
-                      justifyContent: 'flex-end',
+                      minWidth: 0,
+                      marginHorizontal: 1,
+                      alignItems: 'center',
                     }}
                   >
-                    <LinearGradient
-                      colors={BAR_PURPLE}
-                      start={{ x: 0.5, y: 1 }}
-                      end={{ x: 0.5, y: 0 }}
+                    <View
                       style={{
+                        height: 22,
+                        justifyContent: 'center',
+                        alignItems: 'center',
                         width: '100%',
-                        height: `${fillH}%`,
-                        minHeight: v > 0 ? 6 : 0,
-                        borderRadius: 999,
                       }}
-                    />
+                    >
+                      {showYear ? (
+                        <View
+                          style={{
+                            paddingHorizontal: 5,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                            backgroundColor: 'rgba(168,85,247,0.16)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(196,181,253,0.32)',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: '900',
+                              color: 'rgba(233,213,255,0.92)',
+                              fontVariant: ['tabular-nums'],
+                            }}
+                          >
+                            {b.y}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View
+                      style={{
+                        flex: 1,
+                        width: '100%',
+                        maxWidth: 26,
+                        justifyContent: 'flex-end',
+                        marginTop: 2,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flex: 1,
+                          width: '100%',
+                          borderRadius: 999,
+                          backgroundColor: trackBg,
+                          overflow: 'hidden',
+                          justifyContent: 'flex-end',
+                        }}
+                      >
+                        <LinearGradient
+                          colors={BAR_PURPLE}
+                          start={{ x: 0.5, y: 1 }}
+                          end={{ x: 0.5, y: 0 }}
+                          style={{
+                            width: '100%',
+                            height: `${fillH}%`,
+                            minHeight: v > 0 ? 4 : 0,
+                            borderRadius: 999,
+                          }}
+                        />
+                      </View>
+                    </View>
+                    <Text
+                      style={{
+                        marginTop: 5,
+                        fontSize: 12,
+                        fontWeight: '900',
+                        color: ACCENT,
+                        fontVariant: ['tabular-nums'],
+                      }}
+                      numberOfLines={1}
+                    >
+                      {v}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        marginTop: 2,
+                        fontSize: 9,
+                        fontWeight: '700',
+                        color: colors.textMuted,
+                        textTransform: 'lowercase',
+                      }}
+                    >
+                      {b.label}
+                    </Text>
                   </View>
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    marginTop: 6,
-                    fontSize: 9,
-                    fontWeight: '700',
-                    color: colors.textMuted,
-                    textTransform: 'lowercase',
-                  }}
-                >
-                  {b.label}
-                </Text>
-              </View>
-            );
-          })}
+                );
+              })}
+            </View>
+          </View>
         </View>
+
+        <Pressable
+          onPress={() => shiftWindow(STEP_MONTHS)}
+          disabled={!canGoNewer}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Более поздние месяцы"
+          style={({ pressed }) => ({
+            width: 36,
+            justifyContent: 'center',
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.08)',
+            backgroundColor: isLight ? 'rgba(15,17,24,0.03)' : 'rgba(255,255,255,0.04)',
+            opacity: !canGoNewer ? 0.28 : pressed ? 0.85 : 1,
+            ...webPointer,
+          })}
+        >
+          <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+        </Pressable>
       </View>
     </View>
   );

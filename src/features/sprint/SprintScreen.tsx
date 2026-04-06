@@ -27,6 +27,7 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { repos } from '@/services/repositories';
 import { useSprintStore } from '@/stores/sprint.store';
 import { useAppTheme } from '@/theme';
+import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
 
 const ACCENT = '#A855F7';
@@ -262,14 +263,15 @@ export function SprintScreen() {
               Цели
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <Pressable
               onPress={() => router.push('/sprint-settings' as Href)}
               hitSlop={12}
-              style={({ pressed }) => ({ padding: 10, opacity: pressed ? 0.75 : 1 })}
+              style={({ pressed }) => ({ padding: 10, opacity: pressed ? 0.75 : 1, marginRight: 2 })}
             >
               <Ionicons name="settings-outline" size={24} color="rgba(255,255,255,0.55)" />
             </Pressable>
+            <HeaderProfileAvatar marginTop={0} />
           </View>
         </View>
 

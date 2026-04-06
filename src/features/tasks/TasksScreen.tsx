@@ -33,6 +33,7 @@ import {
 import { BACKLOG_TASKS_QUERY_KEY, BACKLOG_TYPES_QUERY_KEY } from '@/features/tasks/queryKeys';
 import { getSupabase } from '@/lib/supabase';
 import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
+import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
@@ -40,36 +41,78 @@ const ACCENT = '#A855F7';
 
 type MainTabId = 'backlog' | 'board';
 
+type PriorityFilter = 'all' | BacklogPriority;
+/** `none` — только задачи без типа; иначе id типа */
+type TypeFilter = 'all' | 'none' | string;
+
 const MAIN_TABS: { id: MainTabId; label: string; soon?: boolean }[] = [
   { id: 'backlog', label: 'Бэклог' },
   { id: 'board', label: 'Доска', soon: true },
 ];
 
-const PRIORITY_OPTIONS: { id: BacklogPriority; label: string }[] = [
-  { id: 'high', label: 'Высокий' },
-  { id: 'medium', label: 'Средний' },
-  { id: 'low', label: 'Низкий' },
+const PRIORITY_OPTIONS: { id: BacklogPriority; label: string; short: string }[] = [
+  { id: 'high', label: 'Высокий', short: 'Важно' },
+  { id: 'medium', label: 'Средний', short: 'Средн.' },
+  { id: 'low', label: 'Низкий', short: 'Низкий' },
 ];
+
+/** Полоска слева — главный сигнал важности (не путать с фиолетовым типом). */
+function priorityStripStyle(priority: BacklogPriority, isLight: boolean): { backgroundColor: string; width: number } {
+  switch (priority) {
+    case 'high':
+      return { backgroundColor: isLight ? '#EA580C' : '#FB923C', width: 5 };
+    case 'medium':
+      return { backgroundColor: isLight ? 'rgba(124,58,237,0.7)' : 'rgba(196,181,253,0.85)', width: 4 };
+    default:
+      return { backgroundColor: isLight ? 'rgba(15,17,24,0.15)' : 'rgba(255,255,255,0.14)', width: 3 };
+  }
+}
+
+function priorityBadgeStyle(
+  priority: BacklogPriority,
+  isLight: boolean
+): { backgroundColor: string; borderColor: string; color: string } {
+  switch (priority) {
+    case 'high':
+      return {
+        backgroundColor: isLight ? 'rgba(234,88,12,0.18)' : 'rgba(251,146,60,0.22)',
+        borderColor: isLight ? 'rgba(234,88,12,0.55)' : 'rgba(251,146,60,0.65)',
+        color: isLight ? '#9A3412' : '#FDBA74',
+      };
+    case 'medium':
+      return {
+        backgroundColor: isLight ? 'rgba(124,58,237,0.14)' : 'rgba(168,85,247,0.2)',
+        borderColor: isLight ? 'rgba(124,58,237,0.4)' : 'rgba(196,181,253,0.45)',
+        color: isLight ? '#5B21B6' : 'rgba(233,213,255,0.95)',
+      };
+    default:
+      return {
+        backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.06)',
+        borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.12)',
+        color: isLight ? 'rgba(15,17,24,0.55)' : 'rgba(255,255,255,0.5)',
+      };
+  }
+}
 
 function cardSurfaceForPriority(priority: BacklogPriority, isLight: boolean) {
   if (isLight) {
     switch (priority) {
       case 'high':
         return {
-          backgroundColor: 'rgba(124,58,237,0.14)',
-          borderColor: 'rgba(124,58,237,0.55)',
-          borderWidth: 1.5,
+          backgroundColor: 'rgba(254,243,232,0.85)',
+          borderColor: 'rgba(234,88,12,0.22)',
+          borderWidth: 1,
         };
       case 'medium':
         return {
-          backgroundColor: 'rgba(124,58,237,0.07)',
-          borderColor: 'rgba(124,58,237,0.28)',
+          backgroundColor: 'rgba(124,58,237,0.06)',
+          borderColor: 'rgba(124,58,237,0.2)',
           borderWidth: 1,
         };
       default:
         return {
-          backgroundColor: 'rgba(15,17,24,0.04)',
-          borderColor: 'rgba(15,17,24,0.1)',
+          backgroundColor: 'rgba(15,17,24,0.03)',
+          borderColor: 'rgba(15,17,24,0.08)',
           borderWidth: 1,
         };
     }
@@ -77,20 +120,20 @@ function cardSurfaceForPriority(priority: BacklogPriority, isLight: boolean) {
   switch (priority) {
     case 'high':
       return {
-        backgroundColor: 'rgba(168,85,247,0.26)',
-        borderColor: 'rgba(196,181,253,0.72)',
-        borderWidth: 1.5,
+        backgroundColor: 'rgba(251,146,60,0.08)',
+        borderColor: 'rgba(251,146,60,0.22)',
+        borderWidth: 1,
       };
     case 'medium':
       return {
-        backgroundColor: 'rgba(168,85,247,0.1)',
-        borderColor: 'rgba(168,85,247,0.38)',
+        backgroundColor: 'rgba(168,85,247,0.08)',
+        borderColor: 'rgba(168,85,247,0.22)',
         borderWidth: 1,
       };
     default:
       return {
-        backgroundColor: 'rgba(255,255,255,0.04)',
-        borderColor: 'rgba(255,255,255,0.09)',
+        backgroundColor: 'rgba(255,255,255,0.035)',
+        borderColor: 'rgba(255,255,255,0.08)',
         borderWidth: 1,
       };
   }
@@ -115,6 +158,9 @@ export function TasksScreen() {
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [newTypeOpen, setNewTypeOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
+
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   useEffect(() => {
     const sb = getSupabase();
@@ -152,6 +198,19 @@ export function TasksScreen() {
     const raw = tasksQ.data ?? [];
     return sortBacklogTasksForDisplay(mergeTasksWithTypes(raw, types));
   }, [tasksQ.data, typesQ.data]);
+
+  const filteredViews = useMemo(() => {
+    let list = views;
+    if (priorityFilter !== 'all') {
+      list = list.filter((t) => t.priority === priorityFilter);
+    }
+    if (typeFilter === 'none') {
+      list = list.filter((t) => !t.type_id);
+    } else if (typeFilter !== 'all') {
+      list = list.filter((t) => t.type_id === typeFilter);
+    }
+    return list;
+  }, [views, priorityFilter, typeFilter]);
 
   const invalidateAll = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...BACKLOG_TYPES_QUERY_KEY] });
@@ -255,20 +314,25 @@ export function TasksScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text
-          style={[
-            typography.caption,
-            {
-              color: colors.textMuted,
-              letterSpacing: 2,
-              textTransform: 'uppercase',
-              marginBottom: spacing.xs,
-            },
-          ]}
-        >
-          Рабочий стол
-        </Text>
-        <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Задачи</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, paddingRight: spacing.md }}>
+            <Text
+              style={[
+                typography.caption,
+                {
+                  color: colors.textMuted,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  marginBottom: spacing.xs,
+                },
+              ]}
+            >
+              Рабочий стол
+            </Text>
+            <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Задачи</Text>
+          </View>
+          <HeaderProfileAvatar marginTop={4} />
+        </View>
 
         {!supabaseOn ? (
           <Text style={[typography.body, { marginTop: spacing.lg, color: colors.textMuted, lineHeight: 22 }]}>
@@ -367,6 +431,171 @@ export function TasksScreen() {
                   <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 16 }}>Добавить в бэклог</Text>
                 </Pressable>
 
+                {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
+                  <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                    <Text
+                      style={[
+                        typography.caption,
+                        {
+                          color: colors.textMuted,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          fontWeight: '800',
+                          fontSize: 10,
+                        },
+                      ]}
+                    >
+                      Фильтр по приоритету
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 2 }}
+                    >
+                      {[
+                        { id: 'all' as const, label: 'Все' },
+                        ...PRIORITY_OPTIONS.map((p) => ({ id: p.id, label: p.label })),
+                      ].map((chip) => {
+                        const active =
+                          chip.id === 'all' ? priorityFilter === 'all' : priorityFilter === chip.id;
+                        return (
+                          <Pressable
+                            key={chip.id}
+                            onPress={() => {
+                              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                              setPriorityFilter(chip.id === 'all' ? 'all' : chip.id);
+                            }}
+                            style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: radius.full,
+                              borderWidth: 1,
+                              backgroundColor: active ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
+                              borderColor: active ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
+                              ...webCursor,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: active ? '800' : '600',
+                                color: active ? colors.text : colors.textMuted,
+                              }}
+                            >
+                              {chip.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text
+                      style={[
+                        typography.caption,
+                        {
+                          color: colors.textMuted,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          fontWeight: '800',
+                          fontSize: 10,
+                          marginTop: 4,
+                        },
+                      ]}
+                    >
+                      Фильтр по типу
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 2 }}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setTypeFilter('all');
+                        }}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: radius.full,
+                          borderWidth: 1,
+                          backgroundColor: typeFilter === 'all' ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
+                          borderColor: typeFilter === 'all' ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
+                          ...webCursor,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: typeFilter === 'all' ? '800' : '600',
+                            color: typeFilter === 'all' ? colors.text : colors.textMuted,
+                          }}
+                        >
+                          Все типы
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setTypeFilter('none');
+                        }}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: radius.full,
+                          borderWidth: 1,
+                          backgroundColor: typeFilter === 'none' ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
+                          borderColor: typeFilter === 'none' ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
+                          ...webCursor,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: typeFilter === 'none' ? '800' : '600',
+                            color: typeFilter === 'none' ? colors.text : colors.textMuted,
+                          }}
+                        >
+                          Без типа
+                        </Text>
+                      </Pressable>
+                      {(typesQ.data ?? []).map((ty) => {
+                        const active = typeFilter === ty.id;
+                        return (
+                          <Pressable
+                            key={ty.id}
+                            onPress={() => {
+                              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                              setTypeFilter(ty.id);
+                            }}
+                            style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: radius.full,
+                              borderWidth: 1,
+                              backgroundColor: active ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
+                              borderColor: active ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.1)',
+                              maxWidth: 220,
+                              ...webCursor,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: active ? '800' : '600',
+                                color: active ? colors.text : colors.textMuted,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {ty.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
                 {tasksQ.isLoading || typesQ.isLoading ? (
                   <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                     <ActivityIndicator color={ACCENT} />
@@ -380,95 +609,155 @@ export function TasksScreen() {
                   >
                     В бэклоге пока пусто. Задачи с типом и приоритетом сохраняются в Supabase.
                   </Text>
+                ) : filteredViews.length === 0 ? (
+                  <Text
+                    style={[
+                      typography.body,
+                      { marginTop: spacing.lg, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },
+                    ]}
+                  >
+                    Нет задач по выбранным фильтрам. Сбрось фильтр «Все» / «Все типы».
+                  </Text>
                 ) : (
                   <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
-                    {views.map((t) => (
-                      <View
-                        key={t.id}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'stretch',
-                          borderRadius: radius.xl,
-                          overflow: 'hidden',
-                          ...cardSurfaceForPriority(t.priority, isLight),
-                        }}
-                      >
-                        <Pressable
-                          onPress={() => openEdit(t)}
-                          style={({ pressed }) => [
-                            { flex: 1, padding: spacing.md, opacity: pressed ? 0.92 : 1 },
-                            webCursor,
-                          ]}
+                    {filteredViews.map((t) => {
+                      const prOpt = PRIORITY_OPTIONS.find((p) => p.id === t.priority);
+                      const pBadge = priorityBadgeStyle(t.priority, isLight);
+                      const strip = priorityStripStyle(t.priority, isLight);
+                      const titleWeight = t.priority === 'high' ? ('900' as const) : ('800' as const);
+                      return (
+                        <View
+                          key={t.id}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'stretch',
+                            borderRadius: radius.xl,
+                            overflow: 'hidden',
+                            ...cardSurfaceForPriority(t.priority, isLight),
+                          }}
                         >
-                          <Text style={[typography.title2, { color: colors.text }]} numberOfLines={3}>
-                            {t.title}
-                          </Text>
-                          {t.description ? (
-                            <Text
-                              style={[typography.caption, { color: colors.textMuted, marginTop: 6, lineHeight: 18 }]}
-                              numberOfLines={4}
-                            >
-                              {t.description}
-                            </Text>
-                          ) : null}
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                          <View style={{ width: strip.width, backgroundColor: strip.backgroundColor }} />
+                          <Pressable
+                            onPress={() => openEdit(t)}
+                            style={({ pressed }) => [
+                              {
+                                flex: 1,
+                                flexDirection: 'row',
+                                alignItems: 'flex-start',
+                                gap: spacing.sm,
+                                paddingVertical: spacing.md,
+                                paddingLeft: spacing.md,
+                                paddingRight: spacing.xs,
+                                opacity: pressed ? 0.92 : 1,
+                              },
+                              webCursor,
+                            ]}
+                          >
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={[
+                                  typography.title2,
+                                  {
+                                    color: colors.text,
+                                    fontWeight: titleWeight,
+                                    fontSize: t.priority === 'high' ? 18 : 17,
+                                  },
+                                ]}
+                                numberOfLines={3}
+                              >
+                                {t.title}
+                              </Text>
+                              {t.description ? (
+                                <Text
+                                  style={[
+                                    typography.caption,
+                                    { color: colors.textMuted, marginTop: 6, lineHeight: 18 },
+                                  ]}
+                                  numberOfLines={4}
+                                >
+                                  {t.description}
+                                </Text>
+                              ) : null}
+                            </View>
                             <View
                               style={{
-                                paddingHorizontal: 10,
-                                paddingVertical: 4,
-                                borderRadius: radius.full,
-                                backgroundColor: 'rgba(0,0,0,0.2)',
+                                alignItems: 'flex-end',
+                                justifyContent: 'flex-start',
+                                gap: 8,
+                                maxWidth: 118,
+                                paddingTop: 2,
                               }}
                             >
-                              <Text
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: '700',
-                                  color: isLight ? colors.text : 'rgba(255,255,255,0.75)',
-                                }}
-                              >
-                                {PRIORITY_OPTIONS.find((p) => p.id === t.priority)?.label ?? t.priority}
-                              </Text>
-                            </View>
-                            {t.typeName ? (
                               <View
                                 style={{
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 4,
-                                  borderRadius: radius.full,
-                                  backgroundColor: 'rgba(168,85,247,0.2)',
+                                  paddingHorizontal: t.priority === 'high' ? 11 : 9,
+                                  paddingVertical: t.priority === 'high' ? 6 : 5,
+                                  borderRadius: radius.md,
                                   borderWidth: 1,
-                                  borderColor: 'rgba(168,85,247,0.35)',
+                                  backgroundColor: pBadge.backgroundColor,
+                                  borderColor: pBadge.borderColor,
                                 }}
                               >
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(196,181,253,0.95)' }}>
-                                  {t.typeName}
+                                <Text
+                                  style={{
+                                    fontSize: t.priority === 'high' ? 12 : 11,
+                                    fontWeight: '900',
+                                    color: pBadge.color,
+                                    textAlign: 'right',
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {t.priority === 'high' ? 'ВАЖНО' : prOpt?.short ?? prOpt?.label ?? t.priority}
                                 </Text>
                               </View>
-                            ) : null}
-                          </View>
-                        </Pressable>
-                        <Pressable
-                          onPress={() =>
-                            confirmDestructive({
-                              title: 'Удалить задачу?',
-                              message: `«${t.title}»`,
-                              onConfirm: () => deleteMut.mutate(t.id),
-                            })
-                          }
-                          hitSlop={12}
-                          style={({ pressed }) => ({
-                            justifyContent: 'flex-start',
-                            paddingTop: spacing.md,
-                            paddingRight: spacing.md,
-                            paddingLeft: 4,
-                            opacity: pressed ? 0.6 : 1,
-                          })}
-                        >
-                          <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.88)" />
-                        </Pressable>
-                      </View>
-                    ))}
+                              {t.typeName ? (
+                                <View
+                                  style={{
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 4,
+                                    borderRadius: radius.full,
+                                    backgroundColor: isLight ? 'rgba(15,17,24,0.04)' : 'rgba(255,255,255,0.05)',
+                                    borderWidth: 1,
+                                    borderColor: isLight ? 'rgba(15,17,24,0.1)' : 'rgba(255,255,255,0.1)',
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: '600',
+                                      color: colors.textMuted,
+                                      textAlign: 'right',
+                                    }}
+                                    numberOfLines={2}
+                                  >
+                                    {t.typeName}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </Pressable>
+                          <Pressable
+                            onPress={() =>
+                              confirmDestructive({
+                                title: 'Удалить задачу?',
+                                message: `«${t.title}»`,
+                                onConfirm: () => deleteMut.mutate(t.id),
+                              })
+                            }
+                            hitSlop={12}
+                            style={({ pressed }) => ({
+                              justifyContent: 'flex-start',
+                              paddingTop: spacing.md,
+                              paddingRight: spacing.md,
+                              paddingLeft: 4,
+                              opacity: pressed ? 0.6 : 1,
+                            })}
+                          >
+                            <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.88)" />
+                          </Pressable>
+                        </View>
+                      );
+                    })}
                   </View>
                 )}
               </>

@@ -25,8 +25,9 @@ import {
 import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
 
-const CELL_GAP = 6;
-const CELL_RADIUS = 12;
+/** Как в `HabitMonthCalendar` — одинаковая сетка с календарём привычек. */
+const CELL_GAP = 8;
+const CELL_RADIUS = 10;
 
 function shiftMonth(y: number, m: number, delta: number): { y: number; m: number } {
   const d = new Date(y, m - 1 + delta, 1);
@@ -83,7 +84,7 @@ function MoodCalendarCell({
         }}
       >
         {meta && !isFuture ? (
-          <Text style={{ fontSize: 20, lineHeight: 24 }}>{meta.emoji}</Text>
+          <Text style={{ fontSize: 17, lineHeight: 22 }}>{meta.emoji}</Text>
         ) : (
           <Text
             style={{
@@ -144,12 +145,14 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
       onLayout={(e) => onLayoutRoot?.(e.nativeEvent.layout.y)}
       style={{
         width: '100%',
+        ...(Platform.OS === 'web' ? { maxWidth: 400, alignSelf: 'flex-start' as const } : {}),
         borderRadius: radius.xl,
         padding: spacing.md,
         backgroundColor: isLight ? 'rgba(15,17,24,0.04)' : 'rgba(10,10,14,0.92)',
         borderWidth: 1,
         borderColor: isLight ? colors.border : 'rgba(255,255,255,0.07)',
         marginTop: spacing.lg,
+        overflow: 'hidden',
       }}
     >
       <Text
@@ -179,6 +182,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             justifyContent: 'center',
             paddingVertical: 6,
             opacity: !canGoPrev ? 0.22 : pressed ? 0.75 : 1,
+            ...(Platform.OS === 'web' && canGoPrev ? { cursor: 'pointer' as const } : {}),
           })}
         >
           <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
@@ -203,6 +207,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             justifyContent: 'center',
             paddingVertical: 6,
             opacity: !canGoNext ? 0.22 : pressed ? 0.75 : 1,
+            ...(Platform.OS === 'web' && canGoNext ? { cursor: 'pointer' as const } : {}),
           })}
         >
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -216,7 +221,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             <View key={label} style={{ flex: 1, alignItems: 'center' }}>
               <Text
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: isTodayCol ? '800' : '600',
                   letterSpacing: 0.4,
                   textTransform: 'uppercase',

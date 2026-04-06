@@ -25,8 +25,6 @@ import {
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { useAppTheme } from '@/theme';
 
-const LIME = '#D4FF43';
-
 type Props = {
   viewDateKey: string;
   todayKey: string;
@@ -77,22 +75,10 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const showDoneBadge = entryHasContent && habitDone;
 
   const commitFieldValue = useCallback(
-    async (field: JournalFieldDefinition, value: string | number | boolean | null) => {
-      const before = getEntry(viewDateKey);
-      const nextValues = { ...before.values, [field.id]: value };
+    (field: JournalFieldDefinition, value: string | number | boolean | null) => {
       setFieldValue(viewDateKey, field.id, value);
-      const nextEntry = { ...before, values: nextValues };
-      if (
-        journalHabit &&
-        !journalEntryHasContent(before, doc.fields) &&
-        journalEntryHasContent(nextEntry, doc.fields) &&
-        !habitDoneOnDate(journalHabit, viewDateKey)
-      ) {
-        const nextHabits = await repos.habits.checkIn(journalHabit.id, viewDateKey);
-        qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
-      }
     },
-    [doc.fields, getEntry, journalHabit, qc, setFieldValue, viewDateKey]
+    [setFieldValue, viewDateKey]
   );
 
   const exportDoc = async (kind: 'journal' | 'health') => {
@@ -106,8 +92,19 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
   const saveJournal = async () => {
     try {
       await pushDayJournalToCloud();
+      const entry = useDayJournalStore.getState().getEntry(viewDateKey);
+      const filled = journalEntryHasContent(entry, doc.fields);
+      if (
+        journalHabit &&
+        filled &&
+        viewDateKey <= todayKey &&
+        !habitDoneOnDate(journalHabit, viewDateKey)
+      ) {
+        const nextHabits = await repos.habits.checkIn(journalHabit.id, viewDateKey);
+        qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
+      }
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSaveHint('В облаке');
+      setSaveHint('Сохранено');
     } catch (error) {
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       const message = error instanceof Error ? error.message : 'Ошибка';
@@ -127,7 +124,7 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
       style={{
         marginBottom: spacing.lg,
         borderWidth: 1,
-        borderColor: showDoneBadge ? 'rgba(134,239,172,0.35)' : 'rgba(212,255,67,0.28)',
+        borderColor: showDoneBadge ? 'rgba(167,139,250,0.45)' : 'rgba(168,85,247,0.35)',
         overflow: 'hidden',
       }}
     >
@@ -151,30 +148,38 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
             borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: showDoneBadge ? 'rgba(134,239,172,0.15)' : 'rgba(212,255,67,0.12)',
+            backgroundColor: showDoneBadge ? 'rgba(167,139,250,0.2)' : 'rgba(168,85,247,0.14)',
             borderWidth: 1,
-            borderColor: showDoneBadge ? 'rgba(134,239,172,0.35)' : 'rgba(212,255,67,0.25)',
+            borderColor: showDoneBadge ? 'rgba(196,181,253,0.45)' : 'rgba(168,85,247,0.3)',
           }}
         >
           <Ionicons
             name={showDoneBadge ? 'checkmark-circle' : 'book-outline'}
             size={26}
-            color={showDoneBadge ? 'rgba(134,239,172,0.95)' : LIME}
+            color={showDoneBadge ? 'rgba(196,181,253,0.98)' : brand.primary}
           />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1.6, color: LIME, textTransform: 'uppercase' }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '900',
+              letterSpacing: 1.4,
+              color: 'rgba(196,181,253,0.9)',
+              textTransform: 'uppercase',
+            }}
+          >
             Привычка дня
           </Text>
-          <Text style={{ marginTop: 4, fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.4 }}>
+          <Text style={{ marginTop: 4, fontSize: 19, fontWeight: '900', color: colors.text, letterSpacing: -0.4 }}>
             Дневник
           </Text>
           <Text style={{ marginTop: 4, fontSize: 13, color: colors.textMuted }} numberOfLines={2}>
             {showDoneBadge
-              ? 'Запись есть — отмечено как сделанное.'
+              ? 'Сохранено — привычка отмечена.'
               : entryHasContent
-                ? 'Раскрой и дополни поля или сохрани в облако.'
-                : 'Раскрой и заполни поля — засчитается как выполненная привычка (настроение — полоска выше).'}
+                ? 'Нажми «Сохранить», чтобы отметить привычку за этот день.'
+                : 'Заполни поля и сохрани — тогда привычка засчитается (настроение — полоска выше).'}
           </Text>
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
@@ -184,10 +189,10 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
           <Text
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: '900',
               letterSpacing: 1.4,
-              color: LIME,
+              color: 'rgba(196,181,253,0.9)',
               textTransform: 'uppercase',
               marginBottom: 8,
               marginTop: 8,
@@ -228,7 +233,7 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
                 borderColor: brand.surfaceBorderStrong,
               }}
             >
-              <Text style={{ fontWeight: '800', color: colors.text }}>В облако</Text>
+              <Text style={{ fontWeight: '800', color: colors.text }}>Сохранить</Text>
             </Pressable>
             <Pressable
               onPress={() => void exportDoc('journal')}
@@ -270,10 +275,10 @@ export function DayJournalAccordion({ viewDateKey, todayKey, sessionEmail }: Pro
           </View>
 
           {saveHint ? (
-            <Text style={{ marginTop: 10, fontSize: 13, color: 'rgba(134,239,172,0.92)' }}>{saveHint}</Text>
+            <Text style={{ marginTop: 10, fontSize: 13, color: brand.primarySoft }}>{saveHint}</Text>
           ) : null}
           {exportHint ? (
-            <Text style={{ marginTop: 6, fontSize: 13, color: 'rgba(134,239,172,0.92)' }}>{exportHint}</Text>
+            <Text style={{ marginTop: 6, fontSize: 13, color: brand.primarySoft }}>{exportHint}</Text>
           ) : null}
         </View>
       ) : null}

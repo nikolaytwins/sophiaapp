@@ -41,10 +41,12 @@ export function lastNCalendarMonths(count: number, todayKey: string): MonthBucke
   return out.reverse();
 }
 
-/** Верхняя граница оси Y: кратно 5, не меньше max и не меньше 5. */
-export function yAxisMaxForCounts(values: number[]): number {
+/**
+ * Верхняя граница шкалы только по фактическим значениям видимого окна (+ небольшой запас).
+ * Без «теоретического» максимума (число привычек × дни и т.п.).
+ */
+export function chartYMaxFromWindowValues(values: number[]): number {
   const maxV = Math.max(0, ...values);
-  if (maxV <= 0) return 5;
-  const step = 5;
-  return Math.max(step, Math.ceil(maxV / step) * step);
+  if (maxV <= 0) return 1;
+  return Math.max(1, Math.ceil(maxV * 1.06));
 }

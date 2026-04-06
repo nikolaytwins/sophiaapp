@@ -86,17 +86,8 @@ function parseRub(raw: string): number {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-function deltaChipLabel(delta: number): string {
-  const k = Math.round(delta / 1000);
-  if (k === 0) return '0';
-  if (k > 0) return `+${k}к`;
-  return `${k}к`;
-}
-
 const SPRINT_HREF = '/sprint' as Href;
 
-const GENZ_LIME = '#D4FF43';
-const GENZ_LIME_SOFT = 'rgba(212,255,67,0.22)';
 const GENZ_PURPLE = '#E879F9';
 const GENZ_PURPLE_SOFT = 'rgba(232,121,249,0.2)';
 const CARD_RADIUS = 26;
@@ -115,14 +106,12 @@ const PLAQUE_THEME: Record<
     chipBg: 'rgba(232,121,249,0.18)',
   },
   cushion: {
-    border: 'rgba(212,255,67,0.55)',
-    glow: ['rgba(212,255,67,0.35)', 'rgba(74,222,128,0.06)'] as const,
-    bar: [GENZ_LIME, '#4ADE80'] as const,
-    chipBg: GENZ_LIME_SOFT,
+    border: 'rgba(167,139,250,0.55)',
+    glow: ['rgba(139,92,246,0.35)', 'rgba(232,121,249,0.08)'] as const,
+    bar: ['#C084FC', '#A855F7'] as const,
+    chipBg: 'rgba(167,139,250,0.2)',
   },
 };
-
-const QUICK_DELTAS = [-10_000, -1000, 1000, 10_000] as const;
 
 function GenZMoneyGoalPlaque({
   variant,
@@ -141,7 +130,6 @@ function GenZMoneyGoalPlaque({
 }) {
   const { colors, spacing } = useAppTheme();
   const theme = PLAQUE_THEME[variant];
-  const adjustGoalCurrent = useSprintStore((s) => s.adjustGoalCurrent);
   const setProgressGoalNumbers = useSprintStore((s) => s.setProgressGoalNumbers);
   const updateGoalTitle = useSprintStore((s) => s.updateGoalTitle);
 
@@ -161,15 +149,6 @@ function GenZMoneyGoalPlaque({
   const current = goal?.current ?? 0;
   const hasNumbers = goal != null && sprintId != null && target > 0;
   const pct = hasNumbers ? Math.min(1, Math.max(0, current / target)) : 0;
-
-  const bump = useCallback(
-    (delta: number) => {
-      if (!sprintId || !goal || goal.kind !== 'progress') return;
-      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      adjustGoalCurrent(sprintId, goal.id, delta);
-    },
-    [adjustGoalCurrent, goal, sprintId]
-  );
 
   const saveEdit = useCallback(() => {
     if (!sprintId || !goal || goal.kind !== 'progress') return;
@@ -210,20 +189,22 @@ function GenZMoneyGoalPlaque({
       <View style={{ position: 'relative' }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
+            {overline.trim() ? (
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '900',
+                  letterSpacing: 2.2,
+                  color: 'rgba(250,232,255,0.75)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {overline}
+              </Text>
+            ) : null}
             <Text
               style={{
-                fontSize: 10,
-                fontWeight: '900',
-                letterSpacing: 2.2,
-                color: variant === 'china' ? 'rgba(250,232,255,0.75)' : 'rgba(220,252,180,0.85)',
-                textTransform: 'uppercase',
-              }}
-            >
-              {overline}
-            </Text>
-            <Text
-              style={{
-                marginTop: 8,
+                marginTop: overline.trim() ? 8 : 0,
                 fontSize: 21,
                 fontWeight: '900',
                 color: '#FAFAFC',
@@ -254,7 +235,7 @@ function GenZMoneyGoalPlaque({
                 borderColor: 'rgba(255,255,255,0.12)',
               })}
             >
-              <Ionicons name="create-outline" size={22} color={variant === 'china' ? GENZ_PURPLE : GENZ_LIME} />
+              <Ionicons name="create-outline" size={22} color={GENZ_PURPLE} />
             </Pressable>
           ) : null}
         </View>
@@ -294,40 +275,6 @@ function GenZMoneyGoalPlaque({
               />
             </View>
 
-            <Text
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                fontWeight: '800',
-                color: 'rgba(255,255,255,0.42)',
-                letterSpacing: 0.4,
-              }}
-            >
-              {Math.round(pct * 100)}% · синхрон со спринтом
-            </Text>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-              {QUICK_DELTAS.map((d) => (
-                <Pressable
-                  key={d}
-                  onPress={() => bump(d)}
-                  style={({ pressed }) => ({
-                    minHeight: 44,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    borderRadius: 999,
-                    backgroundColor: pressed ? theme.chipBg : 'rgba(255,255,255,0.06)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.1)',
-                    justifyContent: 'center',
-                  })}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#FAFAFC', fontVariant: ['tabular-nums'] }}>
-                    {deltaChipLabel(d)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
           </>
         ) : (
           <View style={{ marginTop: 14 }}>
@@ -345,7 +292,7 @@ function GenZMoneyGoalPlaque({
                   borderColor: theme.border,
                 })}
               >
-                <Text style={{ fontSize: 14, fontWeight: '800', color: variant === 'china' ? GENZ_PURPLE : GENZ_LIME }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: GENZ_PURPLE }}>
                   Настроить в спринте →
                 </Text>
               </Pressable>
@@ -368,7 +315,7 @@ function GenZMoneyGoalPlaque({
           ...(Platform.OS === 'web'
             ? {}
             : {
-                shadowColor: variant === 'china' ? '#A855F7' : GENZ_LIME,
+                shadowColor: '#A855F7',
                 shadowOffset: { width: 0, height: 12 },
                 shadowOpacity: 0.25,
                 shadowRadius: 20,
@@ -394,7 +341,9 @@ function GenZMoneyGoalPlaque({
               padding: spacing.lg + 4,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text, marginBottom: 4 }}>{overline}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text, marginBottom: 4 }}>
+              {goal?.title ?? defaultTitle}
+            </Text>
             <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 16 }}>Изменения сразу попадают в активный спринт.</Text>
 
             <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Название</Text>
@@ -478,7 +427,7 @@ function GenZMoneyGoalPlaque({
                   borderRadius: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: variant === 'china' ? '#9333EA' : '#65A30D',
+                  backgroundColor: '#9333EA',
                 }}
               >
                 <Text style={{ fontWeight: '900', color: '#FAFAFC' }}>Сохранить</Text>
@@ -488,34 +437,6 @@ function GenZMoneyGoalPlaque({
         </Pressable>
       </Modal>
     </>
-  );
-}
-
-function SprintLinkRow() {
-  const { spacing } = useAppTheme();
-  return (
-    <Link href={SPRINT_HREF} asChild>
-      <Pressable
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          alignSelf: 'flex-start',
-          marginTop: spacing.xs,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: 'rgba(212,255,67,0.35)',
-          backgroundColor: pressed ? 'rgba(212,255,67,0.12)' : 'rgba(255,255,255,0.04)',
-          opacity: pressed ? 0.92 : 1,
-          ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-        })}
-      >
-        <Ionicons name="rocket-outline" size={18} color={GENZ_LIME} />
-        <Text style={{ fontSize: 14, fontWeight: '800', color: GENZ_LIME }}>Весь спринт</Text>
-      </Pressable>
-    </Link>
   );
 }
 
@@ -534,21 +455,20 @@ export function NikolayDayMoneyHeroCards({
     <View style={{ marginBottom: spacing.md, gap: spacing.lg }}>
       <GenZMoneyGoalPlaque
         variant="china"
-        overline="Китай"
+        overline=""
         defaultTitle="Поездка в Китай"
         goal={chinaGoal}
         sprintId={sprintId}
-        fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала и быстрые кнопки."
+        fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала прогресса."
       />
       <GenZMoneyGoalPlaque
         variant="cushion"
-        overline="Подушка"
+        overline=""
         defaultTitle="Финансовая подушка"
         goal={cushionGoal}
         sprintId={sprintId}
         fallbackHint="Добавь прогресс-цель с «подуш» в названии в спринте — увидишь накопление здесь."
       />
-      <SprintLinkRow />
     </View>
   );
 }
@@ -566,7 +486,7 @@ export function NikolayDayMutedReminders() {
             paddingVertical: spacing.md,
             paddingHorizontal: spacing.lg,
             borderLeftWidth: 4,
-            borderLeftColor: 'rgba(212,255,67,0.55)',
+            borderLeftColor: 'rgba(167,139,250,0.55)',
           },
         ]}
       >

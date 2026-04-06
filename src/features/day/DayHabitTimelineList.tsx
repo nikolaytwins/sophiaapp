@@ -16,7 +16,7 @@ const ICON_BG: string[] = [
   'rgba(168,85,247,0.22)',
   'rgba(59,130,246,0.2)',
   'rgba(236,72,153,0.2)',
-  'rgba(34,197,94,0.18)',
+  'rgba(139,92,246,0.22)',
   'rgba(249,115,22,0.2)',
   'rgba(139,92,246,0.2)',
 ];
@@ -31,7 +31,7 @@ type Props = {
   onRequestDelete?: (habit: Habit) => void;
 };
 
-function streakSubtitle(h: Habit, viewDateKey: string): string {
+function streakSubtitle(h: Habit, viewDateKey: string, todayKey: string): string {
   if (h.cadence === 'daily') {
     if (h.streak > 0) return `Стрик · ${h.streak} дн.`;
     return habitCadenceLabel(h);
@@ -42,7 +42,9 @@ function streakSubtitle(h: Habit, viewDateKey: string): string {
       ? countCompletionsInWeekRange(h.completionDates, weekStart)
       : (h.weeklyCompleted ?? 0);
   const target = h.weeklyTarget ?? 1;
-  return `${weekCount}/${target} за неделю`;
+  const doneThisDay = habitDoneOnDate(h, viewDateKey);
+  const dayLabel = viewDateKey === todayKey ? 'Сегодня' : 'В выбранный день';
+  return `${dayLabel}: ${doneThisDay ? 'отмечено' : 'нет отметки'} · ${weekCount}/${target} за неделю`;
 }
 
 function rightMeta(h: Habit): string {
@@ -202,7 +204,7 @@ export function DayHabitTimelineList({
                       }}
                       numberOfLines={1}
                     >
-                      {streakSubtitle(h, viewDateKey)}
+                      {streakSubtitle(h, viewDateKey, todayKey)}
                     </Text>
                     {h.cadence === 'weekly' ? (
                       <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>

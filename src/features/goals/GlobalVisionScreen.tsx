@@ -221,7 +221,7 @@ export function GlobalVisionScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {supabaseOn ? (
-          <Link href={'/cloud' as Href} asChild>
+          <Link href={'/settings' as Href} asChild>
             <Pressable
               style={{
                 marginBottom: spacing.lg,
@@ -235,7 +235,7 @@ export function GlobalVisionScreen() {
               }}
             >
               <Text style={{ color: GOALS_ACCENT_SOFT, fontSize: 13, fontWeight: '600' }}>
-                ☁️ Облако — войдите, чтобы данные жили на аккаунте
+                Настройки — войдите, чтобы данные жили на аккаунте
               </Text>
             </Pressable>
           </Link>

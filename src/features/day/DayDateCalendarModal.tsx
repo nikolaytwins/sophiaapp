@@ -18,6 +18,7 @@ import { useAppTheme } from '@/theme';
 
 const CELL_GAP = 6;
 const CELL_RADIUS = 14;
+const WEB_SHEET_MAX_W = 520;
 
 function shiftMonth(y: number, m: number, delta: number): { y: number; m: number } {
   const d = new Date(y, m - 1 + delta, 1);
@@ -87,16 +88,18 @@ export function DayDateCalendarModal({
           pointerEvents="box-none"
           style={{
             flex: 1,
-            justifyContent: 'flex-end',
+            justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
             paddingHorizontal: spacing.md,
+            paddingTop: Platform.OS === 'web' ? spacing.lg : 0,
             paddingBottom: Math.max(insets.bottom, spacing.md),
           }}
         >
           <View
             style={[
               styles.sheet,
+              Platform.OS === 'web' && styles.sheetWeb,
               {
-                padding: spacing.lg,
+                padding: spacing.lg + (Platform.OS === 'web' ? 4 : 0),
                 borderRadius: radius.xl,
                 backgroundColor: isLight ? '#F7F4FA' : '#12121a',
                 borderWidth: 1,
@@ -151,7 +154,7 @@ export function DayDateCalendarModal({
                 <View key={label} style={{ flex: 1, alignItems: 'center' }}>
                   <Text
                     style={{
-                      fontSize: 10,
+                      fontSize: Platform.OS === 'web' ? 11 : 10,
                       fontWeight: isTodayCol ? '800' : '600',
                       textTransform: 'uppercase',
                       color: isTodayCol ? colors.text : colors.textMuted,
@@ -184,7 +187,8 @@ export function DayDateCalendarModal({
                       flex: 1,
                       aspectRatio: 1,
                       minWidth: 0,
-                      padding: CELL_GAP / 2,
+                      minHeight: Platform.OS === 'web' ? 44 : undefined,
+                      padding: (Platform.OS === 'web' ? 4 : CELL_GAP) / 2,
                     }}
                     accessibilityLabel={`${dd}${future ? ', недоступно' : ''}`}
                   >
@@ -197,22 +201,22 @@ export function DayDateCalendarModal({
                         backgroundColor: selected
                           ? isLight
                             ? colors.text
-                            : '#D4FF43'
+                            : '#A855F7'
                           : 'rgba(255,255,255,0.06)',
                         borderWidth: !selected && isToday ? 2 : 0,
-                        borderColor: 'rgba(212,255,67,0.55)',
+                        borderColor: 'rgba(168,85,247,0.55)',
                         opacity: future ? 0.28 : 1,
                       }}
                     >
                       <Text
                         style={{
-                          fontSize: 15,
+                          fontSize: Platform.OS === 'web' ? 17 : 15,
                           fontWeight: selected ? '900' : isToday ? '800' : '600',
                           fontVariant: ['tabular-nums'],
                           color: selected
                             ? isLight
                               ? '#F7F4FA'
-                              : '#0F1208'
+                              : '#FAFAFC'
                             : future
                               ? colors.textMuted
                               : colors.text,
@@ -249,5 +253,9 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     alignSelf: 'center',
     width: '100%',
+  },
+  sheetWeb: {
+    maxWidth: WEB_SHEET_MAX_W,
+    maxHeight: '85%' as const,
   },
 });

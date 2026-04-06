@@ -1,8 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -15,7 +13,6 @@ import { DayDateCalendarModal } from '@/features/day/DayDateCalendarModal';
 import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { journalEntryHasContent } from '@/features/day/dayJournal.logic';
 import type { JournalMoodId } from '@/features/day/dayJournal.types';
-import { findJournalHabit } from '@/features/journal/journalHabit';
 import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { WEEKDAY_SHORT_RU, getWeekDayKeys, habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { DayHabitTimelineList } from '@/features/day/DayHabitTimelineList';
@@ -29,19 +26,18 @@ import { repos } from '@/services/repositories';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useSprintStore } from '@/stores/sprint.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
+import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
 const HABITS_HREF = '/habits' as Href;
-const HABITS_MANAGE_HREF = '/habits-manage' as Href;
+const HABITS_MANAGE_HREF = '/settings?tab=habits' as Href;
 
-const SOPHIA_MASCOT = require('../../../assets/images/sophia-day-mascot.png');
+const COUNTER_RING_COLORS = ['#A855F7', '#7C3AED', '#38BDF8', '#F472B6'] as const;
 
-const COUNTER_RING_COLORS = ['#A855F7', '#84CC16', '#38BDF8', '#F472B6'] as const;
-
-/** Акцент «Gen Z» для полосы дней (как в референсе). */
-const DAY_STRIP_LIME = '#D4FF43';
-const DAY_STRIP_LIME_TEXT = '#0F1208';
+/** Акцент полосы дней и календаря — фирменный фиолетовый. */
+const DAY_ACCENT = '#A855F7';
+const DAY_ACCENT_TEXT_ON_FILL = '#FAFAFC';
 
 function greetingForHour(h: number): string {
   if (h < 5) return 'Доброй ночи';
@@ -87,7 +83,6 @@ export function DayScreen() {
   const habits = useHabitsQuery();
   const journalDoc = useDayJournalStore((s) => s.doc);
   const setMood = useDayJournalStore((s) => s.setMood);
-  const getJournalEntry = useDayJournalStore((s) => s.getEntry);
   const todayKey = localDateKey();
   const [viewDateKey, setViewDateKey] = useState(todayKey);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -146,25 +141,9 @@ export function DayScreen() {
   );
   const counterBadgeTotal = counterPool.length;
 
-  const journalHabit = useMemo(() => findJournalHabit(data), [data]);
-
-  const pickMood = useCallback(
-    async (dateKey: string, mood: JournalMoodId | null) => {
-      const before = getJournalEntry(dateKey);
-      setMood(dateKey, mood);
-      const after = useDayJournalStore.getState().getEntry(dateKey);
-      if (
-        journalHabit &&
-        !journalEntryHasContent(before, journalDoc.fields) &&
-        journalEntryHasContent(after, journalDoc.fields) &&
-        !habitDoneOnDate(journalHabit, dateKey)
-      ) {
-        const nextHabits = await repos.habits.checkIn(journalHabit.id, dateKey);
-        qc.setQueryData([...HABITS_QUERY_KEY], nextHabits);
-      }
-    },
-    [getJournalEntry, journalDoc.fields, journalHabit, qc, setMood]
-  );
+  const pickMood = useCallback((dateKey: string, mood: JournalMoodId | null) => {
+    setMood(dateKey, mood);
+  }, [setMood]);
 
   const checkIn = useMutation({
     mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.checkIn(id, dk),
@@ -249,9 +228,9 @@ export function DayScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
-          paddingTop: insets.top + spacing.xl,
-          paddingHorizontal: spacing.xl + 8,
-          paddingBottom: insets.bottom + 148,
+          paddingTop: insets.top + spacing.lg,
+          paddingHorizontal: spacing.lg + 4,
+          paddingBottom: insets.bottom + 120,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -259,19 +238,18 @@ export function DayScreen() {
         <View
           style={{
             flexDirection: 'row',
-            alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: spacing.md,
+            alignItems: 'flex-start',
             marginBottom: spacing.md,
           }}
         >
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flex: 1, paddingRight: spacing.md }}>
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: '900',
-                letterSpacing: 2,
-                color: isLight ? colors.textMuted : 'rgba(212,255,67,0.75)',
+                letterSpacing: 1.4,
+                color: isLight ? colors.textMuted : 'rgba(196,181,253,0.85)',
                 textTransform: 'uppercase',
               }}
             >
@@ -280,20 +258,20 @@ export function DayScreen() {
             <Text
               style={{
                 marginTop: 6,
-                fontSize: 30,
+                fontSize: 26,
                 fontWeight: '900',
-                letterSpacing: -1,
+                letterSpacing: -0.6,
                 color: colors.text,
               }}
               numberOfLines={2}
             >
               {hourGreeting},{' '}
-              <Text style={{ color: isLight ? brand.primary : DAY_STRIP_LIME }}>{greetingName}</Text>
+              <Text style={{ color: brand.primary }}>{greetingName}</Text>
             </Text>
             <Text
               style={{
-                marginTop: 8,
-                fontSize: 15,
+                marginTop: 6,
+                fontSize: 14,
                 fontWeight: '600',
                 color: colors.textMuted,
               }}
@@ -303,28 +281,7 @@ export function DayScreen() {
               {isViewingToday ? ' · сегодня' : ''}
             </Text>
           </View>
-          <LinearGradient
-            colors={['rgba(212,255,67,0.5)', 'rgba(168,85,247,0.45)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              width: 62,
-              height: 62,
-              borderRadius: 22,
-              padding: 2,
-            }}
-          >
-            <View
-              style={{
-                flex: 1,
-                borderRadius: 20,
-                overflow: 'hidden',
-                backgroundColor: isLight ? colors.surface2 : '#12121a',
-              }}
-            >
-              <Image source={SOPHIA_MASCOT} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-            </View>
-          </LinearGradient>
+          <HeaderProfileAvatar marginTop={4} />
         </View>
 
         <View
@@ -332,7 +289,7 @@ export function DayScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 4,
-            marginBottom: spacing.lg,
+            marginBottom: spacing.md,
           }}
         >
           <Pressable
@@ -364,8 +321,8 @@ export function DayScreen() {
                     borderRadius: 16,
                     backgroundColor: selected
                       ? isLight
-                        ? colors.text
-                        : DAY_STRIP_LIME
+                        ? brand.primary
+                        : DAY_ACCENT
                       : isLight
                         ? 'rgba(15,17,24,0.04)'
                         : 'rgba(255,255,255,0.06)',
@@ -380,7 +337,7 @@ export function DayScreen() {
                     style={{
                       fontSize: 16,
                       fontWeight: '900',
-                      color: selected ? (isLight ? '#F7F4FA' : DAY_STRIP_LIME_TEXT) : colors.textMuted,
+                      color: selected ? DAY_ACCENT_TEXT_ON_FILL : colors.textMuted,
                       fontVariant: ['tabular-nums'],
                     }}
                   >
@@ -393,11 +350,7 @@ export function DayScreen() {
                       fontWeight: '800',
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
-                      color: selected
-                        ? isLight
-                          ? 'rgba(247,244,250,0.72)'
-                          : 'rgba(15,18,8,0.55)'
-                        : colors.textMuted,
+                      color: selected ? 'rgba(250,250,252,0.75)' : colors.textMuted,
                     }}
                   >
                     {label}
@@ -419,11 +372,11 @@ export function DayScreen() {
               paddingHorizontal: 8,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: 'rgba(212,255,67,0.35)',
-              backgroundColor: 'rgba(212,255,67,0.08)',
+              borderColor: 'rgba(168,85,247,0.45)',
+              backgroundColor: 'rgba(168,85,247,0.12)',
             }}
           >
-            <Ionicons name="calendar-outline" size={22} color={DAY_STRIP_LIME} />
+            <Ionicons name="calendar-outline" size={22} color={DAY_ACCENT} />
           </Pressable>
           <Pressable
             onPress={goNextDay}
@@ -451,13 +404,13 @@ export function DayScreen() {
           isTodayContext={viewDateKey === todayKey}
         />
 
-        <View style={{ marginBottom: spacing.lg }}>
+        <View style={{ marginTop: spacing.xl, marginBottom: spacing.lg }}>
           <Text
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: '900',
-              letterSpacing: 1.8,
-              color: 'rgba(232,121,249,0.95)',
+              letterSpacing: 1.4,
+              color: 'rgba(196,181,253,0.9)',
               textTransform: 'uppercase',
               marginBottom: 10,
             }}
@@ -472,19 +425,6 @@ export function DayScreen() {
             onPickMood={(dk, mood) => void pickMood(dk, mood)}
           />
         </View>
-
-        <DayJournalAccordion viewDateKey={viewDateKey} todayKey={todayKey} sessionEmail={accountEmail} />
-
-        {shouldShowJournalReminder ? (
-          <AppSurfaceCard glow style={{ marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 6 }}>
-              Вечер — не забудь дневник
-            </Text>
-            <Text style={{ fontSize: 14, lineHeight: 22, color: colors.textMuted }}>
-              Раскрой плашку «Дневник» выше и заполни поля за сегодня.
-            </Text>
-          </AppSurfaceCard>
-        ) : null}
 
         {isNikolay ? (
           <>
@@ -509,10 +449,10 @@ export function DayScreen() {
               <View>
                 <Text
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: '900',
-                    letterSpacing: 1.8,
-                    color: DAY_STRIP_LIME,
+                    letterSpacing: 1.4,
+                    color: 'rgba(196,181,253,0.9)',
                     textTransform: 'uppercase',
                   }}
                 >
@@ -521,9 +461,9 @@ export function DayScreen() {
                 <Text
                   style={{
                     marginTop: 4,
-                    fontSize: 20,
+                    fontSize: 19,
                     fontWeight: '900',
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.4,
                     color: colors.text,
                   }}
                 >
@@ -567,40 +507,53 @@ export function DayScreen() {
           </View>
         ) : null}
 
+        <DayJournalAccordion viewDateKey={viewDateKey} todayKey={todayKey} sessionEmail={accountEmail} />
+
+        {shouldShowJournalReminder ? (
+          <AppSurfaceCard glow style={{ marginBottom: spacing.md }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 6 }}>
+              Вечер — не забудь дневник
+            </Text>
+            <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textMuted }}>
+              Раскрой плашку «Дневник» выше и заполни поля за сегодня.
+            </Text>
+          </AppSurfaceCard>
+        ) : null}
+
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             marginBottom: spacing.md,
-            marginTop: spacing.xs,
+            marginTop: spacing.md,
           }}
         >
           <View>
             <Text
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: '900',
-                letterSpacing: 1.8,
-                color: 'rgba(232,121,249,0.9)',
+                letterSpacing: 1.4,
+                color: 'rgba(196,181,253,0.9)',
                 textTransform: 'uppercase',
               }}
             >
-              Лента
+              План дня
             </Text>
             <Text
               style={{
                 marginTop: 4,
-                fontSize: 20,
+                fontSize: 19,
                 fontWeight: '900',
-                letterSpacing: -0.5,
+                letterSpacing: -0.4,
                 color: colors.text,
               }}
             >
-              Ритм дня
+              Привычки дня
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Link href={HABITS_MANAGE_HREF} asChild>
               <Pressable
                 style={({ pressed }) => ({
@@ -610,7 +563,7 @@ export function DayScreen() {
                   ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
                 })}
               >
-                <Text style={{ fontSize: 14, fontWeight: '700', color: brand.primarySoft }}>Привычки</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Привычки</Text>
               </Pressable>
             </Link>
             <Link href={HABITS_HREF} asChild>
@@ -622,7 +575,7 @@ export function DayScreen() {
                   ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
                 })}
               >
-                <Text style={{ fontSize: 14, fontWeight: '700', color: brand.primarySoft }}>Аналитика</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: brand.primarySoft }}>Аналитика</Text>
               </Pressable>
             </Link>
           </View>

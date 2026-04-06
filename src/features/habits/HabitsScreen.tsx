@@ -10,8 +10,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -45,14 +43,8 @@ import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { JournalMoodCalendarPanel } from '@/features/journal/JournalMoodCalendarPanel';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
+import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
-import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
-import {
-  groupNikolayDailyHabits,
-  groupNikolayWeeklyHabits,
-  NIKOLAY_DAILY_GROUPS,
-  NIKOLAY_WEEKLY_GROUPS,
-} from '@/features/accounts/nikolayHabitsUi';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
 import { useAppTheme } from '@/theme';
 
@@ -62,13 +54,6 @@ const ACCENT_MUTED = 'rgba(168,85,247,0.45)';
 const ACCENT_FILL = 'rgba(168,85,247,0.10)';
 const WEEKLY = '#C4B5FD';
 const WEEKLY_FILL = 'rgba(196,181,253,0.10)';
-function streakLabel(h: Habit): string {
-  if (h.cadence === 'daily') {
-    return h.streak === 1 ? '1 день' : `${h.streak} дн.`;
-  }
-  return h.streak === 1 ? '1 неделя' : `${h.streak} нед.`;
-}
-
 function headlineDate(): string {
   const d = new Date();
   return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -196,6 +181,7 @@ function CheckInControl({
 function HabitCard({
   habit,
   readOnly,
+  variant = 'default',
   onCheck,
   onUndo,
   onDelete,
@@ -205,6 +191,8 @@ function HabitCard({
 }: {
   habit: Habit;
   readOnly?: boolean;
+  /** Экран «Аналитика»: без аккордеона и стриков. */
+  variant?: 'default' | 'analytics';
   onCheck?: (dateKey?: string) => void;
   onUndo?: (dateKey?: string) => void;
   onDelete?: () => void;
@@ -213,6 +201,7 @@ function HabitCard({
   todayKey: string;
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
+  const analyticsUi = variant === 'analytics';
   const isDaily = habit.cadence === 'daily';
   const isCounterDaily = isDaily && habit.checkInKind === 'counter' && habit.dailyTarget != null;
   const accent = isDaily ? ACCENT : WEEKLY;
@@ -307,12 +296,14 @@ function HabitCard({
     setActionDayKey(todayKey);
   }, [todayKey]);
 
+  const effectiveExpanded = analyticsUi || expanded;
+
   useEffect(() => {
-    expandedSv.value = withTiming(expanded ? 1 : 0, {
+    expandedSv.value = withTiming(effectiveExpanded ? 1 : 0, {
       duration: 300,
       easing: Easing.out(Easing.cubic),
     });
-  }, [expanded, expandedSv]);
+  }, [effectiveExpanded, expandedSv]);
 
   const toggleExpand = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -372,12 +363,6 @@ function HabitCard({
   const dailyMetaCompact = (
     <>
       <Text style={[typography.caption, { color: colors.textMuted, opacity: 0.92 }]}>{statusLine}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: 6 }}>
-        <Ionicons name="flash-outline" size={14} color="rgba(255,255,255,0.42)" />
-        <Text style={[typography.caption, { color: 'rgba(255,255,255,0.5)', opacity: 1 }]}>
-          Стрик · {streakLabel(habit)}
-        </Text>
-      </View>
     </>
   );
 
@@ -525,39 +510,30 @@ function HabitCard({
                   <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
                 </Pressable>
               ) : null}
-              <Pressable
-                onPress={toggleExpand}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={expanded ? 'Свернуть' : 'Показать детали'}
-                accessibilityState={{ expanded }}
-              >
-                <Animated.View style={chevronAnimStyle}>
-                  <Ionicons name="chevron-down" size={18} color="rgba(255,255,255,0.38)" />
-                </Animated.View>
-              </Pressable>
+              {!analyticsUi ? (
+                <Pressable
+                  onPress={toggleExpand}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={expanded ? 'Свернуть' : 'Показать детали'}
+                  accessibilityState={{ expanded }}
+                >
+                  <Animated.View style={chevronAnimStyle}>
+                    <Ionicons name="chevron-down" size={18} color="rgba(255,255,255,0.38)" />
+                  </Animated.View>
+                </Pressable>
+              ) : null}
             </View>
 
-            {!expanded ? (
+            {!effectiveExpanded ? (
               <View style={{ marginTop: spacing.sm }}>
-                <View style={metaSecondaryStyle}>
-                  {readOnly ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="flash-outline" size={14} color="rgba(255,255,255,0.42)" />
-                      <Text style={[typography.caption, { color: 'rgba(255,255,255,0.5)', opacity: 1 }]}>
-                        Стрик · {streakLabel(habit)}
-                      </Text>
-                    </View>
-                  ) : (
-                    dailyMetaCompact
-                  )}
-                </View>
+                <View style={metaSecondaryStyle}>{dailyMetaCompact}</View>
               </View>
             ) : null}
 
             <Animated.View
               style={expandableAnimStyle}
-              pointerEvents={expanded ? 'auto' : 'none'}
+              pointerEvents={effectiveExpanded ? 'auto' : 'none'}
             >
               <View
                 style={{
@@ -689,22 +665,24 @@ function HabitCard({
                   <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
                 </Pressable>
               ) : null}
-              <Pressable
-                onPress={toggleExpand}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={expanded ? 'Свернуть' : 'Показать детали'}
-                accessibilityState={{ expanded }}
-              >
-                <Animated.View style={chevronAnimStyle}>
-                  <Ionicons name="chevron-down" size={18} color="rgba(255,255,255,0.38)" />
-                </Animated.View>
-              </Pressable>
+              {!analyticsUi ? (
+                <Pressable
+                  onPress={toggleExpand}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={expanded ? 'Свернуть' : 'Показать детали'}
+                  accessibilityState={{ expanded }}
+                >
+                  <Animated.View style={chevronAnimStyle}>
+                    <Ionicons name="chevron-down" size={18} color="rgba(255,255,255,0.38)" />
+                  </Animated.View>
+                </Pressable>
+              ) : null}
             </View>
 
             <Animated.View
               style={expandableAnimStyle}
-              pointerEvents={expanded ? 'auto' : 'none'}
+              pointerEvents={effectiveExpanded ? 'auto' : 'none'}
             >
               <View
                 style={{
@@ -765,12 +743,6 @@ function HabitCard({
                     {rhythmHint}
                   </Text>
                 ) : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: 6 }}>
-                  <Ionicons name="flash-outline" size={14} color="rgba(255,255,255,0.42)" />
-                  <Text style={[typography.caption, { color: 'rgba(255,255,255,0.5)' }]}>
-                    Стрик · {streakLabel(habit)}
-                  </Text>
-                </View>
               </View>
             </Animated.View>
 
@@ -851,8 +823,6 @@ export function HabitsScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const isNikolay = isNikolayPrimaryAccount(accountEmail);
-
   const showDailyEmptyHint =
     coreDaily.length === 0 && (mediaHabits.length === 0 || coreWeekly.length > 0);
   const showWeeklyEmptyHint =
@@ -892,23 +862,28 @@ export function HabitsScreen() {
             <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, opacity: 0.9 }]}>
               {headlineDate()}
             </Text>
-            <View style={{ marginTop: spacing.sm, alignSelf: 'flex-start', gap: 8 }}>
+            <View style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
               {supabaseOn ? (
-                <Link href={'/cloud' as Href} asChild>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт и синхронизация" style={{ paddingVertical: 4 }}>
+                <Link href={'/settings' as Href} asChild>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Настройки и аккаунт" style={{ paddingVertical: 4 }}>
                     <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>
-                      {accountEmail ? `Облако · ${accountEmail}` : 'Войти в облако · синхронизация'}
+                      {accountEmail ? `Настройки · ${accountEmail}` : 'Настройки · войти в аккаунт'}
                     </Text>
                   </Pressable>
                 </Link>
               ) : null}
-              <Link href={'/habits-manage' as Href} asChild>
-                <Pressable accessibilityRole="button" accessibilityLabel="Управление привычками" style={{ paddingVertical: 4 }}>
+              <Link href={'/settings?tab=habits' as Href} asChild>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Управление привычками"
+                  style={{ paddingVertical: 4, marginTop: supabaseOn ? 6 : 0 }}
+                >
                   <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>Управление привычками</Text>
                 </Pressable>
               </Link>
             </View>
           </View>
+          <HeaderProfileAvatar marginTop={4} />
         </View>
 
         <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
@@ -1036,11 +1011,11 @@ export function HabitsScreen() {
             <View style={{ marginTop: spacing.xl + 10 }}>
               <Text
                 style={[
-                  typography.caption,
+                  typography.hero,
                   {
-                    color: 'rgba(255,255,255,0.42)',
-                    letterSpacing: 2.2,
-                    textTransform: 'uppercase',
+                    fontSize: 30,
+                    letterSpacing: -0.95,
+                    color: colors.text,
                     marginBottom: spacing.md,
                   },
                 ]}
@@ -1111,46 +1086,15 @@ export function HabitsScreen() {
                     </View>
                   </LinearGradient>
                   {mediaHabits.map((h) => (
-                    <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
+                    <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
                   ))}
                 </>
               ) : null}
 
               {coreDaily.length > 0 ? (
-                isNikolay ? (
-                  <>
-                    {NIKOLAY_DAILY_GROUPS.flatMap(({ key, label }) => {
-                      const grouped = groupNikolayDailyHabits(coreDaily)[key];
-                      if (grouped.length === 0) return [];
-                      return [
-                        label ? (
-                          <Text
-                            key={`nikolay-d-${key}`}
-                            style={{
-                              fontSize: 13,
-                              fontWeight: '800',
-                              color: 'rgba(196,181,253,0.92)',
-                              marginBottom: spacing.sm,
-                              marginTop:
-                                key === 'money'
-                                  ? mediaHabits.length > 0
-                                    ? spacing.md
-                                    : 0
-                                  : spacing.md,
-                            }}
-                          >
-                            {label}
-                          </Text>
-                        ) : null,
-                        ...grouped.map((h) => (
-                          <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
-                        )),
-                      ];
-                    })}
-                  </>
-                ) : (
-                  coreDaily.map((h) => <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />)
-                )
+                coreDaily.map((h) => (
+                  <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
+                ))
               ) : showDailyEmptyHint ? (
                 <Text
                   style={[
@@ -1163,36 +1107,9 @@ export function HabitsScreen() {
               ) : null}
 
               {coreWeekly.length > 0 ? (
-                isNikolay ? (
-                  <>
-                    {NIKOLAY_WEEKLY_GROUPS.flatMap(({ key, label }) => {
-                      const grouped = groupNikolayWeeklyHabits(coreWeekly)[key];
-                      if (grouped.length === 0) return [];
-                      const afterBlock = coreDaily.length > 0 || mediaHabits.length > 0;
-                      return [
-                        label ? (
-                          <Text
-                            key={`nikolay-w-${key}`}
-                            style={{
-                              fontSize: 13,
-                              fontWeight: '800',
-                              color: 'rgba(196,181,253,0.92)',
-                              marginBottom: spacing.sm,
-                              marginTop: key === 'body' ? (afterBlock ? spacing.md : 0) : spacing.md,
-                            }}
-                          >
-                            {label}
-                          </Text>
-                        ) : null,
-                        ...grouped.map((h) => (
-                          <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
-                        )),
-                      ];
-                    })}
-                  </>
-                ) : (
-                  coreWeekly.map((h) => <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />)
-                )
+                coreWeekly.map((h) => (
+                  <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
+                ))
               ) : showWeeklyEmptyHint ? (
                 <Text
                   style={[
