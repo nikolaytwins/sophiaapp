@@ -1,0 +1,275 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useMemo, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import {
+  chunkMonthIntoWeekRows,
+  monthAnchorKey,
+  monthGridCells,
+  monthGridTitleRu,
+  weekdayIndexMondayFirst,
+  WEEKDAY_LABELS_SHORT,
+  ymToIndex,
+  type MonthGridCell,
+} from '@/features/habits/habitCardVisual';
+import { localDateKey } from '@/features/habits/habitLogic';
+import type { JournalDocument } from '@/features/day/dayJournal.types';
+import {
+  JOURNAL_MOODS,
+  aggregateMoodsInMonth,
+  getMoodMeta,
+  journalMoodForDateKey,
+  totalMoodDaysInMonth,
+} from '@/features/journal/journalMood';
+import { useDayJournalStore } from '@/stores/dayJournal.store';
+import { useAppTheme } from '@/theme';
+
+const CELL_GAP = 6;
+const CELL_RADIUS = 12;
+
+function shiftMonth(y: number, m: number, delta: number): { y: number; m: number } {
+  const d = new Date(y, m - 1 + delta, 1);
+  return { y: d.getFullYear(), m: d.getMonth() + 1 };
+}
+
+function MoodCalendarCell({
+  cell,
+  todayKey,
+  doc,
+  colors,
+  isLight,
+}: {
+  cell: MonthGridCell;
+  todayKey: string;
+  doc: JournalDocument;
+  colors: { text: string; textMuted: string; borderStrong: string };
+  isLight: boolean;
+}) {
+  if (!cell.dateKey) {
+    return <View style={{ flex: 1, aspectRatio: 1, minWidth: 0 }} />;
+  }
+
+  const isFuture = cell.dateKey > todayKey;
+  const isToday = cell.dateKey === todayKey;
+  const moodId = journalMoodForDateKey(doc, cell.dateKey);
+  const meta = getMoodMeta(moodId);
+  const [, , dd] = cell.dateKey.split('-');
+  const dayNum = dd ?? '';
+
+  const futureText = isLight ? 'rgba(15,17,24,0.28)' : 'rgba(255,255,255,0.28)';
+
+  return (
+    <View
+      style={{ flex: 1, aspectRatio: 1, minWidth: 0, padding: CELL_GAP / 2 }}
+      accessibilityLabel={
+        meta
+          ? `${dayNum}, ${meta.label}`
+          : isFuture
+            ? `${dayNum}, будущий день`
+            : `${dayNum}, настроение не отмечено`
+      }
+    >
+      <View
+        style={{
+          flex: 1,
+          borderRadius: CELL_RADIUS,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: meta && !isFuture ? meta.circleBg : 'rgba(255,255,255,0.04)',
+          borderWidth: meta && !isFuture ? 0 : StyleSheet.hairlineWidth,
+          borderColor: isToday && !isFuture ? (isLight ? colors.borderStrong : 'rgba(255,255,255,0.28)') : 'rgba(255,255,255,0.08)',
+          opacity: isFuture ? 0.32 : 1,
+        }}
+      >
+        {meta && !isFuture ? (
+          <Text style={{ fontSize: 20, lineHeight: 24 }}>{meta.emoji}</Text>
+        ) : (
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: isToday ? '800' : '600',
+              fontVariant: ['tabular-nums'],
+              color: isFuture ? futureText : colors.textMuted,
+            }}
+          >
+            {dayNum}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+type Props = {
+  /** Для прокрутки экрана-приёмника при `?focus=mood`. */
+  onLayoutRoot?: (y: number) => void;
+};
+
+/**
+ * Календарь месяца с эмодзи настроения по дням + сводка по типам за месяц.
+ */
+export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
+  const { colors, isLight, radius, spacing, typography } = useAppTheme();
+  const doc = useDayJournalStore((s) => s.doc);
+  const todayKey = localDateKey();
+  const [ty, tm] = todayKey.split('-').map(Number);
+  const todayIdx = ymToIndex(ty, tm);
+
+  const [y, setY] = useState(ty);
+  const [m, setM] = useState(tm);
+
+  const anchorKey = monthAnchorKey(y, m);
+  const monthTitle = monthGridTitleRu(anchorKey);
+  const cells = useMemo(() => monthGridCells(anchorKey), [anchorKey]);
+  const monthWeekRows = useMemo(() => chunkMonthIntoWeekRows(cells), [cells]);
+  const isViewingCurrentMonth = y === ty && m === tm;
+  const todayWeekdayIdx = weekdayIndexMondayFirst(todayKey);
+
+  const canGoPrev = ymToIndex(y, m) > ymToIndex(2020, 1);
+  const canGoNext = ymToIndex(y, m) < todayIdx;
+
+  const counts = useMemo(() => aggregateMoodsInMonth(doc, y, m, todayKey), [doc, y, m, todayKey]);
+  const totalMarked = totalMoodDaysInMonth(counts);
+
+  const bump = (delta: number) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    const n = shiftMonth(y, m, delta);
+    setY(n.y);
+    setM(n.m);
+  };
+
+  return (
+    <View
+      onLayout={(e) => onLayoutRoot?.(e.nativeEvent.layout.y)}
+      style={{
+        width: '100%',
+        borderRadius: radius.xl,
+        padding: spacing.md,
+        backgroundColor: isLight ? 'rgba(15,17,24,0.04)' : 'rgba(10,10,14,0.92)',
+        borderWidth: 1,
+        borderColor: isLight ? colors.border : 'rgba(255,255,255,0.07)',
+        marginTop: spacing.lg,
+      }}
+    >
+      <Text
+        style={[
+          typography.caption,
+          {
+            color: 'rgba(232,121,249,0.85)',
+            letterSpacing: 1.4,
+            textTransform: 'uppercase',
+            marginBottom: spacing.sm,
+          },
+        ]}
+      >
+        Настроение · календарь
+      </Text>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+        <Pressable
+          onPress={() => bump(-1)}
+          disabled={!canGoPrev}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Предыдущий месяц"
+          style={({ pressed }) => ({
+            width: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 6,
+            opacity: !canGoPrev ? 0.22 : pressed ? 0.75 : 1,
+          })}
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={[typography.title2, { fontSize: 17, fontWeight: '800', color: colors.text }]} numberOfLines={1}>
+            {monthTitle}
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '600', color: colors.textMuted }}>
+            Отмечено дней: {totalMarked}
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => bump(1)}
+          disabled={!canGoNext}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Следующий месяц"
+          style={({ pressed }) => ({
+            width: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 6,
+            opacity: !canGoNext ? 0.22 : pressed ? 0.75 : 1,
+          })}
+        >
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
+      </View>
+
+      <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
+        {WEEKDAY_LABELS_SHORT.map((label, i) => {
+          const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+          return (
+            <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: isTodayCol ? '800' : '600',
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                  color: isTodayCol ? colors.text : colors.textMuted,
+                }}
+              >
+                {label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {monthWeekRows.map((row, ri) => (
+        <View key={`mood-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
+          {row.map((cell, ci) => (
+            <MoodCalendarCell
+              key={cell.dateKey ?? `e-${ri}-${ci}`}
+              cell={cell}
+              todayKey={todayKey}
+              doc={doc}
+              colors={colors}
+              isLight={isLight}
+            />
+          ))}
+        </View>
+      ))}
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
+        {JOURNAL_MOODS.map((row) => (
+          <View
+            key={row.id}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: radius.md,
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'rgba(255,255,255,0.08)',
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{counts[row.id]}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={{ marginTop: spacing.sm, fontSize: 12, lineHeight: 17, color: colors.textMuted }}>
+        Меняй настроение на экране «День». Здесь — обзор месяца.
+      </Text>
+    </View>
+  );
+}

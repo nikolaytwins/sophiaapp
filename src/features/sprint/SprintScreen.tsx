@@ -6,16 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { ProgressRing } from '@/shared/ui/ProgressRing';
-import {
-  Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -36,6 +27,7 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { repos } from '@/services/repositories';
 import { useSprintStore } from '@/stores/sprint.store';
 import { useAppTheme } from '@/theme';
+import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
 
 const ACCENT = '#A855F7';
 const CANVAS_GRAD = ['#020203', '#0A0A10', '#050506'] as const;
@@ -56,14 +48,11 @@ function confirmRemoveHabit(h: { id: string; name: string }, onRemove: (id: stri
   if (Platform.OS !== 'web') {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   }
-  Alert.alert(
-    'Удалить привычку?',
-    `«${h.name}» исчезнет везде (День, Привычки). Связи целей этого спринта сбросятся.`,
-    [
-      { text: 'Отмена', style: 'cancel' },
-      { text: 'Удалить', style: 'destructive', onPress: () => onRemove(h.id) },
-    ]
-  );
+  confirmDestructive({
+    title: 'Удалить привычку?',
+    message: `«${h.name}» исчезнет везде (День, аналитика). Связи целей этого спринта сбросятся.`,
+    onConfirm: () => onRemove(h.id),
+  });
 }
 
 function SurfaceCard({ children, style, glow }: { children: ReactNode; style?: object; glow?: boolean }) {
@@ -166,7 +155,7 @@ export function SprintScreen() {
   const onCreateSprint = useCallback(() => {
     const r = createSprint({ title: newTitle.trim() || undefined, durationDays: durationPick });
     if (!r.ok) {
-      Alert.alert('Спринт', r.error);
+      alertInfo('Спринт', r.error);
       return;
     }
     setNewTitle('');
@@ -186,7 +175,7 @@ export function SprintScreen() {
       habitLinks: linkHabitId ? [{ habitId: linkHabitId, deltaPerCompletion: 1 }] : [],
     });
     if (!r.ok) {
-      Alert.alert('Цель', r.error);
+      alertInfo('Цель', r.error);
       return;
     }
     resetAddForm();
@@ -213,14 +202,13 @@ export function SprintScreen() {
   );
 
   const confirmRemoveGoal = (g: SprintGoal) => {
-    Alert.alert('Удалить цель?', g.title, [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: () => active && removeGoal(active.id, g.id),
+    confirmDestructive({
+      title: 'Удалить цель?',
+      message: g.title,
+      onConfirm: () => {
+        if (active) removeGoal(active.id, g.id);
       },
-    ]);
+    });
   };
 
   const openHabitPickerForGoal = (goalId: string) => {
@@ -246,7 +234,7 @@ export function SprintScreen() {
       current: Math.min(c, t),
     });
     if (!r.ok) {
-      Alert.alert('Значения', r.error);
+      alertInfo('Значения', r.error);
       return;
     }
     setGoalProgressEdit(null);

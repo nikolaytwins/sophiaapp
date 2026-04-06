@@ -11,34 +11,31 @@ import { useAppTheme } from '@/theme';
 
 const TAB_HREF: Record<string, Href> = {
   day: '/day',
-  journal: '/journal' as Href,
   sprint: '/sprint' as Href,
+  tasks: '/tasks' as Href,
+  finance: '/finance' as Href,
   habits: '/habits',
 };
 
 const LABELS: Record<string, string> = {
   day: 'День',
-  journal: 'Дневник',
   sprint: 'Спринт',
-  habits: 'Привычки',
+  tasks: 'Задачи',
+  finance: 'Финансы',
+  habits: 'Аналитика',
 };
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
-  journal: 'book-outline',
   sprint: 'flag-outline',
+  tasks: 'list-outline',
+  finance: 'wallet-outline',
   /** Повторяющиеся действия / трекинг — ближе к привычкам, чем «фитнес». */
   habits: 'repeat-outline',
 };
 
-/** `href: null` в Tabs.Screen скрывает таб из навигации; custom tab bar должен то же фильтровать. */
-function tabHrefFromDescriptor(
-  descriptor: BottomTabBarProps['descriptors'][string]
-): string | null | undefined {
-  const o = descriptor.options;
-  if (typeof o === 'function') return undefined;
-  return (o as { href?: string | null }).href;
-}
+/** В нижнем меню только эти вкладки (остальные экраны — вне `(tabs)` или со `href: null`). */
+const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'tasks', 'finance', 'habits']);
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -102,7 +99,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     [colors, isLight, shadows, typography]
   );
 
-  const visibleRoutes = state.routes.filter((route) => tabHrefFromDescriptor(descriptors[route.key]) !== null);
+  const visibleRoutes = state.routes.filter((route) => TAB_BAR_ROUTE_NAMES.has(route.name));
 
   const row = (
     <View style={styles.row}>

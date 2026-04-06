@@ -63,6 +63,8 @@ type SprintState = {
     goalId: string,
     input: { target: number; current: number }
   ) => { ok: true } | { ok: false; error: string };
+  /** Переименовать цель (любой kind) в активном или указанном спринте. */
+  updateGoalTitle: (sprintId: string, goalId: string, title: string) => { ok: true } | { ok: false; error: string };
   /** Ручная корректировка прогресса (+1 / −1 и т.д.), с клампом [0, target]. */
   adjustGoalCurrent: (sprintId: string, goalId: string, delta: number) => void;
   /** Чекпоинт: переключить «сделано» по completedAt. */
@@ -265,6 +267,21 @@ export const useSprintStore = create<SprintState>()(
                   ? { ...g, target: t, current: c }
                   : g
               ),
+            };
+          }),
+        }));
+        return { ok: true };
+      },
+
+      updateGoalTitle: (sprintId, goalId, titleRaw) => {
+        const title = titleRaw.trim();
+        if (!title) return { ok: false, error: 'Введите название цели.' };
+        set((state) => ({
+          sprints: state.sprints.map((s) => {
+            if (s.id !== sprintId) return s;
+            return {
+              ...s,
+              goals: s.goals.map((g) => (g.id === goalId ? { ...g, title } : g)),
             };
           }),
         }));

@@ -1,3 +1,6 @@
-import { JournalMoodStatsScreen } from '@/features/journal/JournalMoodStatsScreen';
+import { Redirect } from 'expo-router';
 
-export default JournalMoodStatsScreen;
+/** Статистика настроений перенесена на экран «Привычки». */
+export default function JournalMoodStatsRedirect() {
+  return <Redirect href="/habits?focus=mood" />;
+}

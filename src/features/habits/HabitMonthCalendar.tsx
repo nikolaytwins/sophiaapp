@@ -7,9 +7,9 @@ import type { MonthGridCell } from '@/features/habits/habitCardVisual';
 import { WEEKDAY_LABELS_SHORT } from '@/features/habits/habitCardVisual';
 import { useAppTheme } from '@/theme';
 
-/** Как на референсе: сплошной синий + тёмные цифры. */
-const HEAT_DONE_BG = '#6495ED';
-const HEAT_DONE_TEXT = '#0D1117';
+/** Фирменный фиолетовый: выполненный день. */
+const HEAT_DONE_BG = '#A855F7';
+const HEAT_DONE_TEXT = '#FAFAFC';
 
 const CELL_GAP = 8;
 const CELL_RADIUS = 10;

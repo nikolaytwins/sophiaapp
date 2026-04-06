@@ -138,17 +138,7 @@ export function DayHabitTimelineList({
               ) : null}
             </View>
 
-            <Pressable
-              disabled={future}
-              onPress={() => onToggle(h)}
-              onLongPress={canDelete ? () => promptDeleteHabit(h, () => onRequestDelete!(h)) : undefined}
-              delayLongPress={480}
-              style={({ pressed }) => ({
-                flex: 1,
-                minWidth: 0,
-                opacity: future ? 0.45 : pressed ? 0.94 : 1,
-              })}
-            >
+            <View style={{ flex: 1, minWidth: 0 }}>
               <View
                 style={{
                   borderRadius: radius.xl,
@@ -179,12 +169,21 @@ export function DayHabitTimelineList({
                   />
                 </View>
 
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                <Pressable
+                  disabled={future}
+                  onPress={() => onToggle(h)}
+                  onLongPress={canDelete ? () => promptDeleteHabit(h, () => onRequestDelete!(h)) : undefined}
+                  delayLongPress={480}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minWidth: 0,
+                    opacity: future ? 0.45 : pressed ? 0.94 : 1,
+                  })}
+                >
+                  <View>
                     <Text
                       numberOfLines={2}
                       style={{
-                        flex: 1,
                         fontSize: 16,
                         fontWeight: '800',
                         letterSpacing: -0.3,
@@ -194,51 +193,56 @@ export function DayHabitTimelineList({
                     >
                       {h.name}
                     </Text>
-                    {canDelete ? (
-                      <Pressable
-                        onPress={() => promptDeleteHabit(h, () => onRequestDelete(h))}
-                        hitSlop={10}
-                        accessibilityRole="button"
-                        accessibilityLabel="Удалить привычку"
-                        style={{ padding: 4 }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="rgba(248,113,113,0.85)" />
-                      </Pressable>
+                    <Text
+                      style={{
+                        marginTop: 4,
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: 'rgba(255,255,255,0.42)',
+                      }}
+                      numberOfLines={1}
+                    >
+                      {streakSubtitle(h, viewDateKey)}
+                    </Text>
+                    {h.cadence === 'weekly' ? (
+                      <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
+                        {weekKeys.map((dk) => {
+                          const hit = habitDoneOnDate(h, dk);
+                          const isView = dk === viewDateKey;
+                          return (
+                            <View
+                              key={dk}
+                              style={{
+                                flex: 1,
+                                height: 5,
+                                borderRadius: 3,
+                                backgroundColor: hit ? 'rgba(168,85,247,0.75)' : 'rgba(255,255,255,0.08)',
+                                borderWidth: isView ? 1 : 0,
+                                borderColor: 'rgba(196,181,253,0.7)',
+                              }}
+                            />
+                          );
+                        })}
+                      </View>
                     ) : null}
                   </View>
-                  <Text
-                    style={{
-                      marginTop: 4,
-                      fontSize: 13,
-                      fontWeight: '600',
-                      color: 'rgba(255,255,255,0.42)',
-                    }}
-                    numberOfLines={1}
+                </Pressable>
+
+                {canDelete ? (
+                  <Pressable
+                    onPress={() => promptDeleteHabit(h, () => onRequestDelete(h))}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="Удалить привычку"
+                    style={({ pressed }) => ({
+                      padding: 6,
+                      alignSelf: 'flex-start',
+                      opacity: pressed ? 0.85 : 1,
+                    })}
                   >
-                    {streakSubtitle(h, viewDateKey)}
-                  </Text>
-                  {h.cadence === 'weekly' ? (
-                    <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
-                      {weekKeys.map((dk) => {
-                        const hit = habitDoneOnDate(h, dk);
-                        const isView = dk === viewDateKey;
-                        return (
-                          <View
-                            key={dk}
-                            style={{
-                              flex: 1,
-                              height: 5,
-                              borderRadius: 3,
-                              backgroundColor: hit ? 'rgba(168,85,247,0.75)' : 'rgba(255,255,255,0.08)',
-                              borderWidth: isView ? 1 : 0,
-                              borderColor: 'rgba(196,181,253,0.7)',
-                            }}
-                          />
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </View>
+                    <Ionicons name="trash-outline" size={18} color="rgba(248,113,113,0.85)" />
+                  </Pressable>
+                ) : null}
 
                 <View
                   style={{
@@ -266,7 +270,7 @@ export function DayHabitTimelineList({
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </View>
           </View>
         );
       })}

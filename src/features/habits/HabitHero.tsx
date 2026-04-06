@@ -11,6 +11,8 @@ export type HabitHeroProps = {
   totalHabits: number;
   doneToday: number;
   imageSource?: ImageSourcePropType;
+  /** false — подпись «день в календаре», не «сегодня» (экран «День» с прошлой датой). */
+  isTodayContext?: boolean;
 };
 
 const STACK_BREAKPOINT = 420;
@@ -22,7 +24,12 @@ const STACK_BREAKPOINT = 420;
 const HERO_IMAGE_POSITION_ROW = { top: '14%', right: '0%' } as const;
 const HERO_IMAGE_POSITION_STACK = { top: '10%', right: '0%' } as const;
 
-export function HabitHero({ totalHabits, doneToday, imageSource = DEFAULT_HERO_IMAGE }: HabitHeroProps) {
+export function HabitHero({
+  totalHabits,
+  doneToday,
+  imageSource = DEFAULT_HERO_IMAGE,
+  isTodayContext = true,
+}: HabitHeroProps) {
   const { radius } = useAppTheme();
   const cardRadius = radius.xl;
   const { width: windowWidth } = useWindowDimensions();
@@ -59,7 +66,9 @@ export function HabitHero({ totalHabits, doneToday, imageSource = DEFAULT_HERO_I
 
       <View style={[styles.contentRow, stackLayout && styles.contentRowStack]}>
         <View style={[styles.copyZone, stackLayout && styles.copyZoneStack]}>
-          <Text style={styles.overline}>{isEmpty ? 'НАЧНИ СЕЙЧАС' : 'СЕГОДНЯ В РИТМЕ'}</Text>
+          <Text style={styles.overline}>
+            {isEmpty ? 'НАЧНИ СЕЙЧАС' : isTodayContext ? 'СЕГОДНЯ В РИТМЕ' : 'ДЕНЬ В КАЛЕНДАРЕ'}
+          </Text>
           {isEmpty ? (
             <>
               <Text style={styles.headline}>Начни свой ритм</Text>

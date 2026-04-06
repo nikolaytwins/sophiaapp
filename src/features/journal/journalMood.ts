@@ -29,6 +29,11 @@ export function getMoodMeta(id: JournalMoodId | undefined | null) {
   return JOURNAL_MOODS.find((m) => m.id === id) ?? null;
 }
 
+export function journalMoodForDateKey(doc: JournalDocument, dateKey: string): JournalMoodId | null {
+  const m = doc.entries[dateKey]?.mood;
+  return m && MOOD_SET.has(m) ? m : null;
+}
+
 /** Дни для горизонтальной ленты: центр — anchorKey, не дальше todayKey в будущее. */
 export function journalMoodStripDayKeys(anchorKey: string, todayKey: string, radius = 8): string[] {
   const keys: string[] = [];

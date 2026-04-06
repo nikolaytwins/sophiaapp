@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, type Href, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -40,16 +38,12 @@ import {
 } from '@/features/habits/habitCardVisual';
 import { useSupabaseConfigured } from '@/config/env';
 import { addDays, counterCountOnDate, localDateKey } from '@/features/habits/habitLogic';
-import { monthHabitQuota } from '@/features/habits/monthCompletionQuota';
 import { getSupabase } from '@/lib/supabase';
-import { repos } from '@/services/repositories';
-import { useSprintStore } from '@/stores/sprint.store';
-import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
-import { HabitHero } from '@/features/habits/HabitHero';
+import { HabitsMonthlyCompletionsChart } from '@/features/habits/HabitsMonthlyCompletionsChart';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
-import { ProgressRing } from '@/shared/ui/ProgressRing';
+import { JournalMoodCalendarPanel } from '@/features/journal/JournalMoodCalendarPanel';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
@@ -59,6 +53,7 @@ import {
   NIKOLAY_DAILY_GROUPS,
   NIKOLAY_WEEKLY_GROUPS,
 } from '@/features/accounts/nikolayHabitsUi';
+import { confirmDestructive } from '@/shared/lib/confirmAction';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -67,21 +62,6 @@ const ACCENT_MUTED = 'rgba(168,85,247,0.45)';
 const ACCENT_FILL = 'rgba(168,85,247,0.10)';
 const WEEKLY = '#C4B5FD';
 const WEEKLY_FILL = 'rgba(196,181,253,0.10)';
-type HabitsTab = 'daily' | 'weekly' | 'media';
-
-const HABITS_TAB_OPTIONS: { value: HabitsTab; label: string }[] = [
-  { value: 'daily', label: 'Ежедневные' },
-  { value: 'weekly', label: 'Еженедельные' },
-  { value: 'media', label: 'Медийка и работа' },
-];
-
-/** Счёт X/Y и hero: только привычки с «звёздочкой» (required !== false). */
-function ritualScoreForDayView(habits: Habit[]): { done: number; total: number } {
-  const list = habits.filter((h) => h.required !== false);
-  const done = list.filter((h) => h.todayDone).length;
-  return { done, total: list.length };
-}
-
 function streakLabel(h: Habit): string {
   if (h.cadence === 'daily') {
     return h.streak === 1 ? '1 день' : `${h.streak} дн.`;
@@ -215,6 +195,7 @@ function CheckInControl({
 
 function HabitCard({
   habit,
+  readOnly,
   onCheck,
   onUndo,
   onDelete,
@@ -223,11 +204,12 @@ function HabitCard({
   todayKey,
 }: {
   habit: Habit;
-  onCheck: (dateKey?: string) => void;
-  onUndo: (dateKey?: string) => void;
-  onDelete: () => void;
+  readOnly?: boolean;
+  onCheck?: (dateKey?: string) => void;
+  onUndo?: (dateKey?: string) => void;
+  onDelete?: () => void;
   onToggleRequired?: () => void;
-  onAdjustCounter: (id: string, dateKey: string, delta: 1 | -1) => void;
+  onAdjustCounter?: (id: string, dateKey: string, delta: 1 | -1) => void;
   todayKey: string;
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
@@ -296,21 +278,19 @@ function HabitCard({
     return habit.todayDone ? 'Сегодня закрыто' : 'Ждёт отметки сегодня';
   }, [habit.countsByDate, habit.dailyTarget, habit.todayDone, isCounterDaily, isDaily, todayKey]);
 
-  const needsAttention = isDaily ? !habit.todayDone : !habit.weekQuotaMet;
+  const needsAttention = readOnly ? false : isDaily ? !habit.todayDone : !habit.weekQuotaMet;
 
   const confirmDelete = useCallback(() => {
+    if (readOnly || !onDelete) return;
     if (Platform.OS !== 'web') {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
-    Alert.alert(
-      'Удалить привычку?',
-      `«${habit.name}» исчезнет везде. Связи целей со спринтом сбросятся.`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { text: 'Удалить', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  }, [habit.name, onDelete]);
+    confirmDestructive({
+      title: 'Удалить привычку?',
+      message: `«${habit.name}» исчезнет везде. Связи целей со спринтом сбросятся.`,
+      onConfirm: onDelete,
+    });
+  }, [habit.name, onDelete, readOnly]);
 
   const rhythmHint = useMemo(() => {
     if (isDaily) return null;
@@ -469,7 +449,7 @@ function HabitCard({
   } as const;
 
   return (
-    <Pressable onLongPress={confirmDelete}>
+    <Pressable onLongPress={readOnly ? undefined : confirmDelete}>
       <SurfaceCard
         glow={needsAttention}
         style={{
@@ -518,7 +498,7 @@ function HabitCard({
                   </Text>
                 </View>
               </View>
-              {onToggleRequired ? (
+              {!readOnly && onToggleRequired ? (
                 <Pressable
                   onPress={() => {
                     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -535,14 +515,16 @@ function HabitCard({
                   />
                 </Pressable>
               ) : null}
-              <Pressable
-                onPress={confirmDelete}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Удалить привычку"
-              >
-                <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
-              </Pressable>
+              {!readOnly ? (
+                <Pressable
+                  onPress={confirmDelete}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Удалить привычку"
+                >
+                  <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -558,7 +540,18 @@ function HabitCard({
 
             {!expanded ? (
               <View style={{ marginTop: spacing.sm }}>
-                <View style={metaSecondaryStyle}>{dailyMetaCompact}</View>
+                <View style={metaSecondaryStyle}>
+                  {readOnly ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="flash-outline" size={14} color="rgba(255,255,255,0.42)" />
+                      <Text style={[typography.caption, { color: 'rgba(255,255,255,0.5)', opacity: 1 }]}>
+                        Стрик · {streakLabel(habit)}
+                      </Text>
+                    </View>
+                  ) : (
+                    dailyMetaCompact
+                  )}
+                </View>
               </View>
             ) : null}
 
@@ -577,7 +570,7 @@ function HabitCard({
               >
                 <HabitMonthCalendar
                   monthTitle={monthGridTitle}
-                  monthStatLine={`${monthPct}% за месяц`}
+                  monthStatLine={readOnly ? undefined : `${monthPct}% за месяц`}
                   monthWeekRows={monthWeekRows}
                   completedSet={completedDailySet}
                   todayKey={todayKey}
@@ -606,25 +599,27 @@ function HabitCard({
               </View>
             </Animated.View>
 
-            <View style={[{ width: '100%' }, ctaZoneStyle]}>
-              {actionDayUi}
-              {isCounterDaily && habit.dailyTarget != null ? (
-                <HabitCounterRingCard
-                  habit={habit}
-                  viewDateKey={actionDayKey}
-                  todayKey={todayKey}
-                  onDelta={(d) => onAdjustCounter(habit.id, actionDayKey, d)}
-                  ringSize={124}
-                  progressColor={accent}
-                />
-              ) : (
-                <CheckInControl
-                  active={Boolean(habit.completionDates?.includes(actionDayKey))}
-                  onPress={() => onCheck(actionDayKey)}
-                  variant="daily"
-                />
-              )}
-            </View>
+            {!readOnly ? (
+              <View style={[{ width: '100%' }, ctaZoneStyle]}>
+                {actionDayUi}
+                {isCounterDaily && habit.dailyTarget != null ? (
+                  <HabitCounterRingCard
+                    habit={habit}
+                    viewDateKey={actionDayKey}
+                    todayKey={todayKey}
+                    onDelta={(d) => onAdjustCounter?.(habit.id, actionDayKey, d)}
+                    ringSize={124}
+                    progressColor={accent}
+                  />
+                ) : (
+                  <CheckInControl
+                    active={Boolean(habit.completionDates?.includes(actionDayKey))}
+                    onPress={() => onCheck?.(actionDayKey)}
+                    variant="daily"
+                  />
+                )}
+              </View>
+            ) : null}
           </>
         ) : (
           <>
@@ -667,7 +662,7 @@ function HabitCard({
                 </View>
               </View>
 
-              {onToggleRequired ? (
+              {!readOnly && onToggleRequired ? (
                 <Pressable
                   onPress={() => {
                     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -684,14 +679,16 @@ function HabitCard({
                   />
                 </Pressable>
               ) : null}
-              <Pressable
-                onPress={confirmDelete}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Удалить привычку"
-              >
-                <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
-              </Pressable>
+              {!readOnly ? (
+                <Pressable
+                  onPress={confirmDelete}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Удалить привычку"
+                >
+                  <Ionicons name="trash-outline" size={21} color="rgba(248,113,113,0.88)" />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleExpand}
                 hitSlop={10}
@@ -751,7 +748,7 @@ function HabitCard({
                 <View style={{ marginTop: spacing.md, width: '100%' }}>
                   <HabitMonthCalendar
                     monthTitle={monthGridTitle}
-                    monthStatLine={`${monthPctWeekly}% за месяц`}
+                    monthStatLine={readOnly ? undefined : `${monthPctWeekly}% за месяц`}
                     monthWeekRows={monthWeekRows}
                     completedSet={completedWeeklySet}
                     todayKey={todayKey}
@@ -777,28 +774,30 @@ function HabitCard({
               </View>
             </Animated.View>
 
-            <View style={[{ width: '100%' }, ctaZoneStyle]}>
-              {actionDayUi}
-              <CheckInControl
-                active={Boolean(habit.completionDates?.includes(actionDayKey))}
-                onPress={() => onCheck(actionDayKey)}
-                variant="weekly"
-              />
-              {(habit.completionDates?.includes(actionDayKey) ?? false) ? (
-                <Pressable
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    onUndo(actionDayKey);
-                  }}
-                  hitSlop={6}
-                  style={{ alignSelf: 'center', marginTop: spacing.sm }}
-                >
-                  <Text style={[typography.caption, { color: colors.textMuted, textDecorationLine: 'underline' }]}>
-                    −1 в этот день
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+            {!readOnly ? (
+              <View style={[{ width: '100%' }, ctaZoneStyle]}>
+                {actionDayUi}
+                <CheckInControl
+                  active={Boolean(habit.completionDates?.includes(actionDayKey))}
+                  onPress={() => onCheck?.(actionDayKey)}
+                  variant="weekly"
+                />
+                {(habit.completionDates?.includes(actionDayKey) ?? false) ? (
+                  <Pressable
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      onUndo?.(actionDayKey);
+                    }}
+                    hitSlop={6}
+                    style={{ alignSelf: 'center', marginTop: spacing.sm }}
+                  >
+                    <Text style={[typography.caption, { color: colors.textMuted, textDecorationLine: 'underline' }]}>
+                      −1 в этот день
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </>
         )}
       </SurfaceCard>
@@ -809,66 +808,28 @@ function HabitCard({
 export function HabitsScreen() {
   const { colors, typography, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const qc = useQueryClient();
   const habits = useHabitsQuery();
-
-  const checkIn = useMutation({
-    mutationFn: ({ id, dateKey }: { id: string; dateKey?: string }) => repos.habits.checkIn(id, dateKey),
-    onSuccess: (list) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-    },
-  });
-
-  const undoWeekly = useMutation({
-    mutationFn: ({ id, dateKey }: { id: string; dateKey?: string }) => repos.habits.undoWeekly(id, dateKey),
-    onSuccess: (list) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-    },
-  });
-
-  const adjustCounter = useMutation({
-    mutationFn: ({ id, dateKey, delta }: { id: string; dateKey: string; delta: 1 | -1 }) =>
-      repos.habits.adjustCounter(id, dateKey, delta),
-    onSuccess: (list) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-    },
-  });
-
-  const removeHabit = useMutation({
-    mutationFn: (id: string) => repos.habits.remove(id),
-    onSuccess: (list, id) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-      useSprintStore.getState().removeHabitFromAllGoalLinks(id);
-    },
-  });
-
-  const setRequiredMutation = useMutation({
-    mutationFn: ({ id, required }: { id: string; required: boolean }) => repos.habits.setRequired(id, required),
-    onSuccess: (list) => {
-      qc.setQueryData([...HABITS_QUERY_KEY], list);
-    },
-  });
 
   const data = habits.data ?? [];
   const coreDaily = data.filter((h) => h.cadence === 'daily' && h.section !== 'media');
   const coreWeekly = data.filter((h) => h.cadence === 'weekly' && h.section !== 'media');
   const mediaHabits = data.filter((h) => h.section === 'media');
 
-  const [habitsTab, setHabitsTab] = useState<HabitsTab>('daily');
-
   const todayKey = localDateKey();
-  const ritualScore = useMemo(() => ritualScoreForDayView(data), [data]);
 
-  const monthStats = useMemo(() => {
-    const [y, m] = todayKey.split('-').map(Number);
-    return monthHabitQuota(data, y, m);
-  }, [data, todayKey]);
+  const scrollRef = useRef<ScrollView>(null);
+  const params = useLocalSearchParams<{ focus?: string | string[] }>();
+  const focusMood =
+    params.focus === 'mood' || (Array.isArray(params.focus) && params.focus[0] === 'mood');
+  const [moodPanelY, setMoodPanelY] = useState<number | null>(null);
 
-  const monthTitleShort = useMemo(() => {
-    const [y, m] = todayKey.split('-').map(Number);
-    const s = new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long' });
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }, [todayKey]);
+  useEffect(() => {
+    if (!focusMood || moodPanelY == null) return;
+    const t = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, moodPanelY - 16), animated: true });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [focusMood, moodPanelY]);
 
   const supabaseOn = useSupabaseConfigured;
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
@@ -892,9 +853,15 @@ export function HabitsScreen() {
 
   const isNikolay = isNikolayPrimaryAccount(accountEmail);
 
+  const showDailyEmptyHint =
+    coreDaily.length === 0 && (mediaHabits.length === 0 || coreWeekly.length > 0);
+  const showWeeklyEmptyHint =
+    coreWeekly.length === 0 && (mediaHabits.length === 0 || coreDaily.length > 0);
+
   return (
     <ScreenCanvas>
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
@@ -920,99 +887,33 @@ export function HabitsScreen() {
               Ритм
             </Text>
             <Text style={[typography.hero, { fontSize: 34, letterSpacing: -1.1, color: colors.text }]}>
-              Привычки
+              Аналитика
             </Text>
             <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted, opacity: 0.9 }]}>
               {headlineDate()}
             </Text>
-            {supabaseOn ? (
-              <Link href={'/cloud' as Href} asChild>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Аккаунт и синхронизация"
-                  style={{ marginTop: spacing.sm, alignSelf: 'flex-start', paddingVertical: 4 }}
-                >
-                  <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>
-                    {accountEmail ? `Облако · ${accountEmail}` : 'Войти в облако · синхронизация'}
-                  </Text>
+            <View style={{ marginTop: spacing.sm, alignSelf: 'flex-start', gap: 8 }}>
+              {supabaseOn ? (
+                <Link href={'/cloud' as Href} asChild>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт и синхронизация" style={{ paddingVertical: 4 }}>
+                    <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>
+                      {accountEmail ? `Облако · ${accountEmail}` : 'Войти в облако · синхронизация'}
+                    </Text>
+                  </Pressable>
+                </Link>
+              ) : null}
+              <Link href={'/habits-manage' as Href} asChild>
+                <Pressable accessibilityRole="button" accessibilityLabel="Управление привычками" style={{ paddingVertical: 4 }}>
+                  <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>Управление привычками</Text>
                 </Pressable>
               </Link>
-            ) : null}
+            </View>
           </View>
-          <Link href="/habit-new" asChild>
-            <Pressable
-              style={({ pressed }) => ({
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderRadius: 20,
-                backgroundColor: pressed ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.04)',
-                borderWidth: 1,
-                borderColor: pressed ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
-              })}
-            >
-              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 14 }}>+ Новая</Text>
-            </Pressable>
-          </Link>
         </View>
 
-        {data.length > 0 && monthStats.max > 0 ? (
-          <SurfaceCard
-            glow
-            style={{
-              marginTop: spacing.lg,
-              overflow: 'hidden',
-            }}
-          >
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(168,85,247,0.07)', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                ...StyleSheet.absoluteFillObject,
-                borderRadius: radius.xl,
-              }}
-            />
-            <View style={{ position: 'relative', zIndex: 1 }}>
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: 'rgba(255,255,255,0.32)',
-                    letterSpacing: 1.3,
-                    textTransform: 'uppercase',
-                    marginBottom: spacing.sm,
-                  },
-                ]}
-              >
-                МЕСЯЦ · {monthTitleShort}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-                <ProgressRing
-                  value01={monthStats.progress01}
-                  size={128}
-                  stroke={10}
-                  label={`${monthStats.percent}`}
-                  sublabel="%"
-                  trackColor="rgba(255,255,255,0.09)"
-                  progressColor={ACCENT}
-                  sublabelColor="rgba(196,181,253,0.78)"
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[typography.body, { color: colors.text, lineHeight: 22 }]}>
-                    Выполнено {monthStats.filled} из {monthStats.max} отметок за месяц (только ежедневные
-                    привычки с звёздочкой «в ритме»).
-                  </Text>
-                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                    На каждый день месяца — по одному слоту на каждую такую привычку.
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </SurfaceCard>
-        ) : null}
+        <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
 
-        <HabitHero totalHabits={ritualScore.total} doneToday={ritualScore.done} />
+        {data.length > 0 ? <HabitsMonthlyCompletionsChart habits={data} /> : null}
 
         {data.length === 0 ? (
           <SurfaceCard
@@ -1132,203 +1033,22 @@ export function HabitsScreen() {
           </SurfaceCard>
         ) : (
           <>
-            <ScrollView
-              horizontal
-              nestedScrollEnabled
-              showsHorizontalScrollIndicator={false}
-              style={{ marginTop: spacing.xl + 10, flexGrow: 0 }}
-              contentContainerStyle={{
-                flexDirection: 'row',
-                flexWrap: 'nowrap',
-                gap: 10,
-                paddingVertical: 4,
-                paddingRight: spacing.sm,
-              }}
-            >
-              {HABITS_TAB_OPTIONS.map((tab) => {
-                const active = habitsTab === tab.value;
-                return (
-                  <Pressable
-                    key={tab.value}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') {
-                        void Haptics.selectionAsync();
-                      }
-                      setHabitsTab(tab.value);
-                    }}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: tab.value === 'media' ? 14 : 16,
-                      paddingVertical: 11,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      backgroundColor: active
-                        ? 'rgba(168,85,247,0.14)'
-                        : pressed
-                          ? 'rgba(255,255,255,0.06)'
-                          : 'rgba(255,255,255,0.04)',
-                      borderColor: active ? ACCENT_MUTED : 'rgba(255,255,255,0.1)',
-                      ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontSize: tab.value === 'media' ? 12.5 : 13,
-                        fontWeight: active ? '700' : '600',
-                        color: active ? '#F5F3FF' : 'rgba(255,255,255,0.55)',
-                        letterSpacing: tab.value === 'media' ? -0.2 : 0,
-                      }}
-                    >
-                      {tab.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <View style={{ marginTop: spacing.xl + 10 }}>
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: 'rgba(255,255,255,0.42)',
+                    letterSpacing: 2.2,
+                    textTransform: 'uppercase',
+                    marginBottom: spacing.md,
+                  },
+                ]}
+              >
+                Привычки
+              </Text>
 
-            <View style={{ marginTop: spacing.lg }}>
-              {habitsTab === 'daily' ? (
-                coreDaily.length > 0 ? (
-                  isNikolay ? (
-                    <>
-                      {NIKOLAY_DAILY_GROUPS.flatMap(({ key, label }) => {
-                        const grouped = groupNikolayDailyHabits(coreDaily)[key];
-                        if (grouped.length === 0) return [];
-                        return [
-                          label ? (
-                            <Text
-                              key={`nikolay-d-${key}`}
-                              style={{
-                                fontSize: 13,
-                                fontWeight: '800',
-                                color: 'rgba(196,181,253,0.92)',
-                                marginBottom: spacing.sm,
-                                marginTop: key === 'money' ? 0 : spacing.md,
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          ) : null,
-                          ...grouped.map((h) => (
-                            <HabitCard
-                              key={h.id}
-                              habit={h}
-                              todayKey={todayKey}
-                              onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                              onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                              onDelete={() => removeHabit.mutate(h.id)}
-                              onToggleRequired={() =>
-                                setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                              }
-                              onAdjustCounter={(id, dateKey, delta) =>
-                                adjustCounter.mutate({ id, dateKey, delta })
-                              }
-                            />
-                          )),
-                        ];
-                      })}
-                    </>
-                  ) : (
-                    coreDaily.map((h) => (
-                      <HabitCard
-                        key={h.id}
-                        habit={h}
-                        todayKey={todayKey}
-                        onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                        onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                        onDelete={() => removeHabit.mutate(h.id)}
-                        onToggleRequired={() =>
-                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                        }
-                        onAdjustCounter={(id, dateKey, delta) =>
-                          adjustCounter.mutate({ id, dateKey, delta })
-                        }
-                      />
-                    ))
-                  )
-                ) : (
-                  <Text
-                    style={[
-                      typography.body,
-                      { textAlign: 'center', marginTop: spacing.md, color: colors.textMuted, opacity: 0.85 },
-                    ]}
-                  >
-                    В ежедневных пока нет привычек
-                  </Text>
-                )
-              ) : null}
-
-              {habitsTab === 'weekly' ? (
-                coreWeekly.length > 0 ? (
-                  isNikolay ? (
-                    <>
-                      {NIKOLAY_WEEKLY_GROUPS.flatMap(({ key, label }) => {
-                        const grouped = groupNikolayWeeklyHabits(coreWeekly)[key];
-                        if (grouped.length === 0) return [];
-                        return [
-                          label ? (
-                            <Text
-                              key={`nikolay-w-${key}`}
-                              style={{
-                                fontSize: 13,
-                                fontWeight: '800',
-                                color: 'rgba(196,181,253,0.92)',
-                                marginBottom: spacing.sm,
-                                marginTop: key === 'body' ? 0 : spacing.md,
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          ) : null,
-                          ...grouped.map((h) => (
-                            <HabitCard
-                              key={h.id}
-                              habit={h}
-                              todayKey={todayKey}
-                              onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                              onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                              onDelete={() => removeHabit.mutate(h.id)}
-                              onToggleRequired={() =>
-                                setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                              }
-                              onAdjustCounter={(id, dateKey, delta) =>
-                                adjustCounter.mutate({ id, dateKey, delta })
-                              }
-                            />
-                          )),
-                        ];
-                      })}
-                    </>
-                  ) : (
-                    coreWeekly.map((h) => (
-                      <HabitCard
-                        key={h.id}
-                        habit={h}
-                        todayKey={todayKey}
-                        onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                        onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                        onDelete={() => removeHabit.mutate(h.id)}
-                        onToggleRequired={() =>
-                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                        }
-                        onAdjustCounter={(id, dateKey, delta) =>
-                          adjustCounter.mutate({ id, dateKey, delta })
-                        }
-                      />
-                    ))
-                  )
-                ) : (
-                  <Text
-                    style={[
-                      typography.body,
-                      { textAlign: 'center', marginTop: spacing.md, color: colors.textMuted, opacity: 0.85 },
-                    ]}
-                  >
-                    В еженедельных пока нет привычек
-                  </Text>
-                )
-              ) : null}
-
-              {habitsTab === 'media' ? (
+              {mediaHabits.length > 0 ? (
                 <>
                   <LinearGradient
                     colors={['rgba(168,85,247,0.22)', 'rgba(88,28,135,0.12)', 'rgba(18,16,26,0.95)']}
@@ -1390,34 +1110,98 @@ export function HabitsScreen() {
                       </View>
                     </View>
                   </LinearGradient>
-                  {mediaHabits.length > 0 ? (
-                    mediaHabits.map((h) => (
-                      <HabitCard
-                        key={h.id}
-                        habit={h}
-                        todayKey={todayKey}
-                    onCheck={(dateKey) => checkIn.mutate({ id: h.id, dateKey })}
-                    onUndo={(dateKey) => undoWeekly.mutate({ id: h.id, dateKey })}
-                        onDelete={() => removeHabit.mutate(h.id)}
-                        onToggleRequired={() =>
-                          setRequiredMutation.mutate({ id: h.id, required: !h.required })
-                        }
-                        onAdjustCounter={(id, dateKey, delta) =>
-                          adjustCounter.mutate({ id, dateKey, delta })
-                        }
-                      />
-                    ))
-                  ) : (
-                    <Text
-                      style={[
-                        typography.body,
-                        { textAlign: 'center', marginTop: spacing.sm, color: colors.textMuted, opacity: 0.85 },
-                      ]}
-                    >
-                      Здесь пока нет привычек
-                    </Text>
-                  )}
+                  {mediaHabits.map((h) => (
+                    <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
+                  ))}
                 </>
+              ) : null}
+
+              {coreDaily.length > 0 ? (
+                isNikolay ? (
+                  <>
+                    {NIKOLAY_DAILY_GROUPS.flatMap(({ key, label }) => {
+                      const grouped = groupNikolayDailyHabits(coreDaily)[key];
+                      if (grouped.length === 0) return [];
+                      return [
+                        label ? (
+                          <Text
+                            key={`nikolay-d-${key}`}
+                            style={{
+                              fontSize: 13,
+                              fontWeight: '800',
+                              color: 'rgba(196,181,253,0.92)',
+                              marginBottom: spacing.sm,
+                              marginTop:
+                                key === 'money'
+                                  ? mediaHabits.length > 0
+                                    ? spacing.md
+                                    : 0
+                                  : spacing.md,
+                            }}
+                          >
+                            {label}
+                          </Text>
+                        ) : null,
+                        ...grouped.map((h) => (
+                          <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
+                        )),
+                      ];
+                    })}
+                  </>
+                ) : (
+                  coreDaily.map((h) => <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />)
+                )
+              ) : showDailyEmptyHint ? (
+                <Text
+                  style={[
+                    typography.body,
+                    { textAlign: 'center', marginTop: spacing.md, color: colors.textMuted, opacity: 0.85 },
+                  ]}
+                >
+                  В ежедневных пока нет привычек
+                </Text>
+              ) : null}
+
+              {coreWeekly.length > 0 ? (
+                isNikolay ? (
+                  <>
+                    {NIKOLAY_WEEKLY_GROUPS.flatMap(({ key, label }) => {
+                      const grouped = groupNikolayWeeklyHabits(coreWeekly)[key];
+                      if (grouped.length === 0) return [];
+                      const afterBlock = coreDaily.length > 0 || mediaHabits.length > 0;
+                      return [
+                        label ? (
+                          <Text
+                            key={`nikolay-w-${key}`}
+                            style={{
+                              fontSize: 13,
+                              fontWeight: '800',
+                              color: 'rgba(196,181,253,0.92)',
+                              marginBottom: spacing.sm,
+                              marginTop: key === 'body' ? (afterBlock ? spacing.md : 0) : spacing.md,
+                            }}
+                          >
+                            {label}
+                          </Text>
+                        ) : null,
+                        ...grouped.map((h) => (
+                          <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />
+                        )),
+                      ];
+                    })}
+                  </>
+                ) : (
+                  coreWeekly.map((h) => <HabitCard key={h.id} readOnly habit={h} todayKey={todayKey} />)
+                )
+              ) : showWeeklyEmptyHint ? (
+                <Text
+                  style={[
+                    typography.body,
+                    { textAlign: 'center', marginTop: spacing.md, color: colors.textMuted, opacity: 0.85 },
+                  ]}
+                >
+                  В еженедельных пока нет привычек
+                </Text>
               ) : null}
             </View>
           </>

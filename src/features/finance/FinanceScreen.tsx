@@ -1,127 +1,353 @@
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { repos } from '@/services/repositories';
-import { GlassCard } from '@/shared/ui/GlassCard';
-import { SectionHeader } from '@/shared/ui/SectionHeader';
+import {
+  FINANCE_HERO_MOCK,
+  FINANCE_MONTHLY_BUDGET_MOCK,
+  type FinanceBudgetCardMock,
+} from '@/features/finance/financeUiMock';
+import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
-function fmt(n: number) {
-  return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
+const { width: SCREEN_W } = Dimensions.get('window');
+
+const PURPLE_HERO = ['#5B21B6', '#7C3AED', '#A855F7', '#C084FC'] as const;
+const GREEN_BAR = '#4ADE80';
+const RED_EXPENSE = '#FB7185';
+
+function fmtMoney(n: number) {
+  return (
+    n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽'
+  );
+}
+
+function PaginationDots({ count, active, isLight }: { count: number; active: number; isLight: boolean }) {
+  const activeC = isLight ? 'rgba(15,17,24,0.85)' : 'rgba(255,255,255,0.95)';
+  const idleC = isLight ? 'rgba(15,17,24,0.22)' : 'rgba(255,255,255,0.28)';
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 }}>
+      {Array.from({ length: count }, (_, i) => (
+        <View
+          key={i}
+          style={{
+            width: i === active ? 8 : 6,
+            height: i === active ? 8 : 6,
+            borderRadius: 4,
+            backgroundColor: i === active ? activeC : idleC,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+function BudgetCard({ card }: { card: FinanceBudgetCardMock }) {
+  const { colors, radius, isLight } = useAppTheme();
+  const barColor = card.variant === 'budget' ? GREEN_BAR : '#A855F7';
+  const iconBg =
+    card.variant === 'budget' ? 'rgba(74,222,128,0.18)' : 'rgba(168,85,247,0.2)';
+  const iconName = card.variant === 'budget' ? 'cash-outline' : 'wallet-outline';
+
+  const shell = isLight
+    ? {
+        backgroundColor: '#FFFFFF',
+        borderColor: 'rgba(15,17,24,0.08)',
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
+      }
+    : {
+        backgroundColor: 'rgba(18,18,24,0.88)',
+        borderColor: 'rgba(255,255,255,0.08)',
+      };
+
+  return (
+    <View
+      style={{
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        padding: 18,
+        marginBottom: 14,
+        ...shell,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, paddingRight: 12 }}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: iconBg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name={iconName as keyof typeof Ionicons.glyphMap} size={26} color={barColor} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3 }}>
+              {card.title}
+            </Text>
+            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>
+              {card.subtitle}
+            </Text>
+          </View>
+        </View>
+        <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
+          {fmtMoney(card.amountRight)}
+        </Text>
+      </View>
+      <View
+        style={{
+          marginTop: 16,
+          height: 8,
+          borderRadius: 8,
+          backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.08)',
+          overflow: 'hidden',
+        }}
+      >
+        <View
+          style={{
+            width: `${Math.round(Math.min(1, card.progress01) * 100)}%`,
+            height: '100%',
+            borderRadius: 8,
+            backgroundColor: barColor,
+          }}
+        />
+      </View>
+    </View>
+  );
 }
 
 export function FinanceScreen() {
-  const { colors, typography, spacing } = useAppTheme();
+  const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const fin = useQuery({ queryKey: ['finance'], queryFn: () => repos.finance.getSummary() });
+  const [heroIndex, setHeroIndex] = useState(0);
 
-  const data = fin.data;
+  const padH = spacing.xl;
+  const heroPageW = SCREEN_W - padH * 2;
 
-  const styles = useMemo(
+  const onHeroScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(x / heroPageW);
+    setHeroIndex(Math.max(0, Math.min(FINANCE_HERO_MOCK.length - 1, idx)));
+  }, [heroPageW]);
+
+  const twinworksHint = useMemo(
     () =>
-      StyleSheet.create({
-        screen: {
-          flex: 1,
-          backgroundColor: colors.bg,
-          paddingHorizontal: spacing.xl,
-        },
-        row: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          marginTop: spacing.lg,
-        },
-        bar: {
-          marginTop: spacing.md,
-          height: 8,
-          borderRadius: 8,
-          backgroundColor: colors.surface2,
-          overflow: 'hidden',
-        },
-        barFill: {
-          height: '100%',
-          backgroundColor: colors.accent2,
-        },
-        catRow: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          marginBottom: spacing.sm,
-        },
-        miniBar: {
-          height: 4,
-          borderRadius: 4,
-          backgroundColor: colors.surface2,
-          overflow: 'hidden',
-        },
-        miniFill: {
-          height: '100%',
-          backgroundColor: colors.accent,
-        },
-      }),
-    [colors, spacing]
+      'Данные демонстрационные. Интеграция с Twinworks потребует их API и ключей в окружении — к сервису у меня нет доступа; когда появится контракт эндпоинтов, можно подставить клиент вместо моков.',
+    []
   );
 
   return (
-    <ScrollView
-      style={[styles.screen, { paddingTop: insets.top + spacing.md }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={typography.caption}>Обзор</Text>
-      <Text style={typography.hero}>Финансы</Text>
-      <Text style={[typography.body, { marginTop: spacing.sm }]}>
-        Синхронизация с веб-сервисом — через finance repository.
-      </Text>
+    <ScreenCanvas>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + spacing.lg,
+          paddingHorizontal: padH,
+          paddingBottom: insets.bottom + 120,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.textMuted, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 6 },
+          ]}
+        >
+          Обзор
+        </Text>
+        <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Финансы</Text>
 
-      {data ? (
-        <>
-          <GlassCard style={{ marginTop: spacing.xl }} glow>
-            <Text style={typography.caption}>БАЛАНС</Text>
-            <Text style={[typography.hero, { marginTop: spacing.sm }]}>{fmt(data.balance)}</Text>
-            <View style={styles.row}>
-              <View>
-                <Text style={typography.caption}>Доход</Text>
-                <Text style={typography.title2}>{fmt(data.monthlyIncome)}</Text>
-              </View>
-              <View>
-                <Text style={typography.caption}>Расход</Text>
-                <Text style={typography.title2}>{fmt(data.monthlyExpense)}</Text>
-              </View>
-            </View>
-          </GlassCard>
+        <View style={{ marginTop: spacing.lg, width: heroPageW, alignSelf: 'center' }}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onHeroScrollEnd}
+            decelerationRate="fast"
+            style={{ width: heroPageW }}
+          >
+            {FINANCE_HERO_MOCK.map((item) => (
+              <LinearGradient
+                key={item.id}
+                colors={[...PURPLE_HERO]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  width: heroPageW,
+                  borderRadius: 26,
+                  paddingVertical: 22,
+                  paddingHorizontal: 22,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '800',
+                    letterSpacing: 2,
+                    color: 'rgba(255,255,255,0.82)',
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.eyebrow}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    marginTop: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 36, fontWeight: '800', color: '#FAFAFC', letterSpacing: -1 }}>
+                    {fmtMoney(item.balance)}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    }}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="Изменить баланс"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: 'rgba(255,255,255,0.18)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.95)" />
+                  </Pressable>
+                </View>
 
-          <View style={{ marginTop: spacing.xl }}>
-            <SectionHeader title="Накопления" />
-            <GlassCard>
-              <Text style={typography.body}>Цель: {fmt(data.savingsGoal)}</Text>
-              <View style={styles.bar}>
-                <View style={[styles.barFill, { width: `${Math.round(data.savingsProgress01 * 100)}%` }]} />
-              </View>
-              <Text style={typography.caption}>{Math.round(data.savingsProgress01 * 100)}%</Text>
-            </GlassCard>
-          </View>
-
-          <View style={{ marginTop: spacing.xl }}>
-            <SectionHeader title="Категории" />
-            <View style={{ gap: spacing.sm }}>
-              {data.categories.map((c) => (
-                <GlassCard key={c.id}>
-                  <View style={styles.catRow}>
-                    <Text style={typography.title2}>{c.label}</Text>
-                    <Text style={typography.title2}>{fmt(c.amount)}</Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    marginTop: 22,
+                    paddingTop: 18,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: 'rgba(255,255,255,0.28)',
+                  }}
+                >
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="trending-up" size={22} color={GREEN_BAR} />
+                    </View>
+                    <View>
+                      <Text
+                        style={{ fontSize: 18, fontWeight: '800', color: '#FAFAFC', fontVariant: ['tabular-nums'] }}
+                      >
+                        {fmtMoney(item.income)}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+                        Доход
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.miniBar}>
-                    <View style={[styles.miniFill, { width: `${Math.round(c.pct * 100)}%` }]} />
+                  <View
+                    style={{
+                      width: StyleSheet.hairlineWidth,
+                      backgroundColor: 'rgba(255,255,255,0.35)',
+                      marginHorizontal: 8,
+                    }}
+                  />
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="trending-down" size={22} color={RED_EXPENSE} />
+                    </View>
+                    <View>
+                      <Text
+                        style={{ fontSize: 18, fontWeight: '800', color: '#FAFAFC', fontVariant: ['tabular-nums'] }}
+                      >
+                        {fmtMoney(item.expense)}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+                        Траты
+                      </Text>
+                    </View>
                   </View>
-                </GlassCard>
-              ))}
-            </View>
+                </View>
+              </LinearGradient>
+            ))}
+          </ScrollView>
+          <PaginationDots count={FINANCE_HERO_MOCK.length} active={heroIndex} isLight={isLight} />
+        </View>
+
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: '800',
+            color: colors.text,
+            marginTop: spacing.xl + 4,
+            marginBottom: spacing.md,
+            letterSpacing: -0.4,
+          }}
+        >
+          Месячный бюджет
+        </Text>
+
+        {FINANCE_MONTHLY_BUDGET_MOCK.map((c) => (
+          <BudgetCard key={c.id} card={c} />
+        ))}
+
+        <View
+          style={{
+            marginTop: spacing.md,
+            padding: spacing.md,
+            borderRadius: radius.lg,
+            backgroundColor: isLight ? 'rgba(91,75,255,0.06)' : 'rgba(168,85,247,0.08)',
+            borderWidth: 1,
+            borderColor: isLight ? 'rgba(91,75,255,0.15)' : 'rgba(168,85,247,0.22)',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Ionicons name="cloud-outline" size={18} color="#A855F7" />
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#A855F7' }}>Twinworks</Text>
           </View>
-        </>
-      ) : (
-        <Text style={[typography.body, { marginTop: spacing.lg }]}>Загрузка…</Text>
-      )}
-    </ScrollView>
+          <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 20 }]}>{twinworksHint}</Text>
+        </View>
+      </ScrollView>
+    </ScreenCanvas>
   );
 }

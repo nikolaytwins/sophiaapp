@@ -63,18 +63,12 @@ function HabitCard({
       : h.weeklyCompleted;
 
   return (
-    <Pressable
-      disabled={future}
-      onPress={() => onToggle(h)}
-      onLongPress={
-        onRequestDelete && !future ? () => promptDeleteHabit(h, () => onRequestDelete(h)) : undefined
-      }
-      delayLongPress={480}
-      style={({ pressed }) => ({
+    <View
+      style={{
         flex: 1,
         alignSelf: 'stretch',
-        opacity: future ? 0.45 : pressed ? 0.92 : 1,
-      })}
+        opacity: future ? 0.45 : 1,
+      }}
     >
       <LinearGradient
         colors={[grad[0], grad[1]]}
@@ -118,33 +112,53 @@ function HabitCard({
                   hitSlop={10}
                   accessibilityRole="button"
                   accessibilityLabel="Удалить привычку"
-                  style={{ padding: 6 }}
+                  style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.85 : 1 })}
                 >
                   <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.92)" />
                 </Pressable>
               ) : null}
-              <View
-                pointerEvents="none"
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  borderWidth: 2,
-                  borderColor: doneToday ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.18)',
-                  backgroundColor: doneToday ? 'rgba(168,85,247,0.28)' : 'rgba(255,255,255,0.06)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+              <Pressable
+                disabled={future}
+                onPress={() => onToggle(h)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={doneToday ? 'Снять отметку' : 'Отметить привычку'}
+                style={({ pressed }) => ({ opacity: future ? 0.45 : pressed ? 0.88 : 1 })}
               >
-                <Ionicons
-                  name={doneToday ? 'checkmark' : 'ellipse-outline'}
-                  size={doneToday ? 22 : 18}
-                  color={doneToday ? '#FAFAFC' : 'rgba(255,255,255,0.35)'}
-                />
-              </View>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    borderWidth: 2,
+                    borderColor: doneToday ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.18)',
+                    backgroundColor: doneToday ? 'rgba(168,85,247,0.28)' : 'rgba(255,255,255,0.06)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons
+                    name={doneToday ? 'checkmark' : 'ellipse-outline'}
+                    size={doneToday ? 22 : 18}
+                    color={doneToday ? '#FAFAFC' : 'rgba(255,255,255,0.35)'}
+                  />
+                </View>
+              </Pressable>
             </View>
           </View>
 
+          <Pressable
+            disabled={future}
+            onPress={() => onToggle(h)}
+            onLongPress={
+              onRequestDelete && !future ? () => promptDeleteHabit(h, () => onRequestDelete(h)) : undefined
+            }
+            delayLongPress={480}
+            style={({ pressed }) => ({
+              flex: 1,
+              opacity: future ? 0.45 : pressed ? 0.92 : 1,
+            })}
+          >
           <Text
             numberOfLines={2}
             style={{
@@ -215,9 +229,10 @@ function HabitCard({
               );
             })}
           </View>
+          </Pressable>
         </View>
       </LinearGradient>
-    </Pressable>
+    </View>
   );
 }
 
