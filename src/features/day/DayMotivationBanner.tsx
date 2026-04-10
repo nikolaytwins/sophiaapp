@@ -33,94 +33,88 @@ type Props = {
 };
 
 export function DayMotivationBanner({ dateKey }: Props) {
-  const { spacing, radius, isLight } = useAppTheme();
+  const { spacing, radius, isLight, colors, brand, shadows } = useAppTheme();
   const payload = dayMotivationForDateKey(dateKey);
   if (!payload) return null;
 
-  const titleColor = isLight ? '#1c1008' : '#fffef8';
-  const bodyColor = isLight ? 'rgba(28,16,8,0.88)' : 'rgba(255,254,248,0.92)';
+  const headlineColor = isLight ? brand.primary : colors.accent;
+  const bodyColor = isLight ? colors.text : 'rgba(247,244,250,0.88)';
+
+  const outerStyle = {
+    marginBottom: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: isLight ? brand.surfaceBorder : 'rgba(167,139,250,0.24)',
+    backgroundColor: brand.surface,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+    ...(Platform.OS === 'web'
+      ? (isLight
+          ? ({ boxShadow: '0 8px 28px rgba(15,17,24,0.07)' } as object)
+          : ({ boxShadow: '0 14px 40px rgba(0,0,0,0.4)' } as object))
+      : shadows.card),
+  };
 
   return (
-    <View
-      style={[
-        styles.wrap,
-        {
-          marginBottom: spacing.lg,
-          borderRadius: radius.xl,
-          ...(Platform.OS === 'web'
-            ? ({ boxShadow: '0 0 28px rgba(251,191,36,0.55), 0 0 48px rgba(245,158,11,0.25)' } as object)
-            : {
-                shadowColor: '#fbbf24',
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.65,
-                shadowRadius: 18,
-                elevation: 12,
-              }),
-        },
-      ]}
-    >
+    <View style={outerStyle}>
       <LinearGradient
-        colors={['#fde68a', '#fbbf24', '#f59e0b', '#ea580c']}
-        locations={[0, 0.35, 0.72, 1]}
+        pointerEvents="none"
+        colors={
+          isLight
+            ? ['rgba(124,58,237,0.07)', 'rgba(124,58,237,0.02)', 'transparent']
+            : ['rgba(168,85,247,0.11)', 'rgba(212,184,122,0.05)', 'transparent']
+        }
+        locations={[0, 0.42, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.gradient, { borderRadius: radius.xl }]}
-      >
+        style={[StyleSheet.absoluteFillObject, { borderRadius: radius.xl }]}
+      />
+      {Platform.OS === 'web' ? (
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, styles.innerGlow, { borderRadius: radius.xl - 1 }]}
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              borderRadius: radius.xl,
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
+            } as object,
+          ]}
         />
-        <View style={styles.content}>
-          {payload.headline ? (
-            <Text style={[styles.headline, { color: titleColor }]}>{payload.headline}</Text>
-          ) : null}
-          <Text style={[payload.headline ? styles.body : styles.bodySolo, { color: bodyColor }]}>
-            {payload.body}
+      ) : null}
+      <View
+        style={{
+          paddingVertical: spacing.md + 4,
+          paddingHorizontal: spacing.lg,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {payload.headline ? (
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              color: headlineColor,
+              marginBottom: 8,
+            }}
+          >
+            {payload.headline}
           </Text>
-        </View>
-      </LinearGradient>
+        ) : null}
+        <Text
+          style={{
+            fontSize: payload.headline ? 15 : 16,
+            fontWeight: '600',
+            lineHeight: payload.headline ? 22 : 24,
+            letterSpacing: -0.2,
+            color: bodyColor,
+          }}
+        >
+          {payload.body}
+        </Text>
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
-  },
-  gradient: {
-    overflow: 'hidden',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  innerGlow: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  content: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  headline: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.12)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  body: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 22,
-    letterSpacing: -0.2,
-  },
-  bodySolo: {
-    fontSize: 17,
-    fontWeight: '800',
-    lineHeight: 24,
-    letterSpacing: -0.3,
-  },
-});
