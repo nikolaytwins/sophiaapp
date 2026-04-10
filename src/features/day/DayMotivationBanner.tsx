@@ -11,20 +11,21 @@ export type DayMotivationPayload = {
 
 /**
  * Мотивационная заметка по месяцу календаря дня (`YYYY-MM-DD`).
- * Май–июль и август — зашитые тексты; в остальные месяцы не показываем.
+ * Август — отдельный текст; во всех остальных месяцах — основной блок.
  */
 export function dayMotivationForDateKey(dateKey: string): DayMotivationPayload | null {
-  const m = Number(dateKey.slice(5, 7));
-  if (m >= 5 && m <= 7) {
-    return {
-      headline: 'НЕ СДАВАТЬСЯ.',
-      body: 'результата не будет, но главное не слиться и продолжать.',
-    };
-  }
+  const part = dateKey.slice(5, 7);
+  if (part.length !== 2) return null;
+  const m = Number(part);
+  if (!Number.isFinite(m) || m < 1 || m > 12) return null;
+
   if (m === 8) {
     return { body: 'Полный газ в контент.' };
   }
-  return null;
+  return {
+    headline: 'НЕ СДАВАТЬСЯ.',
+    body: 'результата не будет, но главное не слиться и продолжать.',
+  };
 }
 
 type Props = {

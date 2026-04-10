@@ -823,7 +823,7 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
                                 ...webCursor,
                               })}
                             >
-                              <Ionicons name="checkmark-circle" size={24} color="rgba(129,140,248,0.98)" />
+                              <Ionicons name="checkmark-circle-outline" size={24} color="rgba(129,140,248,0.98)" />
                             </Pressable>
                           ) : null}
                           <Pressable
