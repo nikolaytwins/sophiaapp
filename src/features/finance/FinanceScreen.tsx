@@ -458,7 +458,9 @@ export function FinanceScreen() {
           </Text>
         ) : overview ? (
           <>
-            <FinanceQuickTransactionBar userId={userId} overview={overview} onSaved={invalidateFinance} />
+            {mainTab === 'transactions' ? (
+              <FinanceQuickTransactionBar userId={userId} overview={overview} onSaved={invalidateFinance} />
+            ) : null}
             {mainTab === 'overview' ? (
               <>
                 <View style={{ marginTop: spacing.md, width: heroPageW, alignSelf: 'center' }}>

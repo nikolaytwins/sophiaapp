@@ -1,6 +1,9 @@
 export type JournalFieldType = 'text' | 'number' | 'toggle';
 export type JournalFieldSection = 'journal' | 'health';
 
+/** Период выгрузки дневника в PDF. */
+export type JournalExportPeriod = 'today' | 'month' | 'last90';
+
 /** Настроение дня в дневнике (эмодзи + цвет в UI). */
 export type JournalMoodId = 'death' | 'sad' | 'neutral' | 'smile' | 'stars';
 

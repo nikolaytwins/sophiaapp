@@ -33,6 +33,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-sharing",
       "expo-calendar",
       [
         "expo-image-picker",

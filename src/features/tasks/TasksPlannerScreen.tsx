@@ -31,6 +31,7 @@ import {
 } from '@/features/tasks/plannerApi';
 import type { PlannerTaskRow } from '@/features/tasks/planner.types';
 import { PLANNER_STATS_QUERY_KEY, PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
+import { applyPlannerTitleDateHints } from '@/features/tasks/plannerTitleDateParse';
 import { sortPlannerTasksForDisplay } from '@/features/tasks/plannerSort';
 import {
   PLANNER_PRIORITY_OPTIONS,
@@ -142,35 +143,73 @@ export function TasksPlannerScreen() {
   }, [qc, selectedDay]);
 
   const addMut = useMutation({
-    mutationFn: () =>
-      createPlannerTask({
-        day_date: selectedDay,
-        title: draftTitle,
+    mutationFn: async () => {
+      const parsed = applyPlannerTitleDateHints(draftTitle, selectedDay);
+      const title = parsed.title.trim();
+      if (!title) throw new Error('Введи текст');
+      return createPlannerTask({
+        day_date: parsed.dayDate,
+        title,
         priority: draftPriority,
         is_focus: draftAsFocus || undefined,
-      }),
-    onSuccess: () => {
+      });
+    },
+    onSuccess: (row) => {
       setDraftTitle('');
       setDraftPriority('medium');
       setDraftAsFocus(false);
-      invalidateDay();
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, selectedDay] });
+      if (row.day_date !== selectedDay) {
+        void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, row.day_date] });
+      }
       if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
     onError: (e: Error) => alertInfo('Задача', e.message),
   });
 
   const toggleMut = useMutation({
-    mutationFn: async ({ id, next, wasDone }: { id: string; next: boolean; wasDone: boolean }) => {
-      await updatePlannerTask(id, { is_done: next });
+    mutationFn: async ({
+      id,
+      next,
+      wasDone,
+      dayKey,
+    }: {
+      id: string;
+      next: boolean;
+      wasDone: boolean;
+      dayKey: string;
+    }) => {
+      const row = await updatePlannerTask(id, { is_done: next });
       if (!wasDone && next) await adjustPlannerCompletedCount(1);
       if (wasDone && !next) await adjustPlannerCompletedCount(-1);
+      return { row, dayKey };
     },
-    onSuccess: () => {
-      invalidateDay();
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, vars.dayKey] });
+      const previous = qc.getQueryData<PlannerTaskRow[]>([...PLANNER_TASKS_QUERY_KEY, vars.dayKey]);
+      if (previous) {
+        qc.setQueryData(
+          [...PLANNER_TASKS_QUERY_KEY, vars.dayKey],
+          sortPlannerTasksForDisplay(
+            previous.map((t) => (t.id === vars.id ? { ...t, is_done: vars.next } : t))
+          )
+        );
+      }
+      return { previous } as { previous: PlannerTaskRow[] | undefined };
+    },
+    onError: (e, vars, ctx) => {
+      const p = ctx as { previous: PlannerTaskRow[] | undefined } | undefined;
+      if (p?.previous) qc.setQueryData([...PLANNER_TASKS_QUERY_KEY, vars.dayKey], p.previous);
+      alertInfo('Задача', e.message);
+    },
+    onSuccess: ({ row, dayKey }) => {
+      qc.setQueryData<PlannerTaskRow[]>([...PLANNER_TASKS_QUERY_KEY, dayKey], (old) => {
+        if (!old) return [row];
+        return sortPlannerTasksForDisplay(old.map((t) => (t.id === row.id ? row : t)));
+      });
       void qc.invalidateQueries({ queryKey: [...PLANNER_STATS_QUERY_KEY] });
       if (Platform.OS !== 'web') void Haptics.selectionAsync();
     },
-    onError: (e: Error) => alertInfo('Задача', e.message),
   });
 
   const deleteMut = useMutation({
@@ -184,6 +223,20 @@ export function TasksPlannerScreen() {
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     onError: (e: Error) => alertInfo('Удаление', e.message),
+  });
+
+  const deferToNextDayMut = useMutation({
+    mutationFn: async ({ id, fromDay }: { id: string; fromDay: string }) => {
+      const next = addDays(fromDay, 1);
+      await updatePlannerTask(id, { day_date: next });
+      return { fromDay, toDay: next };
+    },
+    onSuccess: ({ fromDay, toDay }) => {
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, fromDay] });
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, toDay] });
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    },
+    onError: (e: Error) => alertInfo('Перенос', e.message),
   });
 
   const openTaskEditor = useCallback((t: PlannerTaskRow) => {
@@ -314,7 +367,7 @@ export function TasksPlannerScreen() {
                 }}
               >
                 <Pressable
-                  onPress={() => router.push('/tasks-backlog' as Href)}
+                  onPress={() => router.push('/inbox' as Href)}
                   style={StyleSheet.flatten([
                     {
                       flexDirection: 'row',
@@ -330,7 +383,7 @@ export function TasksPlannerScreen() {
                   ])}
                 >
                   <Ionicons name="layers-outline" size={18} color={ACCENT} />
-                  <Text style={{ marginLeft: 8, fontWeight: '800', color: ACCENT, fontSize: 14 }}>Бэклог</Text>
+                  <Text style={{ marginLeft: 8, fontWeight: '800', color: ACCENT, fontSize: 14 }}>Входящие</Text>
                   <Ionicons name="chevron-forward" size={16} color={ACCENT} style={{ marginLeft: 4 }} />
                 </Pressable>
                 <View
@@ -580,6 +633,11 @@ export function TasksPlannerScreen() {
                 <Text style={{ marginTop: 8, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
                   Полоски справа: важный · средний · низкий приоритет
                 </Text>
+                <Text style={{ marginTop: 6, fontSize: 11, fontWeight: '600', color: colors.textMuted, lineHeight: 16 }}>
+                  В названии: завтра, послезавтра, день недели (вторник, пятница) или кратко пн … вс — задача уйдёт на
+                  эту дату, слово из заголовка уберется. От выбранного дня на экране считается «завтра» и ближайший
+                  будний день.
+                </Text>
               </View>
 
               <Text
@@ -616,9 +674,15 @@ export function TasksPlannerScreen() {
                       key={t.id}
                       task={t}
                       onToggle={() =>
-                        toggleMut.mutate({ id: t.id, next: !t.is_done, wasDone: t.is_done })
+                        toggleMut.mutate({
+                          id: t.id,
+                          next: !t.is_done,
+                          wasDone: t.is_done,
+                          dayKey: selectedDay,
+                        })
                       }
                       onEdit={() => openTaskEditor(t)}
+                      onDeferNextDay={() => deferToNextDayMut.mutate({ id: t.id, fromDay: t.day_date })}
                       onDelete={() =>
                         confirmDestructive({
                           title: 'Удалить задачу?',
@@ -629,7 +693,8 @@ export function TasksPlannerScreen() {
                       busy={
                         toggleMut.isPending ||
                         deleteMut.isPending ||
-                        saveTaskEditMut.isPending
+                        saveTaskEditMut.isPending ||
+                        deferToNextDayMut.isPending
                       }
                     />
                   ))}
@@ -671,7 +736,8 @@ export function TasksPlannerScreen() {
             />
             <Text style={[typography.title1, { color: colors.text }]}>Редактировать</Text>
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
-              Текст, приоритет и день. Тап по полю ниже — другая дата.
+              Текст, приоритет и день. Тап по полоске дней — другая дата. В тексте можно написать завтра, послезавтра
+              или день недели — дата подставится автоматически.
             </Text>
 
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.md }]}>Задача</Text>
@@ -844,11 +910,13 @@ export function TasksPlannerScreen() {
                     alertInfo('Задача', 'Введи текст');
                     return;
                   }
+                  const parsed = applyPlannerTitleDateHints(t, editDayKey);
+                  const finalTitle = parsed.title.trim() || 'Задача';
                   saveTaskEditMut.mutate({
                     id: editingTask.id,
                     fromDay: editingTask.day_date,
-                    toDay: editDayKey,
-                    title: t,
+                    toDay: parsed.dayDate,
+                    title: finalTitle,
                     priority: editPriority,
                     isFocus: editIsFocus,
                     wasFocus: Boolean(editingTask.is_focus),
@@ -883,12 +951,14 @@ function PlannerTaskCard({
   task,
   onToggle,
   onEdit,
+  onDeferNextDay,
   onDelete,
   busy,
 }: {
   task: PlannerTaskRow;
   onToggle: () => void;
   onEdit: () => void;
+  onDeferNextDay: () => void;
   onDelete: () => void;
   busy: boolean;
 }) {
@@ -1028,6 +1098,22 @@ function PlannerTaskCard({
           </View>
           <Ionicons name="create-outline" size={22} color="rgba(196,181,253,0.65)" style={{ marginTop: 2 }} />
         </View>
+      </Pressable>
+      <Pressable
+        onPress={onDeferNextDay}
+        disabled={busy}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Перенести на следующий день"
+        style={({ pressed }) => ({
+          justifyContent: 'flex-start',
+          paddingTop: spacing.md,
+          paddingRight: 4,
+          paddingLeft: 4,
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Ionicons name="arrow-forward-circle-outline" size={22} color="rgba(52,211,153,0.95)" />
       </Pressable>
       <Pressable
         onPress={onDelete}

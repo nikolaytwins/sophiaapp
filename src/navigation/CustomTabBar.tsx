@@ -13,6 +13,7 @@ const TAB_HREF: Record<string, Href> = {
   day: '/day',
   sprint: '/sprint' as Href,
   tasks: '/tasks' as Href,
+  inbox: '/inbox' as Href,
   finance: '/finance' as Href,
   habits: '/habits',
 };
@@ -21,6 +22,7 @@ const LABELS: Record<string, string> = {
   day: 'День',
   sprint: 'Спринт',
   tasks: 'Задачи',
+  inbox: 'Входящие',
   finance: 'Финансы',
   habits: 'Аналитика',
 };
@@ -29,13 +31,14 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
   sprint: 'flag-outline',
   tasks: 'list-outline',
+  inbox: 'file-tray-stacked-outline',
   finance: 'wallet-outline',
   /** Вкладка «Аналитика»: графики и календари. */
   habits: 'stats-chart-outline',
 };
 
 /** В нижнем меню только эти вкладки (остальные экраны — вне `(tabs)` или со `href: null`). */
-const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'tasks', 'finance', 'habits']);
+const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'tasks', 'inbox', 'finance', 'habits']);
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();

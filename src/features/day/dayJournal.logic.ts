@@ -1,7 +1,9 @@
+import { addDays, startOfCalendarMonthKey } from '@/features/habits/habitLogic';
 import {
   DEFAULT_JOURNAL_FIELDS,
   type JournalDocument,
   type JournalEntry,
+  type JournalExportPeriod,
   type JournalFieldDefinition,
   type JournalFieldSection,
   type JournalFieldType,
@@ -233,4 +235,30 @@ export function buildHealthExport(doc: JournalDocument): JournalHealthExportDoc 
     fields,
     rows,
   };
+}
+
+export function journalExportDateRange(
+  period: JournalExportPeriod,
+  todayKey: string
+): { fromKey: string; toKey: string; label: string } {
+  const toKey = todayKey;
+  if (period === 'today') {
+    return { fromKey: todayKey, toKey: todayKey, label: 'Сегодня' };
+  }
+  if (period === 'month') {
+    return { fromKey: startOfCalendarMonthKey(todayKey), toKey, label: 'Текущий месяц' };
+  }
+  return { fromKey: addDays(todayKey, -89), toKey, label: '90 дней' };
+}
+
+export function sliceJournalDocumentByDateRange(
+  doc: JournalDocument,
+  fromKey: string,
+  toKey: string
+): JournalDocument {
+  const entries: Record<string, JournalEntry> = {};
+  for (const [k, e] of Object.entries(doc.entries)) {
+    if (k >= fromKey && k <= toKey) entries[k] = e;
+  }
+  return { ...doc, entries };
 }

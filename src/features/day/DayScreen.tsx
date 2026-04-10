@@ -11,6 +11,7 @@ import type { Habit } from '@/entities/models';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { DayDateCalendarModal } from '@/features/day/DayDateCalendarModal';
+import { DayMotivationBanner } from '@/features/day/DayMotivationBanner';
 import { DayPlannerTasksBlock } from '@/features/day/DayPlannerTasksBlock';
 import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { journalEntryHasContent } from '@/features/day/dayJournal.logic';
@@ -21,6 +22,7 @@ import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
+import { optimisticApplyCheckIn, optimisticApplyCounterDelta } from '@/features/habits/optimisticHabitsList';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { listPlannerTasks } from '@/features/tasks/plannerApi';
@@ -160,6 +162,19 @@ export function DayScreen() {
 
   const checkIn = useMutation({
     mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.checkIn(id, dk),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: [...HABITS_QUERY_KEY] });
+      const previous = qc.getQueryData<Habit[]>([...HABITS_QUERY_KEY]);
+      const dk = vars.dateKey ?? todayKey;
+      if (previous) {
+        qc.setQueryData([...HABITS_QUERY_KEY], optimisticApplyCheckIn(previous, vars.id, dk, todayKey));
+      }
+      return { previous } as { previous: Habit[] | undefined };
+    },
+    onError: (_err, _vars, ctx) => {
+      const p = ctx as { previous: Habit[] | undefined } | undefined;
+      if (p?.previous) qc.setQueryData([...HABITS_QUERY_KEY], p.previous);
+    },
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
     },
@@ -176,6 +191,21 @@ export function DayScreen() {
   const adjustCounter = useMutation({
     mutationFn: ({ id, dateKey, delta }: { id: string; dateKey: string; delta: 1 | -1 }) =>
       repos.habits.adjustCounter(id, dateKey, delta),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: [...HABITS_QUERY_KEY] });
+      const previous = qc.getQueryData<Habit[]>([...HABITS_QUERY_KEY]);
+      if (previous) {
+        qc.setQueryData(
+          [...HABITS_QUERY_KEY],
+          optimisticApplyCounterDelta(previous, vars.id, vars.dateKey, vars.delta, todayKey)
+        );
+      }
+      return { previous } as { previous: Habit[] | undefined };
+    },
+    onError: (_err, _vars, ctx) => {
+      const p = ctx as { previous: Habit[] | undefined } | undefined;
+      if (p?.previous) qc.setQueryData([...HABITS_QUERY_KEY], p.previous);
+    },
     onSuccess: (list) => {
       qc.setQueryData([...HABITS_QUERY_KEY], list);
     },
@@ -424,6 +454,8 @@ export function DayScreen() {
           totalCount={heroScore.total}
           isTodayContext={viewDateKey === todayKey}
         />
+
+        <DayMotivationBanner dateKey={viewDateKey} />
 
         {isNikolay ? (
           <>

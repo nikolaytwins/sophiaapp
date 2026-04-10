@@ -1,9 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type Href, Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useSupabaseConfigured } from '@/config/env';
+import { addDays } from '@/features/habits/habitLogic';
 import {
   adjustPlannerCompletedCount,
   listPlannerTasks,
@@ -37,22 +39,63 @@ export function DayPlannerTasksBlock({ viewDateKey, todayKey, userId }: Props) {
     enabled,
   });
 
-  const invalidateDay = () => {
-    void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, viewDateKey] });
-  };
-
   const toggleMut = useMutation({
-    mutationFn: async ({ id, next, wasDone }: { id: string; next: boolean; wasDone: boolean }) => {
-      await updatePlannerTask(id, { is_done: next });
+    mutationFn: async ({
+      id,
+      next,
+      wasDone,
+      dayKey,
+    }: {
+      id: string;
+      next: boolean;
+      wasDone: boolean;
+      dayKey: string;
+    }) => {
+      const row = await updatePlannerTask(id, { is_done: next });
       if (!wasDone && next) await adjustPlannerCompletedCount(1);
       if (wasDone && !next) await adjustPlannerCompletedCount(-1);
+      return { row, dayKey };
     },
-    onSuccess: () => {
-      invalidateDay();
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, vars.dayKey] });
+      const previous = qc.getQueryData<PlannerTaskRow[]>([...PLANNER_TASKS_QUERY_KEY, vars.dayKey]);
+      if (previous) {
+        qc.setQueryData(
+          [...PLANNER_TASKS_QUERY_KEY, vars.dayKey],
+          sortPlannerTasksForDisplay(
+            previous.map((t) => (t.id === vars.id ? { ...t, is_done: vars.next } : t))
+          )
+        );
+      }
+      return { previous } as { previous: PlannerTaskRow[] | undefined };
+    },
+    onError: (e, vars, ctx) => {
+      const p = ctx as { previous: PlannerTaskRow[] | undefined } | undefined;
+      if (p?.previous) qc.setQueryData([...PLANNER_TASKS_QUERY_KEY, vars.dayKey], p.previous);
+      alertInfo('Задача', e.message);
+    },
+    onSuccess: ({ row, dayKey }) => {
+      qc.setQueryData<PlannerTaskRow[]>([...PLANNER_TASKS_QUERY_KEY, dayKey], (old) => {
+        if (!old) return [row];
+        return sortPlannerTasksForDisplay(old.map((t) => (t.id === row.id ? row : t)));
+      });
       void qc.invalidateQueries({ queryKey: [...PLANNER_STATS_QUERY_KEY] });
       if (Platform.OS !== 'web') void Haptics.selectionAsync();
     },
-    onError: (e: Error) => alertInfo('Задача', e.message),
+  });
+
+  const deferMut = useMutation({
+    mutationFn: async ({ id, fromDay }: { id: string; fromDay: string }) => {
+      const next = addDays(fromDay, 1);
+      await updatePlannerTask(id, { day_date: next });
+      return { fromDay, toDay: next };
+    },
+    onSuccess: ({ fromDay, toDay }) => {
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, fromDay] });
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, toDay] });
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    },
+    onError: (e: Error) => alertInfo('Перенос', e.message),
   });
 
   const sorted = sortPlannerTasksForDisplay(q.data ?? []);
@@ -112,9 +155,16 @@ export function DayPlannerTasksBlock({ viewDateKey, todayKey, userId }: Props) {
                 task={t}
                 isLast={i === sorted.length - 1}
                 canToggle={isToday || viewDateKey < todayKey}
+                deferBusy={deferMut.isPending}
                 onToggle={() =>
-                  toggleMut.mutate({ id: t.id, next: !t.is_done, wasDone: t.is_done })
+                  toggleMut.mutate({
+                    id: t.id,
+                    next: !t.is_done,
+                    wasDone: t.is_done,
+                    dayKey: viewDateKey,
+                  })
                 }
+                onDeferNext={() => deferMut.mutate({ id: t.id, fromDay: t.day_date })}
               />
             ))}
           </View>
@@ -141,60 +191,89 @@ function PlannerTaskLine({
   task,
   isLast,
   canToggle,
+  deferBusy,
   onToggle,
+  onDeferNext,
 }: {
   task: PlannerTaskRow;
   isLast: boolean;
   canToggle: boolean;
+  deferBusy: boolean;
   onToggle: () => void;
+  onDeferNext: () => void;
 }) {
   const { colors, spacing } = useAppTheme();
   const done = task.is_done;
   return (
-    <Pressable
-      disabled={!canToggle}
-      onPress={onToggle}
-      style={({ pressed }) => ({
+    <View
+      style={{
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 10,
-        paddingHorizontal: spacing.md,
+        paddingLeft: spacing.md,
+        paddingRight: 6,
         borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
         borderBottomColor: 'rgba(255,255,255,0.06)',
-        opacity: !canToggle ? 0.92 : pressed ? 0.88 : 1,
-        ...(Platform.OS === 'web' && canToggle ? { cursor: 'pointer' as const } : {}),
-      })}
+        opacity: !canToggle ? 0.92 : 1,
+      }}
     >
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          borderWidth: done ? 0 : 2,
-          borderColor: 'rgba(249,115,22,0.45)',
-          backgroundColor: done ? ACCENT : 'transparent',
-          marginRight: 12,
-        }}
-      />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        {task.is_focus ? (
-          <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1, color: ACCENT, marginBottom: 2 }}>
-            ФОКУС
-          </Text>
-        ) : null}
-        <Text
+      <Pressable
+        disabled={!canToggle}
+        onPress={onToggle}
+        style={({ pressed }) => ({
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          minWidth: 0,
+          opacity: pressed ? 0.88 : 1,
+          ...(Platform.OS === 'web' && canToggle ? { cursor: 'pointer' as const } : {}),
+        })}
+      >
+        <View
           style={{
-            fontSize: 15,
-            fontWeight: '700',
-            color: colors.text,
-            textDecorationLine: done ? 'line-through' : 'none',
-            opacity: done ? 0.55 : 1,
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            borderWidth: done ? 0 : 2,
+            borderColor: 'rgba(249,115,22,0.45)',
+            backgroundColor: done ? ACCENT : 'transparent',
+            marginRight: 12,
           }}
-          numberOfLines={2}
-        >
-          {task.title}
-        </Text>
-      </View>
-    </Pressable>
+        />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {task.is_focus ? (
+            <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1, color: ACCENT, marginBottom: 2 }}>
+              ФОКУС
+            </Text>
+          ) : null}
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: '700',
+              color: colors.text,
+              textDecorationLine: done ? 'line-through' : 'none',
+              opacity: done ? 0.55 : 1,
+            }}
+            numberOfLines={2}
+          >
+            {task.title}
+          </Text>
+        </View>
+      </Pressable>
+      <Pressable
+        onPress={onDeferNext}
+        disabled={deferBusy}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="На следующий день"
+        style={({ pressed }) => ({
+          padding: 8,
+          opacity: pressed ? 0.65 : deferBusy ? 0.4 : 1,
+          ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+        })}
+      >
+        <Ionicons name="arrow-forward-circle-outline" size={24} color="rgba(52,211,153,0.95)" />
+      </Pressable>
+    </View>
   );
 }

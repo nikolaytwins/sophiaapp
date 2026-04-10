@@ -53,7 +53,7 @@ export const localHabitsRepository: HabitsRepository = {
     if (prev && next) {
       applySprintAfterHabitCheckIn(id, prev, next, dk);
     }
-    return delay(useHabitsStore.getState().listView());
+    return useHabitsStore.getState().listView();
   },
 
   async adjustCounter(id: string, dateKey: string, delta: 1 | -1) {
@@ -64,7 +64,7 @@ export const localHabitsRepository: HabitsRepository = {
     if (prev && next) {
       applySprintAfterHabitCheckIn(id, prev, next, dateKey);
     }
-    return delay(useHabitsStore.getState().listView());
+    return useHabitsStore.getState().listView();
   },
 
   async undoWeekly(id: string, dateKey?: string) {
@@ -75,7 +75,7 @@ export const localHabitsRepository: HabitsRepository = {
     if (prev && next) {
       applySprintAfterHabitUndoWeekly(id, prev, next);
     }
-    return delay(useHabitsStore.getState().listView());
+    return useHabitsStore.getState().listView();
   },
 
   async remove(id: string) {

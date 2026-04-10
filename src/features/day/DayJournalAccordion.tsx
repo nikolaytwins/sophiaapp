@@ -15,11 +15,12 @@ import {
   journalEntryHasContent,
   journalEntryHasFieldContent,
 } from '@/features/day/dayJournal.logic';
-import type { JournalFieldDefinition, JournalMoodId } from '@/features/day/dayJournal.types';
+import type { JournalExportPeriod, JournalFieldDefinition, JournalMoodId } from '@/features/day/dayJournal.types';
 import { findJournalHabit } from '@/features/journal/journalHabit';
 import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { exportDayJournalPdf } from '@/services/dayJournalPdfExport';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
 import { repos } from '@/services/repositories';
 import {
@@ -75,6 +76,7 @@ export function DayJournalAccordion({
   });
   const [saveHint, setSaveHint] = useState<string | null>(null);
   const [exportHint, setExportHint] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     if (dayKeyRef.current !== editingDay) {
@@ -113,6 +115,28 @@ export function DayJournalAccordion({
     await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
     setExportHint(kind === 'journal' ? 'Дневник скопирован' : 'Здоровье скопировано');
     setTimeout(() => setExportHint(null), 2800);
+  };
+
+  const exportPdf = async (period: JournalExportPeriod) => {
+    if (pdfBusy) return;
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPdfBusy(true);
+    try {
+      await exportDayJournalPdf(period);
+      setExportHint(
+        Platform.OS === 'web'
+          ? 'Откроется окно печати — выбери «Сохранить как PDF», если нужен файл.'
+          : 'PDF сформирован — сохрани или отправь из системного окна.'
+      );
+      setTimeout(() => setExportHint(null), 4200);
+    } catch (error) {
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message = error instanceof Error ? error.message : 'Ошибка';
+      setExportHint(`PDF: ${message}`);
+      setTimeout(() => setExportHint(null), 5200);
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const saveJournal = async () => {
@@ -309,6 +333,65 @@ export function DayJournalAccordion({
               }}
             >
               <Text style={{ fontWeight: '700', color: colors.textMuted }}>Экспорт здоровья</Text>
+            </Pressable>
+          </View>
+
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '900',
+              letterSpacing: 1.2,
+              color: 'rgba(196,181,253,0.85)',
+              textTransform: 'uppercase',
+              marginTop: 16,
+              marginBottom: 8,
+            }}
+          >
+            PDF за период
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <Pressable
+              disabled={pdfBusy}
+              onPress={() => void exportPdf('today')}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: brand.surfaceBorderStrong,
+                backgroundColor: pdfBusy ? 'rgba(255,255,255,0.02)' : 'rgba(168,85,247,0.08)',
+                opacity: pdfBusy ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ fontWeight: '800', color: colors.text, fontSize: 13 }}>Сегодня</Text>
+            </Pressable>
+            <Pressable
+              disabled={pdfBusy}
+              onPress={() => void exportPdf('month')}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: brand.surfaceBorder,
+                opacity: pdfBusy ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ fontWeight: '700', color: colors.textMuted, fontSize: 13 }}>Месяц</Text>
+            </Pressable>
+            <Pressable
+              disabled={pdfBusy}
+              onPress={() => void exportPdf('last90')}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: brand.surfaceBorder,
+                opacity: pdfBusy ? 0.55 : 1,
+              }}
+            >
+              <Text style={{ fontWeight: '700', color: colors.textMuted, fontSize: 13 }}>90 дней</Text>
             </Pressable>
           </View>
 

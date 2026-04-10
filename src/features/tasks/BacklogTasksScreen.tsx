@@ -27,10 +27,13 @@ import {
   listBacklogTasks,
   listBacklogTypes,
   mergeTasksWithTypes,
+  scheduleBacklogTasksToDay,
   sortBacklogTasksForDisplay,
   updateBacklogTask,
 } from '@/features/tasks/backlogApi';
-import { BACKLOG_TASKS_QUERY_KEY, BACKLOG_TYPES_QUERY_KEY } from '@/features/tasks/queryKeys';
+import { WEEKDAY_SHORT_RU } from '@/features/day/dayHabitUi';
+import { addDays, localDateKey } from '@/features/habits/habitLogic';
+import { BACKLOG_TASKS_QUERY_KEY, BACKLOG_TYPES_QUERY_KEY, PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
 import {
   PLANNER_PRIORITY_OPTIONS,
   cardSurfaceForPriority,
@@ -50,7 +53,33 @@ type TypeFilter = 'all' | 'none' | string;
 
 const PRIORITY_OPTIONS = PLANNER_PRIORITY_OPTIONS;
 
-export function BacklogTasksScreen() {
+function formatLongDateLabel(dateKey: string, todayKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const withYear = dateKey.slice(0, 4) !== todayKey.slice(0, 4);
+  const s = dt.toLocaleDateString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(withYear ? { year: 'numeric' as const } : {}),
+  });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function weekdayShortRu(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const day = dt.getDay();
+  const idx = day === 0 ? 6 : day - 1;
+  return WEEKDAY_SHORT_RU[idx] ?? '';
+}
+
+export type BacklogTasksScreenProps = {
+  /** `tab` — отдельная вкладка; `stack` — экран из стека (с шапкой «Назад»). */
+  variant?: 'stack' | 'tab';
+};
+
+export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProps) {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
@@ -71,6 +100,18 @@ export function BacklogTasksScreen() {
 
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+
+  const todayKey = localDateKey();
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleBatch, setScheduleBatch] = useState<BacklogTaskView[]>([]);
+  const [scheduleDayKey, setScheduleDayKey] = useState(todayKey);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+
+  const scheduleStripKeys = useMemo(
+    () => Array.from({ length: 14 }, (_, i) => addDays(scheduleDayKey, i - 5)),
+    [scheduleDayKey]
+  );
 
   useEffect(() => {
     const sb = getSupabase();
@@ -181,6 +222,45 @@ export function BacklogTasksScreen() {
     onError: (e: Error) => alertInfo('Удаление', e.message),
   });
 
+  const scheduleMut = useMutation({
+    mutationFn: async ({ tasks, day }: { tasks: BacklogTaskView[]; day: string }) => {
+      await scheduleBacklogTasksToDay(
+        tasks.map((t) => ({ id: t.id, title: t.title, priority: t.priority })),
+        day
+      );
+    },
+    onSuccess: () => {
+      invalidateAll();
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY] });
+      setScheduleOpen(false);
+      setScheduleBatch([]);
+      setSelectMode(false);
+      setSelectedIds(new Set());
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (e: Error) => alertInfo('Перенос в план', e.message),
+  });
+
+  const openScheduleForTasks = useCallback(
+    (tasks: BacklogTaskView[]) => {
+      if (tasks.length === 0) return;
+      setScheduleBatch(tasks);
+      setScheduleDayKey(todayKey);
+      setScheduleOpen(true);
+    },
+    [todayKey]
+  );
+
+  const toggleTaskSelected = useCallback((id: string) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const openCreate = useCallback(() => {
     setEditingId(null);
     setDraftTitle('');
@@ -225,13 +305,13 @@ export function BacklogTasksScreen() {
 
   return (
     <ScreenCanvas>
-      <Stack.Screen options={headerOpts} />
+      {variant === 'stack' ? <Stack.Screen options={headerOpts} /> : null}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingTop: insets.top + spacing.xl,
+          paddingTop: variant === 'tab' ? insets.top + spacing.lg : insets.top + spacing.xl,
           paddingHorizontal: spacing.xl,
-          paddingBottom: insets.bottom + 120,
+          paddingBottom: insets.bottom + (selectMode && selectedIds.size > 0 ? 160 : 120),
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -251,10 +331,12 @@ export function BacklogTasksScreen() {
             Рабочий стол
           </Text>
           <Text style={[typography.hero, { fontSize: 28, letterSpacing: -0.8, color: colors.text }]}>
-            Идеи без даты
+            {variant === 'tab' ? 'Входящие' : 'Идеи без даты'}
           </Text>
           <Text style={[typography.body, { marginTop: spacing.sm, color: colors.textMuted, lineHeight: 22 }]}>
-            Задачи без привязки к дню. Дневной план — на вкладке «Задачи».
+            {variant === 'tab'
+              ? 'Список без даты: добавляй задачи и приоритеты, переноси в план (календарь) или отметь галочкой «сделано» — строка сразу исчезнет. Пакетом — через «Выбрать».'
+              : 'Задачи без привязки к дню. Галочка у карточки — выполнено, сразу убирается. Дневной план — на вкладке «Задачи».'}
           </Text>
         </View>
 
@@ -304,6 +386,80 @@ export function BacklogTasksScreen() {
                   <Ionicons name="add-circle-outline" size={22} color={ACCENT} />
                   <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 16 }}>Добавить в бэклог</Text>
                 </Pressable>
+
+                {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
+                  <View style={{ marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                        setSelectMode((m) => {
+                          if (m) setSelectedIds(new Set());
+                          return !m;
+                        });
+                      }}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: radius.lg,
+                        borderWidth: 1,
+                        borderColor: selectMode ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.12)',
+                        backgroundColor: selectMode ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
+                        opacity: pressed ? 0.88 : 1,
+                        ...webCursor,
+                      })}
+                    >
+                      <Text style={{ fontWeight: '800', color: selectMode ? ACCENT : colors.textMuted, fontSize: 13 }}>
+                        {selectMode ? 'Готово' : 'Выбрать'}
+                      </Text>
+                    </Pressable>
+                    {selectMode ? (
+                      <Pressable
+                        onPress={() => {
+                          const ids = filteredViews.map((t) => t.id);
+                          setSelectedIds((prev) => {
+                            const allOn = ids.length > 0 && ids.every((id) => prev.has(id));
+                            return allOn ? new Set() : new Set(ids);
+                          });
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                        }}
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: radius.lg,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255,255,255,0.12)',
+                          backgroundColor: 'rgba(255,255,255,0.04)',
+                          opacity: pressed ? 0.88 : 1,
+                          ...webCursor,
+                        })}
+                      >
+                        <Text style={{ fontWeight: '700', color: colors.textMuted, fontSize: 13 }}>Все в фильтре</Text>
+                      </Pressable>
+                    ) : null}
+                    {selectMode && selectedIds.size > 0 ? (
+                      <Pressable
+                        onPress={() => {
+                          const list = filteredViews.filter((t) => selectedIds.has(t.id));
+                          openScheduleForTasks(list);
+                        }}
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: radius.lg,
+                          borderWidth: 1,
+                          borderColor: 'rgba(52,211,153,0.45)',
+                          backgroundColor: 'rgba(52,211,153,0.12)',
+                          opacity: pressed ? 0.88 : 1,
+                          ...webCursor,
+                        })}
+                      >
+                        <Text style={{ fontWeight: '800', color: 'rgba(52,211,153,0.98)', fontSize: 13 }}>
+                          На день ({selectedIds.size})
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
 
                 {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
                   <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -511,8 +667,26 @@ export function BacklogTasksScreen() {
                           }}
                         >
                           <View style={{ width: strip.width, backgroundColor: strip.backgroundColor }} />
+                          {selectMode ? (
+                            <Pressable
+                              onPress={() => toggleTaskSelected(t.id)}
+                              style={{
+                                justifyContent: 'center',
+                                paddingLeft: spacing.sm,
+                                paddingRight: 4,
+                              }}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: selectedIds.has(t.id) }}
+                            >
+                              <Ionicons
+                                name={selectedIds.has(t.id) ? 'checkmark-circle' : 'ellipse-outline'}
+                                size={26}
+                                color={selectedIds.has(t.id) ? ACCENT : colors.textMuted}
+                              />
+                            </Pressable>
+                          ) : null}
                           <Pressable
-                            onPress={() => openEdit(t)}
+                            onPress={() => (selectMode ? toggleTaskSelected(t.id) : openEdit(t))}
                             style={({ pressed }) => [
                               {
                                 flex: 1,
@@ -520,7 +694,7 @@ export function BacklogTasksScreen() {
                                 alignItems: 'flex-start',
                                 gap: spacing.sm,
                                 paddingVertical: spacing.md,
-                                paddingLeft: spacing.md,
+                                paddingLeft: selectMode ? spacing.xs : spacing.md,
                                 paddingRight: spacing.xs,
                                 opacity: pressed ? 0.92 : 1,
                               },
@@ -610,6 +784,48 @@ export function BacklogTasksScreen() {
                               ) : null}
                             </View>
                           </Pressable>
+                          {!selectMode ? (
+                            <Pressable
+                              onPress={() => openScheduleForTasks([t])}
+                              hitSlop={10}
+                              accessibilityRole="button"
+                              accessibilityLabel="Перенести в план на день"
+                              style={({ pressed }) => ({
+                                justifyContent: 'flex-start',
+                                paddingTop: spacing.md,
+                                paddingLeft: 4,
+                                paddingRight: 4,
+                                opacity: pressed ? 0.65 : 1,
+                                ...webCursor,
+                              })}
+                            >
+                              <Ionicons name="calendar-outline" size={22} color="rgba(52,211,153,0.95)" />
+                            </Pressable>
+                          ) : null}
+                          {!selectMode ? (
+                            <Pressable
+                              onPress={() => {
+                                if (Platform.OS !== 'web') {
+                                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                }
+                                deleteMut.mutate(t.id);
+                              }}
+                              disabled={deleteMut.isPending}
+                              hitSlop={10}
+                              accessibilityRole="button"
+                              accessibilityLabel="Выполнено, убрать из входящих"
+                              style={({ pressed }) => ({
+                                justifyContent: 'flex-start',
+                                paddingTop: spacing.md,
+                                paddingLeft: 2,
+                                paddingRight: 2,
+                                opacity: deleteMut.isPending ? 0.35 : pressed ? 0.65 : 1,
+                                ...webCursor,
+                              })}
+                            >
+                              <Ionicons name="checkmark-circle" size={24} color="rgba(129,140,248,0.98)" />
+                            </Pressable>
+                          ) : null}
                           <Pressable
                             onPress={() =>
                               confirmDestructive({
@@ -889,6 +1105,178 @@ export function BacklogTasksScreen() {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal visible={scheduleOpen} animationType="slide" transparent onRequestClose={() => setScheduleOpen(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setScheduleOpen(false)} />
+          <View
+            style={{
+              backgroundColor: colors.bg,
+              borderTopLeftRadius: 22,
+              borderTopRightRadius: 22,
+              paddingHorizontal: spacing.xl,
+              paddingTop: spacing.lg,
+              paddingBottom: Math.max(insets.bottom, spacing.lg) + 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxHeight: '88%',
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: colors.border,
+                alignSelf: 'center',
+                marginBottom: spacing.md,
+              }}
+            />
+            <Text style={[typography.title1, { color: colors.text }]}>День в плане</Text>
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
+              {scheduleBatch.length === 1
+                ? `Одна задача: «${scheduleBatch[0]?.title ?? ''}»`
+                : `${scheduleBatch.length} задач — появятся на выбранной дате во вкладке «Задачи».`}
+            </Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.md }}>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  setScheduleDayKey((k) => addDays(k, -1));
+                }}
+                hitSlop={12}
+                style={webCursor}
+              >
+                <Ionicons name="chevron-back" size={24} color={colors.textMuted} />
+              </Pressable>
+              <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text, textAlign: 'center' }} numberOfLines={2}>
+                  {formatLongDateLabel(scheduleDayKey, todayKey)}
+                </Text>
+                {scheduleDayKey === todayKey ? (
+                  <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '700', color: ACCENT }}>Сегодня</Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  setScheduleDayKey((k) => addDays(k, 1));
+                }}
+                hitSlop={12}
+                style={webCursor}
+              >
+                <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginTop: spacing.sm, maxHeight: 56 }}
+              contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+            >
+              {scheduleStripKeys.map((dk) => {
+                const sel = dk === scheduleDayKey;
+                const isToday = dk === todayKey;
+                return (
+                  <Pressable
+                    key={dk}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                      setScheduleDayKey(dk);
+                    }}
+                    style={{
+                      marginRight: 8,
+                      minWidth: 48,
+                      paddingVertical: 10,
+                      paddingHorizontal: 10,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      alignItems: 'center',
+                      backgroundColor: sel
+                        ? 'rgba(168,85,247,0.22)'
+                        : isToday
+                          ? 'rgba(168,85,247,0.08)'
+                          : 'rgba(255,255,255,0.04)',
+                      borderColor: sel
+                        ? 'rgba(168,85,247,0.55)'
+                        : isToday
+                          ? 'rgba(168,85,247,0.3)'
+                          : 'rgba(255,255,255,0.1)',
+                      ...webCursor,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: '900',
+                        color: sel ? colors.text : colors.textMuted,
+                        fontVariant: ['tabular-nums'],
+                      }}
+                    >
+                      {Number(dk.split('-')[2])}
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 2,
+                        fontSize: 9,
+                        fontWeight: '800',
+                        color: sel ? ACCENT : colors.textMuted,
+                      }}
+                    >
+                      {weekdayShortRu(dk)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: spacing.lg }}>
+              <Pressable
+                onPress={() => setScheduleOpen(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: radius.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontWeight: '700', color: colors.textMuted }}>Отмена</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (scheduleBatch.length === 0) return;
+                  scheduleMut.mutate({ tasks: scheduleBatch, day: scheduleDayKey });
+                }}
+                disabled={scheduleMut.isPending || scheduleBatch.length === 0}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: radius.lg,
+                  backgroundColor: 'rgba(52,211,153,0.28)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(52,211,153,0.5)',
+                  alignItems: 'center',
+                }}
+              >
+                {scheduleMut.isPending ? (
+                  <ActivityIndicator color="#FAFAFC" />
+                ) : (
+                  <Text style={{ fontWeight: '800', color: '#FAFAFC' }}>
+                    {scheduleBatch.length === 1 ? 'В план' : `В план (${scheduleBatch.length})`}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenCanvas>
   );

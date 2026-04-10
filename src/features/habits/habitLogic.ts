@@ -6,6 +6,12 @@ export function localDateKey(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Первый день календарного месяца для `dateKey` (локальный календарь). */
+export function startOfCalendarMonthKey(dateKey: string): string {
+  const [y, m] = dateKey.split('-').map(Number);
+  return `${y}-${String(m).padStart(2, '0')}-01`;
+}
+
 export function addDays(dateKey: string, delta: number): string {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, m - 1, d);

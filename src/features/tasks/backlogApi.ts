@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase';
+import { createPlannerTask } from '@/features/tasks/plannerApi';
 
 import type { BacklogPriority, BacklogTask, BacklogTaskType } from '@/features/tasks/backlog.types';
 
@@ -111,6 +112,29 @@ export async function deleteBacklogTask(id: string): Promise<void> {
   await requireUserId();
   const { error } = await sb.from('backlog_tasks').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** Создаёт задачу в дневном плане и удаляет из бэклога. */
+export async function scheduleBacklogTaskToDay(
+  task: Pick<BacklogTask, 'id' | 'title' | 'priority'>,
+  dayDate: string
+): Promise<void> {
+  await createPlannerTask({
+    day_date: dayDate,
+    title: task.title,
+    priority: task.priority,
+  });
+  await deleteBacklogTask(task.id);
+}
+
+/** Пакетный перенос (по очереди, чтобы не ломать sort_order и счётчики). */
+export async function scheduleBacklogTasksToDay(
+  tasks: Pick<BacklogTask, 'id' | 'title' | 'priority'>[],
+  dayDate: string
+): Promise<void> {
+  for (const t of tasks) {
+    await scheduleBacklogTaskToDay(t, dayDate);
+  }
 }
 
 export function mergeTasksWithTypes(tasks: BacklogTask[], types: BacklogTaskType[]) {

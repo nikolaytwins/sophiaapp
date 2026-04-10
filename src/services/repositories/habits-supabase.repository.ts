@@ -132,6 +132,16 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     return remote;
   }
 
+  /** Одна выборка + минимальные локальные правки — без лишних round-trip при каждом чек-ине. */
+  async function loadSliceForMutation(): Promise<HabitsPersistSlice> {
+    let slice = await getState();
+    slice = await maybeMigrateFromLocal(slice);
+    const user = await requireUser();
+    slice = ensureDefaultHabitsSlice(slice);
+    slice = applyNikolayHabitsProfile(slice, user.email);
+    return slice;
+  }
+
   function toList(slice: HabitsPersistSlice) {
     const today = localDateKey();
     return slice.habits.map((row) => habitRowToView(row, today));
@@ -158,7 +168,7 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     },
 
     async checkIn(id: string, dateKey?: string) {
-      let slice = await loadNormalized();
+      let slice = await loadSliceForMutation();
       const dk = dateKey ?? localDateKey();
       const prev = slice.habits.find((h) => h.id === id);
       slice = checkInSlice(slice, id, dateKey);
@@ -171,7 +181,7 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     },
 
     async adjustCounter(id: string, dateKey: string, delta: 1 | -1) {
-      let slice = await loadNormalized();
+      let slice = await loadSliceForMutation();
       const prev = slice.habits.find((h) => h.id === id);
       slice = counterAdjustSlice(slice, id, dateKey, delta);
       const next = slice.habits.find((h) => h.id === id);
@@ -183,7 +193,7 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
     },
 
     async undoWeekly(id: string, dateKey?: string) {
-      let slice = await loadNormalized();
+      let slice = await loadSliceForMutation();
       const prev = slice.habits.find((h) => h.id === id);
       slice = undoWeeklySlice(slice, id, dateKey);
       const next = slice.habits.find((h) => h.id === id);
