@@ -11,6 +11,7 @@ import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { habitDoneOnDate } from '@/features/day/dayHabitUi';
 import { JournalFieldCard } from '@/features/day/DayJournalFieldCards';
 import {
+  buildJournalDayPlainText,
   getFieldsBySection,
   journalEntryHasContent,
   journalEntryHasFieldContent,
@@ -113,8 +114,16 @@ export function DayJournalAccordion({
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const payload = kind === 'journal' ? buildDayJournalNarrativeExportDoc() : buildDayJournalHealthExportDoc();
     await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
-    setExportHint(kind === 'journal' ? 'Дневник скопирован' : 'Здоровье скопировано');
+    setExportHint(kind === 'journal' ? 'Весь дневник (JSON) в буфере' : 'Здоровье (JSON) в буфере');
     setTimeout(() => setExportHint(null), 2800);
+  };
+
+  const copyThisDayPlainText = async () => {
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const text = buildJournalDayPlainText(doc, editingDay);
+    await Clipboard.setStringAsync(text);
+    setExportHint('Текст этого дня скопирован в буфер — вставь в заметки или почту.');
+    setTimeout(() => setExportHint(null), 3200);
   };
 
   const exportPdf = async (period: JournalExportPeriod) => {
@@ -122,12 +131,16 @@ export function DayJournalAccordion({
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPdfBusy(true);
     try {
-      await exportDayJournalPdf(period);
-      setExportHint(
-        Platform.OS === 'web'
-          ? 'Откроется окно печати — выбери «Сохранить как PDF», если нужен файл.'
-          : 'PDF сформирован — сохрани или отправь из системного окна.'
-      );
+      const pdfResult = await exportDayJournalPdf(period, period === 'today' ? { anchorDayKey: editingDay } : undefined);
+      if (pdfResult === 'web-popup-blocked-copied-day') {
+        setExportHint('Окно печати заблокировано — текст этого дня скопирован в буфер. Вставь в документ и при необходимости сохрани как PDF.');
+      } else {
+        setExportHint(
+          Platform.OS === 'web'
+            ? 'Откроется окно печати — выбери «Сохранить как PDF», если нужен файл.'
+            : 'PDF сформирован — сохрани или отправь из системного окна.'
+        );
+      }
       setTimeout(() => setExportHint(null), 4200);
     } catch (error) {
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -311,6 +324,19 @@ export function DayJournalAccordion({
               <Text style={{ fontWeight: '800', color: colors.text }}>Сохранить</Text>
             </Pressable>
             <Pressable
+              onPress={() => void copyThisDayPlainText()}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: brand.surfaceBorderStrong,
+                backgroundColor: 'rgba(168,85,247,0.06)',
+              }}
+            >
+              <Text style={{ fontWeight: '800', color: colors.text }}>Скопировать день (текст)</Text>
+            </Pressable>
+            <Pressable
               onPress={() => void exportDoc('journal')}
               style={{
                 paddingVertical: 12,
@@ -320,7 +346,7 @@ export function DayJournalAccordion({
                 borderColor: brand.surfaceBorder,
               }}
             >
-              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Экспорт текста</Text>
+              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Все дни (JSON)</Text>
             </Pressable>
             <Pressable
               onPress={() => void exportDoc('health')}
@@ -332,7 +358,7 @@ export function DayJournalAccordion({
                 borderColor: brand.surfaceBorder,
               }}
             >
-              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Экспорт здоровья</Text>
+              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Здоровье (JSON)</Text>
             </Pressable>
           </View>
 
@@ -349,6 +375,9 @@ export function DayJournalAccordion({
           >
             PDF за период
           </Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 8, lineHeight: 17 }}>
+            «Этот день» — выбранная в дневнике дата. Если PDF не открывается, используй «Скопировать день (текст)».
+          </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pressable
               disabled={pdfBusy}
@@ -363,7 +392,7 @@ export function DayJournalAccordion({
                 opacity: pdfBusy ? 0.55 : 1,
               }}
             >
-              <Text style={{ fontWeight: '800', color: colors.text, fontSize: 13 }}>Сегодня</Text>
+              <Text style={{ fontWeight: '800', color: colors.text, fontSize: 13 }}>Этот день</Text>
             </Pressable>
             <Pressable
               disabled={pdfBusy}

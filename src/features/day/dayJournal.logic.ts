@@ -1,4 +1,5 @@
 import { addDays, startOfCalendarMonthKey } from '@/features/habits/habitLogic';
+import { getMoodMeta } from '@/features/journal/journalMood';
 import {
   DEFAULT_JOURNAL_FIELDS,
   type JournalDocument,
@@ -237,13 +238,80 @@ export function buildHealthExport(doc: JournalDocument): JournalHealthExportDoc 
   };
 }
 
+function journalDayTitleRu(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Человекочитаемый текст дневника за одну дату (настроение, записи, здоровье).
+ */
+export function buildJournalDayPlainText(doc: JournalDocument, dateKey: string): string {
+  const entry = doc.entries[dateKey];
+  const longDate = journalDayTitleRu(dateKey);
+  const head = `Sophia OS — дневник\n${longDate}\n(${dateKey})`;
+
+  if (!journalEntryHasContent(entry, doc.fields)) {
+    return `${head}\n\nЗа эту дату нет записей (настроение, текст, числа, переключатели).`;
+  }
+
+  const lines: string[] = [head, ''];
+
+  const moodMeta = entry?.mood ? getMoodMeta(entry.mood) : null;
+  if (moodMeta) {
+    lines.push(`Настроение: ${moodMeta.emoji} ${moodMeta.label}`, '');
+  }
+
+  const journalFields = getFieldsBySection(doc.fields, 'journal');
+  if (journalFields.length) {
+    lines.push('Записи', '—'.repeat(28), '');
+    for (const f of journalFields) {
+      lines.push(formatJournalFieldLine(f, entry?.values[f.id]), '');
+    }
+  }
+
+  const healthFields = getFieldsBySection(doc.fields, 'health');
+  if (healthFields.length) {
+    lines.push('Здоровье', '—'.repeat(28), '');
+    for (const f of healthFields) {
+      lines.push(formatJournalFieldLine(f, entry?.values[f.id]), '');
+    }
+  }
+
+  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines.join('\n');
+}
+
+function formatJournalFieldLine(field: JournalFieldDefinition, value: JournalFieldValue | undefined): string {
+  const label = field.label;
+  const v = value ?? null;
+  if (field.type === 'toggle') {
+    return `${label}: ${v === true ? 'Да' : 'Нет'}`;
+  }
+  if (field.type === 'number') {
+    if (typeof v === 'number' && Number.isFinite(v)) return `${label}: ${v}`;
+    return `${label}: —`;
+  }
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return `${label}: —`;
+  return `${label}:\n${s}`;
+}
+
 export function journalExportDateRange(
   period: JournalExportPeriod,
-  todayKey: string
+  todayKey: string,
+  opts?: { anchorDayKey?: string }
 ): { fromKey: string; toKey: string; label: string } {
   const toKey = todayKey;
   if (period === 'today') {
-    return { fromKey: todayKey, toKey: todayKey, label: 'Сегодня' };
+    const d = opts?.anchorDayKey ?? todayKey;
+    const label = d === todayKey ? 'Сегодня' : journalDayTitleRu(d);
+    return { fromKey: d, toKey: d, label };
   }
   if (period === 'month') {
     return { fromKey: startOfCalendarMonthKey(todayKey), toKey, label: 'Текущий месяц' };

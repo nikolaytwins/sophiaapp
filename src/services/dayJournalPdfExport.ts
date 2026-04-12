@@ -1,8 +1,10 @@
+import * as Clipboard from 'expo-clipboard';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
 import {
+  buildJournalDayPlainText,
   getFieldsBySection,
   journalEntryHasContent,
   journalExportDateRange,
@@ -153,12 +155,10 @@ export function buildJournalPdfHtml(
 </html>`;
 }
 
-function printJournalHtmlInWebPopup(html: string): void {
-  if (typeof window === 'undefined') return;
+function printJournalHtmlInWebPopup(html: string): boolean {
+  if (typeof window === 'undefined') return false;
   const w = window.open('', '_blank', 'noopener,noreferrer');
-  if (!w) {
-    throw new Error('Браузер заблокировал окно печати. Разреши всплывающие окна для этого сайта.');
-  }
+  if (!w) return false;
   w.document.open();
   w.document.write(html);
   w.document.close();
@@ -166,14 +166,20 @@ function printJournalHtmlInWebPopup(html: string): void {
   setTimeout(() => {
     w.print();
   }, 300);
+  return true;
 }
+
+export type DayJournalPdfExportResult = 'web-popup-blocked-copied-day' | undefined;
 
 /**
  * PDF на iOS/Android (через системный шаринг) или диалог печати / «Сохранить как PDF» в отдельном окне на вебе.
  */
-export async function exportDayJournalPdf(period: JournalExportPeriod): Promise<void> {
+export async function exportDayJournalPdf(
+  period: JournalExportPeriod,
+  opts?: { anchorDayKey?: string }
+): Promise<DayJournalPdfExportResult> {
   const todayKey = localDateKey();
-  const { fromKey, toKey, label } = journalExportDateRange(period, todayKey);
+  const { fromKey, toKey, label } = journalExportDateRange(period, todayKey, opts);
   const sliced = sliceJournalDocumentByDateRange(getDayJournalDocument(), fromKey, toKey);
   const html = buildJournalPdfHtml(sliced, {
     fromKey,
@@ -183,8 +189,16 @@ export async function exportDayJournalPdf(period: JournalExportPeriod): Promise<
   });
 
   if (Platform.OS === 'web') {
-    printJournalHtmlInWebPopup(html);
-    return;
+    const opened = printJournalHtmlInWebPopup(html);
+    if (!opened) {
+      if (fromKey === toKey) {
+        const plain = buildJournalDayPlainText(getDayJournalDocument(), fromKey);
+        await Clipboard.setStringAsync(plain);
+        return 'web-popup-blocked-copied-day';
+      }
+      throw new Error('Браузер заблокировал окно печати. Разреши всплывающие окна или нажми «Скопировать день (текст)».');
+    }
+    return undefined;
   }
 
   const { uri } = await Print.printToFileAsync({
@@ -202,4 +216,5 @@ export async function exportDayJournalPdf(period: JournalExportPeriod): Promise<
     dialogTitle: 'Сохранить дневник (PDF)',
     UTI: 'com.adobe.pdf',
   });
+  return undefined;
 }
