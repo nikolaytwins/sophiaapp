@@ -153,13 +153,16 @@ export const useDayJournalStore = create<State>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ doc: normalizeJournalDocument(s.doc) }),
       migrate: (persisted) => {
-        const p = persisted as { doc?: unknown; entries?: unknown } | undefined;
-        if (p?.doc) return { doc: normalizeJournalDocument(p.doc) };
-        if (p && 'entries' in p) return { doc: normalizeJournalDocument({ entries: p.entries }) };
+        const p = persisted as { doc?: unknown; entries?: unknown } | Record<string, unknown> | undefined;
+        if (p && typeof p === 'object' && 'doc' in p && p.doc) return { doc: normalizeJournalDocument(p.doc) };
+        if (p && typeof p === 'object' && 'entries' in p)
+          return { doc: normalizeJournalDocument({ entries: (p as { entries?: unknown }).entries }) };
+        if (p && typeof p === 'object' && ('fields' in p || 'entries' in p))
+          return { doc: normalizeJournalDocument(p) };
         return { doc: emptyJournalDocument() };
       },
     }

@@ -169,6 +169,114 @@ export function isJournalDocumentEmpty(doc: JournalDocument): boolean {
   return keys.every((k) => !journalEntryHasContent(doc.entries[k], doc.fields));
 }
 
+const DEFAULT_FIELD_IDS = new Set(DEFAULT_JOURNAL_FIELDS.map((f) => f.id));
+
+function journalDocTimestamp(doc: JournalDocument): number {
+  const t = Date.parse(doc.updatedAt);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function isFieldValueEmptyForMerge(field: JournalFieldDefinition, value: JournalFieldValue | undefined): boolean {
+  if (field.type === 'text') return !(typeof value === 'string' && value.trim());
+  if (field.type === 'number') return !(typeof value === 'number' && Number.isFinite(value));
+  return value !== true;
+}
+
+function mergeFieldDefinitions(a: JournalDocument, b: JournalDocument): JournalFieldDefinition[] {
+  const ta = journalDocTimestamp(a);
+  const tb = journalDocTimestamp(b);
+  const [older, newer] = ta <= tb ? [a, b] : [b, a];
+  const byId = new Map<string, JournalFieldDefinition>();
+  for (const f of DEFAULT_JOURNAL_FIELDS) {
+    byId.set(f.id, { ...f });
+  }
+  const absorb = (doc: JournalDocument) => {
+    for (const f of doc.fields) {
+      const cur = byId.get(f.id);
+      if (DEFAULT_FIELD_IDS.has(f.id)) {
+        byId.set(f.id, { ...(cur ?? f), ...f, builtIn: true });
+      } else {
+        byId.set(f.id, { ...f });
+      }
+    }
+  };
+  absorb(older);
+  absorb(newer);
+  return [...byId.values()].sort((x, y) => x.sortOrder - y.sortOrder);
+}
+
+function mergeJournalEntriesTie(ea: JournalEntry, eb: JournalEntry, fields: JournalFieldDefinition[]): JournalEntry {
+  const values: Record<string, JournalFieldValue> = {};
+  for (const f of fields) {
+    const va = ea.values[f.id];
+    const vb = eb.values[f.id];
+    const ha = !isFieldValueEmptyForMerge(f, va);
+    const hb = !isFieldValueEmptyForMerge(f, vb);
+    if (ha && !hb) values[f.id] = va as JournalFieldValue;
+    else if (!ha && hb) values[f.id] = vb as JournalFieldValue;
+    else if (ha && hb) {
+      if (f.type === 'text') {
+        const sa = String(va).trim();
+        const sb = String(vb).trim();
+        values[f.id] = sa.length >= sb.length ? (va as string) : (vb as string);
+      } else if (f.type === 'number') {
+        values[f.id] = Math.max(va as number, vb as number);
+      } else {
+        values[f.id] = Boolean(va || vb);
+      }
+    } else {
+      values[f.id] = normalizeFieldValue(f.type, undefined);
+    }
+  }
+  const mood = ea.mood ?? eb.mood;
+  const ts = Math.max(Date.parse(ea.updatedAt) || 0, Date.parse(eb.updatedAt) || 0);
+  return normalizeJournalEntry(ea.dateKey, { values, mood, updatedAt: new Date(ts || Date.now()).toISOString() }, fields);
+}
+
+function mergeJournalEntriesPreferNewer(ea: JournalEntry, eb: JournalEntry, fields: JournalFieldDefinition[]): JournalEntry {
+  const ta = Date.parse(ea.updatedAt) || 0;
+  const tb = Date.parse(eb.updatedAt) || 0;
+  if (ta === tb) return mergeJournalEntriesTie(ea, eb, fields);
+  const winner = ta > tb ? ea : eb;
+  const loser = ta > tb ? eb : ea;
+  const merged = normalizeJournalEntry(winner.dateKey, winner, fields);
+  for (const f of fields) {
+    if (isFieldValueEmptyForMerge(f, merged.values[f.id]) && !isFieldValueEmptyForMerge(f, loser.values[f.id])) {
+      merged.values[f.id] = loser.values[f.id];
+    }
+  }
+  if (!merged.mood && loser.mood) merged.mood = loser.mood;
+  return merged;
+}
+
+/**
+ * Симметричное слияние двух снимков дневника (локальный кэш и облако).
+ * По каждой дате побеждает запись с более новым `updatedAt`; при равенстве объединяются непустые поля.
+ * Поля: встроенные из дефолта, затем оверлей старого документа, затем нового (по `doc.updatedAt`).
+ * Нужно, чтобы «урезанный» клиент или пустой payload никогда не затирал историю целиком.
+ */
+export function mergeJournalDocuments(a: JournalDocument, b: JournalDocument): JournalDocument {
+  const na = normalizeJournalDocument(a);
+  const nb = normalizeJournalDocument(b);
+  const fields = mergeFieldDefinitions(na, nb);
+  const keys = new Set([...Object.keys(na.entries), ...Object.keys(nb.entries)]);
+  const entries: Record<string, JournalEntry> = {};
+  for (const dk of keys) {
+    if (!DATE_KEY_RE.test(dk)) continue;
+    const ea = na.entries[dk];
+    const eb = nb.entries[dk];
+    if (!ea) entries[dk] = normalizeJournalEntry(dk, eb, fields);
+    else if (!eb) entries[dk] = normalizeJournalEntry(dk, ea, fields);
+    else entries[dk] = mergeJournalEntriesPreferNewer(ea, eb, fields);
+  }
+  const mergedTs = Math.max(journalDocTimestamp(na), journalDocTimestamp(nb), 0);
+  return normalizeJournalDocument({
+    fields,
+    entries,
+    updatedAt: new Date(mergedTs || Date.now()).toISOString(),
+  });
+}
+
 export function getFieldsBySection(fields: JournalFieldDefinition[], section: JournalFieldSection): JournalFieldDefinition[] {
   return fields.filter((f) => f.section === section).sort((a, b) => a.sortOrder - b.sortOrder);
 }

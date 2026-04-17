@@ -1,5 +1,5 @@
 import { mergeNikolayJournalFieldsIfNeeded } from '@/features/accounts/nikolayJournalFields';
-import { isJournalDocumentEmpty, normalizeJournalDocument } from '@/features/day/dayJournal.logic';
+import { mergeJournalDocuments, normalizeJournalDocument } from '@/features/day/dayJournal.logic';
 import { useSupabaseConfigured } from '@/config/env';
 import { getSupabase } from '@/lib/supabase';
 import { ensureDayJournalHydrated, useDayJournalStore } from '@/stores/dayJournal.store';
@@ -7,7 +7,8 @@ import { ensureDayJournalHydrated, useDayJournalStore } from '@/stores/dayJourna
 const DEBOUNCE_MS = 900;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
-let syncingFromCloud = false;
+/** Подавляет debounce-push при замене стора из pull/push (избегаем лишних upsert). */
+let suppressJournalAutoPush = false;
 
 async function requireSession() {
   const sb = getSupabase();
@@ -18,14 +19,8 @@ async function requireSession() {
   return session?.user ? session : null;
 }
 
-export async function pullDayJournalFromCloud(): Promise<void> {
-  if (!useSupabaseConfigured) return;
-  const session = await requireSession();
-  if (!session) return;
-
+async function fetchRemoteJournalPayload(userId: string): Promise<unknown> {
   const sb = getSupabase()!;
-  const userId = session.user.id;
-
   const { data, error } = await sb
     .from('day_journal_sync_state')
     .select('payload')
@@ -33,35 +28,45 @@ export async function pullDayJournalFromCloud(): Promise<void> {
     .maybeSingle();
 
   if (error) {
-    console.warn('[day journal sync] pull:', error.message);
-    return;
+    console.warn('[day journal sync] fetch payload:', error.message);
+    return undefined;
   }
+  return data?.payload ?? data;
+}
 
-  const rawRemote = normalizeJournalDocument(data?.payload ?? data);
-  const remote = mergeNikolayJournalFieldsIfNeeded(rawRemote, session.user.email);
+function withNikolay(doc: unknown, email: string | null | undefined) {
+  return mergeNikolayJournalFieldsIfNeeded(normalizeJournalDocument(doc), email);
+}
+
+export async function pullDayJournalFromCloud(): Promise<void> {
+  if (!useSupabaseConfigured) return;
+  const session = await requireSession();
+  if (!session) return;
+
+  const rawRemote = await fetchRemoteJournalPayload(session.user.id);
+  const remoteNik = withNikolay(rawRemote ?? {}, session.user.email);
   await ensureDayJournalHydrated();
-  const local = normalizeJournalDocument(useDayJournalStore.getState().doc);
+  const localNik = withNikolay(useDayJournalStore.getState().doc, session.user.email);
+  const merged = mergeJournalDocuments(localNik, remoteNik);
 
-  syncingFromCloud = true;
+  suppressJournalAutoPush = true;
   try {
-    if (isJournalDocumentEmpty(remote) && !isJournalDocumentEmpty(local)) {
-      await pushDayJournalToCloud();
-      return;
-    }
-    if (!isJournalDocumentEmpty(remote)) {
-      useDayJournalStore.getState().replaceDocument(remote);
-      if (JSON.stringify(remote) !== JSON.stringify(rawRemote)) {
-        syncingFromCloud = false;
-        await pushDayJournalToCloud();
-        syncingFromCloud = true;
-      }
+    useDayJournalStore.getState().replaceDocument(merged);
+    if (JSON.stringify(merged) !== JSON.stringify(remoteNik)) {
+      await pushDayJournalToCloud({ skipRemoteFetch: true, premergedDoc: merged });
     }
   } finally {
-    syncingFromCloud = false;
+    suppressJournalAutoPush = false;
   }
 }
 
-export async function pushDayJournalToCloud(): Promise<void> {
+type PushOpts = {
+  /** Уже смерженный документ (из pull), повторно не читаем БД. */
+  skipRemoteFetch?: boolean;
+  premergedDoc?: ReturnType<typeof normalizeJournalDocument>;
+};
+
+export async function pushDayJournalToCloud(opts?: PushOpts): Promise<void> {
   if (!useSupabaseConfigured) {
     throw new Error('Supabase не настроен');
   }
@@ -71,12 +76,22 @@ export async function pushDayJournalToCloud(): Promise<void> {
   }
 
   const sb = getSupabase()!;
-  const doc = normalizeJournalDocument(useDayJournalStore.getState().doc);
+  const email = session.user.email;
+
+  let merged: ReturnType<typeof normalizeJournalDocument>;
+  if (opts?.skipRemoteFetch && opts.premergedDoc) {
+    merged = normalizeJournalDocument(opts.premergedDoc);
+  } else {
+    const rawRemote = await fetchRemoteJournalPayload(session.user.id);
+    const remoteNik = withNikolay(rawRemote ?? {}, email);
+    const localNik = withNikolay(useDayJournalStore.getState().doc, email);
+    merged = mergeJournalDocuments(localNik, remoteNik);
+  }
 
   const { error } = await sb.from('day_journal_sync_state').upsert(
     {
       user_id: session.user.id,
-      payload: { doc },
+      payload: { doc: merged },
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' }
@@ -86,10 +101,20 @@ export async function pushDayJournalToCloud(): Promise<void> {
     console.warn('[day journal sync] push:', error.message);
     throw new Error(error.message);
   }
+
+  const localNow = withNikolay(useDayJournalStore.getState().doc, email);
+  if (JSON.stringify(merged) !== JSON.stringify(localNow)) {
+    suppressJournalAutoPush = true;
+    try {
+      useDayJournalStore.getState().replaceDocument(merged);
+    } finally {
+      suppressJournalAutoPush = false;
+    }
+  }
 }
 
 function schedulePush(): void {
-  if (syncingFromCloud) return;
+  if (suppressJournalAutoPush) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -121,7 +146,7 @@ export function startDayJournalSupabaseSync(): () => void {
 
     storeUnsub = useDayJournalStore.subscribe((state, prev) => {
       if (state.doc === prev.doc) return;
-      if (syncingFromCloud) return;
+      if (suppressJournalAutoPush) return;
       schedulePush();
     });
   })();
