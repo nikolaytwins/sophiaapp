@@ -120,6 +120,7 @@ function GenZMoneyGoalPlaque({
   goal,
   sprintId,
   fallbackHint,
+  size = 'default',
 }: {
   variant: MoneyPlaqueVariant;
   overline: string;
@@ -127,9 +128,20 @@ function GenZMoneyGoalPlaque({
   goal: SprintGoal | null;
   sprintId: string | null;
   fallbackHint: string;
+  size?: 'default' | 'hero';
 }) {
   const { colors, spacing } = useAppTheme();
   const theme = PLAQUE_THEME[variant];
+  const isHero = size === 'hero';
+  const innerR = isHero ? 32 : CARD_RADIUS;
+  const outerR = innerR + 2;
+  const titleFs = isHero ? 30 : 21;
+  const titleLh = isHero ? 36 : 26;
+  const amountMainFs = isHero ? 38 : 26;
+  const amountSuffixFs = isHero ? 22 : 17;
+  const barH = isHero ? 18 : 14;
+  const innerPadV = isHero ? spacing.xl + 2 : spacing.lg + 4;
+  const innerPadH = isHero ? spacing.xl + 6 : spacing.lg + 6;
   const setProgressGoalNumbers = useSprintStore((s) => s.setProgressGoalNumbers);
   const updateGoalTitle = useSprintStore((s) => s.updateGoalTitle);
 
@@ -171,10 +183,10 @@ function GenZMoneyGoalPlaque({
   const inner = (
     <View
       style={{
-        borderRadius: CARD_RADIUS,
+        borderRadius: innerR,
         backgroundColor: CANVAS_INNER,
-        paddingVertical: spacing.lg + 4,
-        paddingHorizontal: spacing.lg + 6,
+        paddingVertical: innerPadV,
+        paddingHorizontal: innerPadH,
         overflow: 'hidden',
       }}
     >
@@ -192,7 +204,7 @@ function GenZMoneyGoalPlaque({
             {overline.trim() ? (
               <Text
                 style={{
-                  fontSize: 10,
+                  fontSize: isHero ? 11 : 10,
                   fontWeight: '900',
                   letterSpacing: 2.2,
                   color: 'rgba(250,232,255,0.75)',
@@ -204,12 +216,12 @@ function GenZMoneyGoalPlaque({
             ) : null}
             <Text
               style={{
-                marginTop: overline.trim() ? 8 : 0,
-                fontSize: 21,
+                marginTop: overline.trim() ? (isHero ? 10 : 8) : 0,
+                fontSize: titleFs,
                 fontWeight: '900',
                 color: '#FAFAFC',
                 letterSpacing: -0.8,
-                lineHeight: 26,
+                lineHeight: titleLh,
               }}
               numberOfLines={2}
             >
@@ -244,8 +256,8 @@ function GenZMoneyGoalPlaque({
           <>
             <Text
               style={{
-                marginTop: 14,
-                fontSize: 26,
+                marginTop: isHero ? 18 : 14,
+                fontSize: amountMainFs,
                 fontWeight: '900',
                 color: '#FAFAFC',
                 fontVariant: ['tabular-nums'],
@@ -253,15 +265,17 @@ function GenZMoneyGoalPlaque({
               }}
             >
               {fmtRub(current)}
-              <Text style={{ fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.45)' }}> ₽</Text>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.35)' }}> · </Text>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: 'rgba(255,255,255,0.5)' }}>{fmtRub(target)} ₽</Text>
+              <Text style={{ fontSize: amountSuffixFs, fontWeight: '700', color: 'rgba(255,255,255,0.45)' }}> ₽</Text>
+              <Text style={{ fontSize: amountSuffixFs, fontWeight: '700', color: 'rgba(255,255,255,0.35)' }}> · </Text>
+              <Text style={{ fontSize: amountSuffixFs, fontWeight: '800', color: 'rgba(255,255,255,0.5)' }}>
+                {fmtRub(target)} ₽
+              </Text>
             </Text>
 
             <View
               style={{
-                marginTop: 14,
-                height: 14,
+                marginTop: isHero ? 18 : 14,
+                height: barH,
                 borderRadius: 999,
                 backgroundColor: 'rgba(255,255,255,0.08)',
                 overflow: 'hidden',
@@ -310,16 +324,16 @@ function GenZMoneyGoalPlaque({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
-          borderRadius: CARD_RADIUS + 2,
+          borderRadius: outerR,
           padding: 2,
           ...(Platform.OS === 'web'
             ? {}
             : {
                 shadowColor: '#A855F7',
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.25,
-                shadowRadius: 20,
-                elevation: 8,
+                shadowOffset: { width: 0, height: isHero ? 18 : 12 },
+                shadowOpacity: isHero ? 0.32 : 0.25,
+                shadowRadius: isHero ? 28 : 20,
+                elevation: isHero ? 12 : 8,
               }),
         }}
       >
@@ -440,33 +454,40 @@ function GenZMoneyGoalPlaque({
   );
 }
 
-/** Крупные плашки Китай и подушка на экране «День» (редактирование = тот же спринт в сторе). */
+/** Крупные плашки Китай и подушка (редактирование = активный спринт в сторе). */
 export function NikolayDayMoneyHeroCards({
   sprintId,
   chinaGoal,
   cushionGoal,
+  overline = '',
+  size = 'default',
 }: {
   sprintId: string | null;
   chinaGoal: SprintGoal | null;
   cushionGoal: SprintGoal | null;
+  /** Например дедлайн капсом над названием. */
+  overline?: string;
+  size?: 'default' | 'hero';
 }) {
   const { spacing } = useAppTheme();
   return (
-    <View style={{ marginBottom: spacing.md, gap: spacing.lg }}>
+    <View style={{ marginBottom: spacing.md, gap: size === 'hero' ? spacing.xl + 6 : spacing.lg }}>
       <GenZMoneyGoalPlaque
         variant="china"
-        overline=""
+        overline={overline}
         defaultTitle="Поездка в Китай"
         goal={chinaGoal}
         sprintId={sprintId}
+        size={size}
         fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала прогресса."
       />
       <GenZMoneyGoalPlaque
         variant="cushion"
-        overline=""
+        overline={overline}
         defaultTitle="Финансовая подушка"
         goal={cushionGoal}
         sprintId={sprintId}
+        size={size}
         fallbackHint="Добавь прогресс-цель с «подуш» в названии в спринте — увидишь накопление здесь."
       />
     </View>

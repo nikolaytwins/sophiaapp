@@ -3,9 +3,12 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
-import { strategyPageConfig } from '@/features/strategy/strategy.config';
-import { StrategyHeader } from '@/features/strategy/StrategyHeader';
-import { StrategyPhaseAccordion } from '@/features/strategy/StrategyPhaseAccordion';
+import { strategyPageConfig, type StrategyMainTabId } from '@/features/strategy/strategy.config';
+import { StrategyAboutNotesPanel } from '@/features/strategy/StrategyAboutNotesPanel';
+import { StrategyGlobalVisionPanel } from '@/features/strategy/StrategyGlobalVisionPanel';
+import { StrategyGoalsTabPanel } from '@/features/strategy/StrategyGoalsTabPanel';
+import { StrategyInnerTabs } from '@/features/strategy/StrategyInnerTabs';
+import { StrategyStrategyTabPanel } from '@/features/strategy/StrategyStrategyTabPanel';
 import { getSupabase } from '@/lib/supabase';
 import { ensureStrategyCheckpointsHydrated, useStrategyCheckpointsStore } from '@/stores/strategyCheckpoints.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
@@ -17,6 +20,7 @@ export function StrategyScreen() {
   const { typography, spacing, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<StrategyMainTabId>('strategy');
 
   const checked = useStrategyCheckpointsStore((s) => s.checked);
   const toggle = useStrategyCheckpointsStore((s) => s.toggle);
@@ -67,8 +71,6 @@ export function StrategyScreen() {
           <HeaderProfileAvatar />
         </View>
 
-        <StrategyHeader config={strategyPageConfig.meta} />
-
         {!isNikolay ? (
           <AppSurfaceCard>
             <Text style={[typography.body, { color: colors.textMuted }]}>
@@ -79,24 +81,14 @@ export function StrategyScreen() {
           </AppSurfaceCard>
         ) : (
           <>
-            <View style={{ gap: spacing.xs }}>
-              <Text style={[typography.title1, { letterSpacing: -0.2 }]}>
-                {strategyPageConfig.strategySectionTitle}
-              </Text>
-              <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
-            </View>
+            <StrategyInnerTabs labels={strategyPageConfig.tabs} active={mainTab} onChange={setMainTab} />
 
-            <View style={{ gap: spacing.md }}>
-              {strategyPageConfig.phases.map((phase) => (
-                <StrategyPhaseAccordion
-                  key={phase.id}
-                  phase={phase}
-                  checkedMap={checked}
-                  onToggleCheckpoint={onToggleCheckpoint}
-                  readOnly={false}
-                />
-              ))}
-            </View>
+            {mainTab === 'strategy' ? (
+              <StrategyStrategyTabPanel checked={checked} onToggleCheckpoint={onToggleCheckpoint} />
+            ) : null}
+            {mainTab === 'vision' ? <StrategyGlobalVisionPanel config={strategyPageConfig.globalVision} /> : null}
+            {mainTab === 'notes' ? <StrategyAboutNotesPanel config={strategyPageConfig.aboutMeNotes} /> : null}
+            {mainTab === 'goals' ? <StrategyGoalsTabPanel config={strategyPageConfig.goalsTab} /> : null}
           </>
         )}
       </ScrollView>

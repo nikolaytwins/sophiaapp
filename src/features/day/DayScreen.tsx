@@ -8,8 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured } from '@/config/env';
 import type { Habit } from '@/entities/models';
-import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
-import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { DayDateCalendarModal } from '@/features/day/DayDateCalendarModal';
 import { DayMotivationBanner } from '@/features/day/DayMotivationBanner';
 import { DayPlannerTasksBlock } from '@/features/day/DayPlannerTasksBlock';
@@ -98,12 +96,6 @@ export function DayScreen() {
   const [greetingName, setGreetingName] = useState('ты');
   const supabaseOn = useSupabaseConfigured;
 
-  const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
-  const nikolayMoneyGoals = useMemo(
-    () => pickNikolayMoneyProgressGoals(activeSprint?.goals ?? []),
-    [activeSprint]
-  );
-
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) {
@@ -126,8 +118,6 @@ export function DayScreen() {
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  const isNikolay = isNikolayPrimaryAccount(accountEmail);
 
   const data = habits.data ?? [];
 
@@ -456,16 +446,6 @@ export function DayScreen() {
         />
 
         <DayMotivationBanner dateKey={viewDateKey} />
-
-        {isNikolay ? (
-          <>
-            <NikolayDayMoneyHeroCards
-              sprintId={activeSprint?.id ?? null}
-              chinaGoal={nikolayMoneyGoals.china}
-              cushionGoal={nikolayMoneyGoals.cushion}
-            />
-          </>
-        ) : null}
 
         <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
 
