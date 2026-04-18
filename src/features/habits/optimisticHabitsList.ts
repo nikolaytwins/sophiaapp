@@ -1,5 +1,10 @@
 import type { Habit, HabitPersisted } from '@/entities/models';
-import { checkInSlice, counterAdjustSlice } from '@/features/habits/habitsPersistReducer';
+import {
+  checkInSlice,
+  counterAdjustSlice,
+  setHarmfulDayChoiceSlice,
+  type HarmfulDayChoice,
+} from '@/features/habits/habitsPersistReducer';
 import { habitRowToView } from '@/stores/habits.store';
 
 function habitToPersisted(h: Habit): HabitPersisted {
@@ -10,6 +15,7 @@ function habitToPersisted(h: Habit): HabitPersisted {
     cadence: h.cadence,
     checkInKind: h.checkInKind,
     dailyTarget: h.dailyTarget,
+    counterIncrementStep: h.counterIncrementStep,
     countsByDate: h.countsByDate ? { ...h.countsByDate } : undefined,
     counterUnit: h.counterUnit,
     weeklyTarget: h.weeklyTarget,
@@ -17,6 +23,8 @@ function habitToPersisted(h: Habit): HabitPersisted {
     required: h.required,
     createdAt: h.createdAt,
     completionDates: [...(h.completionDates ?? [])],
+    explicitCleanDates: h.explicitCleanDates?.length ? [...h.explicitCleanDates] : undefined,
+    ...(h.analyticsHeatMode ? { analyticsHeatMode: h.analyticsHeatMode } : {}),
   };
 }
 
@@ -44,6 +52,19 @@ export function optimisticApplyCounterDelta(
 ): Habit[] {
   const persisted = habits.map(habitToPersisted);
   const nextSlice = counterAdjustSlice(emptySlice(persisted), habitId, dateKey, delta);
+  const byId = new Map(nextSlice.habits.map((row) => [row.id, habitRowToView(row, todayKey)]));
+  return habits.map((h) => byId.get(h.id) ?? h);
+}
+
+export function optimisticApplyHarmfulChoice(
+  habits: Habit[],
+  habitId: string,
+  dateKey: string,
+  choice: HarmfulDayChoice,
+  todayKey: string
+): Habit[] {
+  const persisted = habits.map(habitToPersisted);
+  const nextSlice = setHarmfulDayChoiceSlice(emptySlice(persisted), habitId, dateKey, choice);
   const byId = new Map(nextSlice.habits.map((row) => [row.id, habitRowToView(row, todayKey)]));
   return habits.map((h) => byId.get(h.id) ?? h);
 }

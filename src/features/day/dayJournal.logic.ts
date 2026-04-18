@@ -17,6 +17,17 @@ const FIELD_TYPE_SET: JournalFieldType[] = ['text', 'number', 'toggle'];
 const FIELD_SECTION_SET: JournalFieldSection[] = ['journal', 'health'];
 const VALID_MOODS = new Set<JournalMoodId>(['death', 'sad', 'neutral', 'smile', 'stars']);
 
+/** Убраны из продукта: здоровье в дневнике и старые поля Николая. */
+const STRIPPED_JOURNAL_FIELD_IDS = new Set<string>([
+  'nikolay_reflect_justify',
+  'nikolay_client_actions_count',
+  'health_steps',
+  'health_calories',
+  'health_protein',
+  'health_fat',
+  'health_carbs',
+]);
+
 function normalizeMood(raw: unknown): JournalMoodId | undefined {
   if (raw === null || raw === '') return undefined;
   return typeof raw === 'string' && VALID_MOODS.has(raw as JournalMoodId) ? (raw as JournalMoodId) : undefined;
@@ -90,6 +101,8 @@ export function normalizeJournalEntry(
   base.updatedAt = typeof o.updatedAt === 'string' ? o.updatedAt : new Date().toISOString();
   const mood = normalizeMood(o.mood);
   if (mood) base.mood = mood;
+  const energy = normalizeMood(o.energy);
+  if (energy) base.energy = energy;
   return base;
 }
 
@@ -117,7 +130,9 @@ export function normalizeJournalDocument(raw: unknown): JournalDocument {
       mergedFieldsById.set(f.id, f);
     }
   }
-  const fields = [...mergedFieldsById.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+  const fields = [...mergedFieldsById.values()]
+    .filter((f) => f.section !== 'health' && !STRIPPED_JOURNAL_FIELD_IDS.has(f.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 
   const entriesRaw = o.entries && typeof o.entries === 'object' ? (o.entries as Record<string, unknown>) : {};
   const entries: Record<string, JournalEntry> = {};
@@ -136,6 +151,7 @@ export function normalizeJournalDocument(raw: unknown): JournalDocument {
 export function journalEntryHasContent(entry: JournalEntry | undefined, fields: JournalFieldDefinition[]): boolean {
   if (!entry) return false;
   if (entry.mood) return true;
+  if (entry.energy) return true;
   for (const field of fields) {
     const value = entry.values[field.id];
     if (field.type === 'text' && typeof value === 'string' && value.trim()) return true;
@@ -229,8 +245,13 @@ function mergeJournalEntriesTie(ea: JournalEntry, eb: JournalEntry, fields: Jour
     }
   }
   const mood = ea.mood ?? eb.mood;
+  const energy = ea.energy ?? eb.energy;
   const ts = Math.max(Date.parse(ea.updatedAt) || 0, Date.parse(eb.updatedAt) || 0);
-  return normalizeJournalEntry(ea.dateKey, { values, mood, updatedAt: new Date(ts || Date.now()).toISOString() }, fields);
+  return normalizeJournalEntry(
+    ea.dateKey,
+    { values, mood, energy, updatedAt: new Date(ts || Date.now()).toISOString() },
+    fields
+  );
 }
 
 function mergeJournalEntriesPreferNewer(ea: JournalEntry, eb: JournalEntry, fields: JournalFieldDefinition[]): JournalEntry {
@@ -246,6 +267,7 @@ function mergeJournalEntriesPreferNewer(ea: JournalEntry, eb: JournalEntry, fiel
     }
   }
   if (!merged.mood && loser.mood) merged.mood = loser.mood;
+  if (!merged.energy && loser.energy) merged.energy = loser.energy;
   return merged;
 }
 
@@ -291,7 +313,7 @@ export type JournalNarrativeExportDoc = {
   schema: 'sophia.journal.narrative.v1';
   exportedAt: string;
   fields: JournalFieldDefinition[];
-  entries: Array<{ dateKey: string; mood?: JournalMoodId; values: Record<string, JournalFieldValue> }>;
+  entries: Array<{ dateKey: string; mood?: JournalMoodId; energy?: JournalMoodId; values: Record<string, JournalFieldValue> }>;
 };
 
 export type JournalHealthExportDoc = {
@@ -308,11 +330,13 @@ export function buildNarrativeExport(doc: JournalDocument): JournalNarrativeExpo
     .map((entry) => ({
       dateKey: entry.dateKey,
       ...(entry.mood ? { mood: entry.mood } : {}),
+      ...(entry.energy ? { energy: entry.energy } : {}),
       values: Object.fromEntries(fields.map((f) => [f.id, entry.values[f.id] ?? normalizeFieldValue(f.type, undefined)])),
     }))
     .filter(
       (row) =>
         Boolean(row.mood) ||
+        Boolean(row.energy) ||
         Object.values(row.values).some((v) =>
           typeof v === 'string' ? v.trim().length > 0 : typeof v === 'number' ? Number.isFinite(v) : v === true
         )
@@ -365,7 +389,7 @@ export function buildJournalDayPlainText(doc: JournalDocument, dateKey: string):
   const head = `Sophia OS — дневник\n${longDate}\n(${dateKey})`;
 
   if (!journalEntryHasContent(entry, doc.fields)) {
-    return `${head}\n\nЗа эту дату нет записей (настроение, текст, числа, переключатели).`;
+    return `${head}\n\nЗа эту дату нет записей (настроение, энергия, текст, числа, переключатели).`;
   }
 
   const lines: string[] = [head, ''];
@@ -374,19 +398,15 @@ export function buildJournalDayPlainText(doc: JournalDocument, dateKey: string):
   if (moodMeta) {
     lines.push(`Настроение: ${moodMeta.emoji} ${moodMeta.label}`, '');
   }
+  const energyMeta = entry?.energy ? getMoodMeta(entry.energy) : null;
+  if (energyMeta) {
+    lines.push(`Энергия: ${energyMeta.emoji} ${energyMeta.label}`, '');
+  }
 
   const journalFields = getFieldsBySection(doc.fields, 'journal');
   if (journalFields.length) {
     lines.push('Записи', '—'.repeat(28), '');
     for (const f of journalFields) {
-      lines.push(formatJournalFieldLine(f, entry?.values[f.id]), '');
-    }
-  }
-
-  const healthFields = getFieldsBySection(doc.fields, 'health');
-  if (healthFields.length) {
-    lines.push('Здоровье', '—'.repeat(28), '');
-    for (const f of healthFields) {
       lines.push(formatJournalFieldLine(f, entry?.values[f.id]), '');
     }
   }

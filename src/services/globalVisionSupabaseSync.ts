@@ -13,10 +13,16 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let syncingFromCloud = false;
 
 function isDocEmpty(d: GlobalVisionDocument): boolean {
-  const hasBlockContent = d.blocks.some((b) =>
-    b.kind === 'text' ? Boolean(b.text.trim()) : Boolean(b.imageUri?.trim())
-  );
+  const hasBlockContent = d.blocks.some((b) => {
+    if (b.kind === 'text') {
+      const imgs = b.imageUris?.filter((u) => u.trim()) ?? [];
+      return Boolean(b.text.trim()) || imgs.length > 0;
+    }
+    return Boolean(b.imageUri?.trim());
+  });
   if (hasBlockContent) return false;
+  const hasGoalPhotos = Object.values(d.goalLevelPhotos).some((arr) => arr.length > 0);
+  if (hasGoalPhotos) return false;
   for (const k of ['relationships', 'energy', 'work'] as const) {
     if (d.sphereVisions[k].trim()) return false;
   }

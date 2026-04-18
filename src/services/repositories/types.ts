@@ -14,6 +14,7 @@ import type {
   Task,
   UserProfile,
 } from '@/entities/models';
+import type { HarmfulDayChoice } from '@/features/habits/habitsPersistReducer';
 
 /** Полный срез для аналитики и выгрузки в GPT. */
 export type HabitsAnalyticsExport = {
@@ -74,6 +75,8 @@ export interface HabitsRepository {
   checkIn(id: string, dateKey?: string): Promise<Habit[]>;
   /** Счётчик: +1 / −1 за выбранный день (не ниже 0; выше цели можно, до 99). */
   adjustCounter(id: string, dateKey: string, delta: 1 | -1): Promise<Habit[]>;
+  /** Привычка «вредное»: да / нет / сброс за день. */
+  setHarmfulDayChoice(id: string, dateKey: string, choice: HarmfulDayChoice): Promise<Habit[]>;
   /** Удаляет последнюю отметку за dateKey (по умолчанию — сегодня). */
   undoWeekly(id: string, dateKey?: string): Promise<Habit[]>;
   remove(id: string): Promise<Habit[]>;

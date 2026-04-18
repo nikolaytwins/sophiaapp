@@ -2,6 +2,7 @@ import type { HabitPersisted } from '@/entities/models';
 import { useSprintStore } from '@/stores/sprint.store';
 
 function completionDeltaForCheckIn(prev: HabitPersisted, next: HabitPersisted, dateKey: string): number {
+  if (prev.analyticsHeatMode === 'negative' || next.analyticsHeatMode === 'negative') return 0;
   if (prev.cadence === 'daily') {
     if (prev.checkInKind === 'counter' && prev.dailyTarget != null) {
       const t = prev.dailyTarget;

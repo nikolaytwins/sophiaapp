@@ -24,6 +24,8 @@ export type JournalEntry = {
   values: Record<string, JournalFieldValue>;
   updatedAt: string;
   mood?: JournalMoodId;
+  /** Отдельно от настроения: можно 0 энергии при нормальном настроении. */
+  energy?: JournalMoodId;
 };
 
 export type JournalDocument = {
@@ -62,50 +64,10 @@ export const DEFAULT_JOURNAL_FIELDS: JournalFieldDefinition[] = [
   {
     id: 'body_and_resource',
     label: 'Тело и ресурс',
-    prompt: 'Во сколько лег/встал, как себя чувствовал, какое настроение?',
+    prompt: 'Во сколько лег/встал, как себя чувствовал?',
     type: 'text',
     section: 'journal',
     sortOrder: 3,
-    builtIn: true,
-  },
-  {
-    id: 'health_steps',
-    label: 'Сколько шагов прошел',
-    type: 'number',
-    section: 'health',
-    sortOrder: 100,
-    builtIn: true,
-  },
-  {
-    id: 'health_calories',
-    label: 'Калории',
-    type: 'number',
-    section: 'health',
-    sortOrder: 101,
-    builtIn: true,
-  },
-  {
-    id: 'health_protein',
-    label: 'Белок',
-    type: 'number',
-    section: 'health',
-    sortOrder: 102,
-    builtIn: true,
-  },
-  {
-    id: 'health_fat',
-    label: 'Жиры',
-    type: 'number',
-    section: 'health',
-    sortOrder: 103,
-    builtIn: true,
-  },
-  {
-    id: 'health_carbs',
-    label: 'Углеводы',
-    type: 'number',
-    section: 'health',
-    sortOrder: 104,
     builtIn: true,
   },
 ];

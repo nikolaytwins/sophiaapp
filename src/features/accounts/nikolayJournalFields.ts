@@ -2,26 +2,8 @@ import type { JournalDocument, JournalFieldDefinition } from '@/features/day/day
 
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 
-const NIKOLAY_EXTRA_FIELDS: JournalFieldDefinition[] = [
-  {
-    id: 'nikolay_reflect_justify',
-    label: 'Я оправдывался? Объяснял себя? Подстраивался под ожидания другого?',
-    prompt: 'Коротко зафиксируй, если было — и что сделаешь иначе.',
-    type: 'text',
-    section: 'journal',
-    sortOrder: 10,
-    builtIn: true,
-  },
-  {
-    id: 'nikolay_client_actions_count',
-    label: 'Сколько действий на привлечение клиентов сегодня?',
-    prompt: 'Цель по будням: 3–5. В выходной можно 0.',
-    type: 'number',
-    section: 'journal',
-    sortOrder: 11,
-    builtIn: true,
-  },
-];
+/** Раньше добавлялись доп. поля — оставляем хук на будущее (массив пустой). */
+const NIKOLAY_EXTRA_FIELDS: JournalFieldDefinition[] = [];
 
 /** Добавляет поля в документ дневника (идемпотентно). */
 export function mergeNikolayJournalFields(doc: JournalDocument): JournalDocument {

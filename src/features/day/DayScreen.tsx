@@ -11,8 +11,8 @@ import type { Habit } from '@/entities/models';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { DayDateCalendarModal } from '@/features/day/DayDateCalendarModal';
-import { DayMotivationBanner } from '@/features/day/DayMotivationBanner';
 import { DayPlannerTasksBlock } from '@/features/day/DayPlannerTasksBlock';
+import { DayWeekFocusStrip } from '@/features/day/DayWeekFocusStrip';
 import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { journalEntryHasContent } from '@/features/day/dayJournal.logic';
 import type { JournalMoodId } from '@/features/day/dayJournal.types';
@@ -22,7 +22,12 @@ import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitHero } from '@/features/habits/HabitHero';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
-import { optimisticApplyCheckIn, optimisticApplyCounterDelta } from '@/features/habits/optimisticHabitsList';
+import type { HarmfulDayChoice } from '@/features/habits/habitsPersistReducer';
+import {
+  optimisticApplyCheckIn,
+  optimisticApplyCounterDelta,
+  optimisticApplyHarmfulChoice,
+} from '@/features/habits/optimisticHabitsList';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { listPlannerTasks } from '@/features/tasks/plannerApi';
@@ -90,6 +95,7 @@ export function DayScreen() {
   const habits = useHabitsQuery();
   const journalDoc = useDayJournalStore((s) => s.doc);
   const setMood = useDayJournalStore((s) => s.setMood);
+  const setEnergy = useDayJournalStore((s) => s.setEnergy);
   const todayKey = localDateKey();
   const [viewDateKey, setViewDateKey] = useState(todayKey);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -159,6 +165,10 @@ export function DayScreen() {
     setMood(dateKey, mood);
   }, [setMood]);
 
+  const pickEnergy = useCallback((dateKey: string, energy: JournalMoodId | null) => {
+    setEnergy(dateKey, energy);
+  }, [setEnergy]);
+
   const checkIn = useMutation({
     mutationFn: ({ id, dateKey: dk }: { id: string; dateKey?: string }) => repos.habits.checkIn(id, dk),
     onMutate: async (vars) => {
@@ -210,15 +220,55 @@ export function DayScreen() {
     },
   });
 
+  const setHarmfulChoice = useMutation({
+    mutationFn: ({
+      id,
+      dateKey,
+      choice,
+    }: {
+      id: string;
+      dateKey: string;
+      choice: HarmfulDayChoice;
+    }) => repos.habits.setHarmfulDayChoice(id, dateKey, choice),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: [...HABITS_QUERY_KEY] });
+      const previous = qc.getQueryData<Habit[]>([...HABITS_QUERY_KEY]);
+      if (previous) {
+        qc.setQueryData(
+          [...HABITS_QUERY_KEY],
+          optimisticApplyHarmfulChoice(previous, vars.id, vars.dateKey, vars.choice, todayKey)
+        );
+      }
+      return { previous } as { previous: Habit[] | undefined };
+    },
+    onError: (_err, _vars, ctx) => {
+      const p = ctx as { previous: Habit[] | undefined } | undefined;
+      if (p?.previous) qc.setQueryData([...HABITS_QUERY_KEY], p.previous);
+    },
+    onSuccess: (list) => {
+      qc.setQueryData([...HABITS_QUERY_KEY], list);
+    },
+  });
+
   const onHabitIcon = useCallback(
     (h: Habit) => {
       if (viewDateKey > todayKey) return;
+      if (h.analyticsHeatMode === 'negative') return;
       if (Platform.OS !== 'web') {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       checkIn.mutate({ id: h.id, dateKey: viewDateKey });
     },
     [checkIn, viewDateKey]
+  );
+
+  const onHarmfulChoice = useCallback(
+    (h: Habit, dateKey: string, choice: HarmfulDayChoice) => {
+      if (dateKey > todayKey) return;
+      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+      setHarmfulChoice.mutate({ id: h.id, dateKey, choice });
+    },
+    [setHarmfulChoice, todayKey]
   );
 
   const goPrevDay = useCallback(() => {
@@ -454,8 +504,6 @@ export function DayScreen() {
           isTodayContext={viewDateKey === todayKey}
         />
 
-        <DayMotivationBanner dateKey={viewDateKey} />
-
         {isNikolay ? (
           <NikolayDayMoneyHeroCards
             sprintId={activeSprint?.id ?? null}
@@ -463,6 +511,8 @@ export function DayScreen() {
             cushionGoal={nikolayMoneyGoals.cushion}
           />
         ) : null}
+
+        <DayWeekFocusStrip viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
 
         <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
 
@@ -601,6 +651,7 @@ export function DayScreen() {
             viewDateKey={viewDateKey}
             todayKey={todayKey}
             onToggle={onHabitIcon}
+            onHarmfulChoice={onHarmfulChoice}
             onRequestDelete={(h) => removeHabit.mutate(h.id)}
             journalRow={{
               viewDateKey,
@@ -619,6 +670,7 @@ export function DayScreen() {
           linkMoodToScreenDay
           onMoodStripChangeDay={setViewDateKey}
           onPickMood={(dk, mood) => void pickMood(dk, mood)}
+          onPickEnergy={(dk, energy) => void pickEnergy(dk, energy)}
         />
 
         {shouldShowJournalReminder ? (

@@ -1,5 +1,10 @@
 import type { HabitPersisted } from '@/entities/models';
 import { DEFAULT_HABIT_SEEDS } from '@/features/habits/defaultHabits';
+
+/** Верхняя граница цели счётчика за день и при создании/редактировании. */
+export const COUNTER_DAILY_TARGET_MAX = 500;
+
+const HARMFUL_HABIT_ID = 'seed_harmful_intake_daily';
 import {
   localDateKey,
   removeWeeklyCompletionOnDay,
@@ -24,15 +29,63 @@ export const HABITS_SEED_ROWS: HabitPersisted[] = DEFAULT_HABIT_SEEDS.map((h) =>
   createdAt: new Date().toISOString(),
 }));
 
+function migrateProteinHabitIfNeeded(row: HabitPersisted): HabitPersisted {
+  if (row.id !== 'seed_protein_140') return row;
+  const already =
+    row.checkInKind === 'counter' && row.dailyTarget === 140 && row.countsByDate != null;
+  if (already) {
+    const name = row.name?.trim() || '140 г белка';
+    return {
+      ...row,
+      name: name.includes('140') ? name : '140 г белка',
+      counterUnit: row.counterUnit ?? 'г',
+      counterIncrementStep: row.counterIncrementStep ?? 10,
+      section: row.section ?? 'body',
+    };
+  }
+  const counts: Record<string, number> = { ...(row.countsByDate ?? {}) };
+  for (const dk of row.completionDates ?? []) {
+    if (DATE_KEY_RE.test(dk) && (counts[dk] ?? 0) < 140) counts[dk] = 140;
+  }
+  return {
+    ...row,
+    name: '140 г белка',
+    checkInKind: 'counter',
+    dailyTarget: 140,
+    counterUnit: 'г',
+    counterIncrementStep: 10,
+    section: row.section ?? 'body',
+    completionDates: [],
+    countsByDate: counts,
+  };
+}
+
 function normalizeHabitRow(row: HabitPersisted): HabitPersisted {
-  let next: HabitPersisted = row;
-  if (row.id === 'seed_no_tarot_astro') {
-    next = { ...row, name: 'Без планирования' };
+  let next: HabitPersisted = migrateProteinHabitIfNeeded(row);
+  if (next.id === 'seed_no_tarot_astro') {
+    next = { ...next, name: 'Без планирования' };
   }
   const rawDates = next.completionDates ?? [];
   const dates = [...new Set(rawDates.filter((d) => typeof d === 'string' && DATE_KEY_RE.test(d)))].sort();
   if (dates.length !== rawDates.length) {
     next = { ...next, completionDates: dates };
+  }
+  const rawClean = next.explicitCleanDates ?? [];
+  const cleanDates = [...new Set(rawClean.filter((d) => typeof d === 'string' && DATE_KEY_RE.test(d)))].sort();
+  if (cleanDates.length !== rawClean.length || (rawClean.length > 0 && !next.explicitCleanDates)) {
+    next = { ...next, explicitCleanDates: cleanDates.length ? cleanDates : undefined };
+  }
+  if (next.analyticsHeatMode === 'negative' && next.cadence === 'daily') {
+    const harm = new Set(next.completionDates);
+    const cl = new Set(cleanDates);
+    for (const dk of cl) harm.delete(dk);
+    const mergedHarm = [...harm].sort();
+    const mergedClean = [...cl].sort();
+    next = {
+      ...next,
+      completionDates: mergedHarm,
+      explicitCleanDates: mergedClean.length ? mergedClean : undefined,
+    };
   }
   return next;
 }
@@ -42,10 +95,16 @@ export function normalizeHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice 
     .filter((h) => !REMOVED_HABIT_IDS.has(h.id))
     .map(normalizeHabitRow);
 
-  const hasWalkHabit = baseHabits.some((h) => h.id === WALK_WITHOUT_GOAL_ID);
+  const harmfulSeed = DEFAULT_HABIT_SEEDS.find((h) => h.id === HARMFUL_HABIT_ID);
+  const withHarmful =
+    harmfulSeed && !baseHabits.some((h) => h.id === HARMFUL_HABIT_ID)
+      ? [...baseHabits, { ...harmfulSeed, createdAt: new Date().toISOString() } as HabitPersisted]
+      : baseHabits;
+
+  const hasWalkHabit = withHarmful.some((h) => h.id === WALK_WITHOUT_GOAL_ID);
   const nextHabits = hasWalkHabit
-    ? baseHabits
-    : [...baseHabits, { ...HABITS_SEED_ROWS.find((h) => h.id === WALK_WITHOUT_GOAL_ID)!, createdAt: new Date().toISOString() }];
+    ? withHarmful
+    : [...withHarmful, { ...HABITS_SEED_ROWS.find((h) => h.id === WALK_WITHOUT_GOAL_ID)!, createdAt: new Date().toISOString() }];
 
   return {
     habits: nextHabits,
@@ -58,6 +117,7 @@ export function normalizeHabitsSlice(s: HabitsPersistSlice): HabitsPersistSlice 
 }
 
 function isRitualHabit(h: HabitPersisted): boolean {
+  if (h.analyticsHeatMode === 'negative') return false;
   return h.required !== false;
 }
 
@@ -119,7 +179,7 @@ export function createHabitSlice(s: HabitsPersistSlice, input: CreateHabitPersis
   const isCounterDaily =
     input.cadence === 'daily' && input.checkInKind === 'counter';
   const dailyTarget = isCounterDaily
-    ? Math.max(2, Math.min(99, Math.round(input.dailyTarget ?? 8)))
+    ? Math.max(2, Math.min(COUNTER_DAILY_TARGET_MAX, Math.round(input.dailyTarget ?? 8)))
     : undefined;
   const counterUnit =
     isCounterDaily && input.counterUnit?.trim() ? input.counterUnit.trim().slice(0, 24) : undefined;
@@ -164,7 +224,7 @@ function toDailyOnceRow(h: HabitPersisted): HabitPersisted {
 }
 
 function toDailyCounterRow(h: HabitPersisted, dailyTarget: number, counterUnit?: string): HabitPersisted {
-  const dt = Math.max(2, Math.min(99, Math.round(dailyTarget)));
+  const dt = Math.max(2, Math.min(COUNTER_DAILY_TARGET_MAX, Math.round(dailyTarget)));
   const unit =
     counterUnit !== undefined ? counterUnit.trim().slice(0, 24) || undefined : h.counterUnit;
   const next: HabitPersisted = {
@@ -211,7 +271,7 @@ export function updateHabitSlice(
       (patch.dailyTarget !== undefined || patch.counterUnit !== undefined)
     ) {
       if (patch.dailyTarget !== undefined) {
-        next = { ...next, dailyTarget: Math.max(2, Math.min(99, Math.round(patch.dailyTarget))) };
+        next = { ...next, dailyTarget: Math.max(2, Math.min(COUNTER_DAILY_TARGET_MAX, Math.round(patch.dailyTarget))) };
       }
       if (patch.counterUnit !== undefined) {
         const unit = patch.counterUnit.trim().slice(0, 24);
@@ -254,14 +314,13 @@ export function removeHabitSlice(s: HabitsPersistSlice, id: string): HabitsPersi
   };
 }
 
-/** Верхняя граница + за день (можно перебрать цель, напр. 5/3). */
-const COUNTER_DAY_MAX = 99;
-
 function applyCounterDelta(h: HabitPersisted, dk: string, delta: 1 | -1): HabitPersisted {
   if (h.cadence !== 'daily' || h.checkInKind !== 'counter' || h.dailyTarget == null) return h;
+  const step = Math.max(1, Math.min(50, Math.round(h.counterIncrementStep ?? 1)));
+  const ceiling = Math.max(h.dailyTarget, 99);
   const counts = { ...(h.countsByDate ?? {}) };
   const cur = counts[dk] ?? 0;
-  const nextVal = delta === 1 ? Math.min(COUNTER_DAY_MAX, cur + 1) : Math.max(0, cur - 1);
+  const nextVal = delta === 1 ? Math.min(ceiling, cur + step) : Math.max(0, cur - step);
   if (nextVal <= 0) {
     delete counts[dk];
   } else {
@@ -270,10 +329,50 @@ function applyCounterDelta(h: HabitPersisted, dk: string, delta: 1 | -1): HabitP
   return { ...h, countsByDate: counts };
 }
 
+export type HarmfulDayChoice = 'harmful' | 'clean' | 'clear';
+
+export function setHarmfulDayChoiceSlice(
+  s: HabitsPersistSlice,
+  id: string,
+  dateKey: string,
+  choice: HarmfulDayChoice
+): HabitsPersistSlice {
+  const nextHabits = s.habits.map((h) => {
+    if (h.id !== id) return h;
+    if (h.analyticsHeatMode !== 'negative' || h.cadence !== 'daily') return h;
+    const harm = new Set(h.completionDates);
+    const clean = new Set(h.explicitCleanDates ?? []);
+    if (choice === 'harmful') {
+      clean.delete(dateKey);
+      harm.add(dateKey);
+    } else if (choice === 'clean') {
+      harm.delete(dateKey);
+      clean.add(dateKey);
+    } else {
+      harm.delete(dateKey);
+      clean.delete(dateKey);
+    }
+    const mergedHarm = [...harm].filter((d) => DATE_KEY_RE.test(d)).sort();
+    const mergedClean = [...clean].filter((d) => DATE_KEY_RE.test(d)).sort();
+    return {
+      ...h,
+      completionDates: mergedHarm,
+      explicitCleanDates: mergedClean.length ? mergedClean : undefined,
+    };
+  });
+  const normalized = nextHabits.map(normalizeHabitRow);
+  return {
+    ...s,
+    habits: normalized,
+    heroHistory: { ...s.heroHistory, [dateKey]: ritualScoreForDayPersisted(normalized, dateKey) },
+  };
+}
+
 export function checkInSlice(s: HabitsPersistSlice, id: string, dateKey?: string): HabitsPersistSlice {
   const dk = dateKey ?? localDateKey();
   const nextHabits = s.habits.map((h) => {
     if (h.id !== id) return h;
+    if (h.analyticsHeatMode === 'negative') return h;
     if (h.cadence === 'daily') {
       if (h.checkInKind === 'counter' && h.dailyTarget != null) {
         return applyCounterDelta(h, dk, 1);
@@ -299,6 +398,7 @@ export function counterAdjustSlice(
   const dk = dateKey;
   const nextHabits = s.habits.map((h) => {
     if (h.id !== id) return h;
+    if (h.analyticsHeatMode === 'negative') return h;
     if (h.cadence === 'daily' && h.checkInKind === 'counter' && h.dailyTarget != null) {
       return applyCounterDelta(h, dk, delta);
     }

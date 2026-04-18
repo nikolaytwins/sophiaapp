@@ -45,6 +45,11 @@ export const delegatingHabitsRepository: HabitsRepository = {
     return localHabitsRepository.adjustCounter(id, dateKey, delta);
   },
 
+  async setHarmfulDayChoice(id, dateKey, choice) {
+    if (await useCloudHabits()) return supabaseRepo.setHarmfulDayChoice(id, dateKey, choice);
+    return localHabitsRepository.setHarmfulDayChoice(id, dateKey, choice);
+  },
+
   async undoWeekly(id, dateKey) {
     if (await useCloudHabits()) return supabaseRepo.undoWeekly(id, dateKey);
     return localHabitsRepository.undoWeekly(id, dateKey);

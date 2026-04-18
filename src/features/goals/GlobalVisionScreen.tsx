@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { type Href, Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
 import {
@@ -24,13 +25,39 @@ import {
   GOALS_CALLOUT_BG,
   GOALS_EMBED_MAX_W,
 } from '@/features/goals/goalsNotionTheme';
-import { pickGoalCoverImageUri } from '@/features/goals/pickGoalImage';
+import { pickGoalCoverImageUri, pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
 import { VisionTextInput } from '@/features/goals/VisionTextInput';
 import { useSupabaseConfigured } from '@/config/env';
+import type { GlobalVisionGoalLevelDef } from '@/features/strategy/strategy.config';
+import { strategyPageConfig } from '@/features/strategy/strategy.config';
 import { useGlobalVisionStore } from '@/stores/globalVision.store';
 import { useAppTheme } from '@/theme';
 
 const CARD_R = 18;
+
+const GOAL_LEVEL_ACCENT: Record<
+  GlobalVisionGoalLevelDef['accent'],
+  { label: string; border: string; glow: string; fill: string }
+> = {
+  green: {
+    label: '#86efac',
+    border: 'rgba(34,197,94,0.38)',
+    glow: 'rgba(34,197,94,0.12)',
+    fill: 'rgba(34,197,94,0.06)',
+  },
+  amber: {
+    label: '#fcd34d',
+    border: 'rgba(251,191,36,0.4)',
+    glow: 'rgba(251,191,36,0.12)',
+    fill: 'rgba(251,191,36,0.06)',
+  },
+  violet: {
+    label: '#c4b5fd',
+    border: 'rgba(168,85,247,0.45)',
+    glow: 'rgba(168,85,247,0.14)',
+    fill: 'rgba(168,85,247,0.07)',
+  },
+};
 
 const SPHERE_TABS: {
   key: AnnualSphere;
@@ -50,8 +77,174 @@ const ARTICLE_TEXT = {
 };
 
 function hasVisibleEssayContent(blocks: GlobalVisionBlock[]): boolean {
-  return blocks.some((b) =>
-    b.kind === 'text' ? Boolean(b.text.trim()) : Boolean(b.imageUri?.trim())
+  return blocks.some((b) => {
+    if (b.kind === 'text') {
+      const imgs = b.imageUris?.filter(Boolean) ?? [];
+      return Boolean(b.text.trim()) || imgs.length > 0;
+    }
+    return Boolean(b.imageUri?.trim());
+  });
+}
+
+/** Горизонтальная лента фото с добавлением и удалением. */
+function AttachedPhotosRow({
+  uris,
+  canEdit,
+  onPick,
+  onRemoveAt,
+}: {
+  uris: string[];
+  canEdit: boolean;
+  onPick?: () => void | Promise<void>;
+  onRemoveAt?: (index: number) => void;
+}) {
+  if (!canEdit && uris.length === 0) return null;
+
+  return (
+    <View style={{ marginTop: 12 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 8 }}>
+        {uris.map((uri, index) => (
+          <View key={`ph_${index}_${uri.length}`} style={{ width: 112, height: 80 }}>
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 14,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: GOALS_BORDER,
+                backgroundColor: 'rgba(255,255,255,0.04)',
+              }}
+            >
+              <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+            </View>
+            {canEdit && onRemoveAt ? (
+              <Pressable
+                onPress={() => {
+                  Alert.alert('Удалить фото?', '', [
+                    { text: 'Отмена', style: 'cancel' },
+                    {
+                      text: 'Удалить',
+                      style: 'destructive',
+                      onPress: () => {
+                        onRemoveAt(index);
+                        if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      },
+                    },
+                  ]);
+                }}
+                hitSlop={10}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: 'rgba(0,0,0,0.55)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+              </Pressable>
+            ) : null}
+          </View>
+        ))}
+        {canEdit && onPick ? (
+          <Pressable
+            onPress={() => void onPick()}
+            style={{
+              width: 112,
+              height: 80,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderStyle: 'dashed',
+              borderColor: 'rgba(168,85,247,0.35)',
+              backgroundColor: 'rgba(168,85,247,0.06)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            <Ionicons name="images-outline" size={22} color={GOALS_ACCENT_SOFT} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: GOALS_ACCENT_SOFT }}>Добавить</Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function GoalLevelCard({
+  level,
+  photos,
+  onAppend,
+  onRemoveAt,
+}: {
+  level: GlobalVisionGoalLevelDef;
+  photos: string[];
+  onAppend: (uris: string[]) => void;
+  onRemoveAt: (index: number) => void;
+}) {
+  const { colors } = useAppTheme();
+  const a = GOAL_LEVEL_ACCENT[level.accent];
+
+  const pick = async () => {
+    const uris = await pickVisionBoardImageUris();
+    if (uris.length > 0) {
+      onAppend(uris);
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  return (
+    <LinearGradient
+      colors={[a.glow, 'rgba(255,255,255,0.02)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        borderRadius: CARD_R + 2,
+        padding: 1,
+        marginBottom: 14,
+      }}
+    >
+      <View
+        style={{
+          borderRadius: CARD_R,
+          paddingVertical: 18,
+          paddingHorizontal: 18,
+          borderWidth: 1,
+          borderColor: a.border,
+          backgroundColor: a.fill,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: '800',
+            letterSpacing: 1.1,
+            color: a.label,
+            marginBottom: 8,
+          }}
+        >
+          {level.label}
+        </Text>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.4, lineHeight: 24 }}>
+          {level.headline}
+        </Text>
+        <Text
+          style={{
+            marginTop: 10,
+            fontSize: 15,
+            lineHeight: 24,
+            color: 'rgba(248,250,252,0.62)',
+          }}
+        >
+          {level.body}
+        </Text>
+        <AttachedPhotosRow uris={photos} canEdit onPick={pick} onRemoveAt={onRemoveAt} />
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -115,10 +308,7 @@ function GlobalVisionImageBlockRow({
         }}
       />
       {urlDraft.trim() ? (
-        <Pressable
-          onPress={() => setBlockImageUri(blockId, urlDraft.trim())}
-          style={{ marginTop: 8, alignSelf: 'flex-start' }}
-        >
+        <Pressable onPress={() => setBlockImageUri(blockId, urlDraft.trim())} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
           <Text style={{ color: GOALS_ACCENT_SOFT, fontWeight: '600', fontSize: 13 }}>Применить URL</Text>
         </Pressable>
       ) : null}
@@ -126,7 +316,35 @@ function GlobalVisionImageBlockRow({
   );
 }
 
-/** Единая статья: только текст и картинки, без рамок редактора. */
+function TextBlockAttachedPhotosEditor({
+  blockId,
+  uris,
+}: {
+  blockId: string;
+  uris: string[];
+}) {
+  const appendTextBlockImages = useGlobalVisionStore((s) => s.appendTextBlockImages);
+  const removeTextBlockImageAt = useGlobalVisionStore((s) => s.removeTextBlockImageAt);
+
+  const pick = async () => {
+    const next = await pickVisionBoardImageUris();
+    if (next.length > 0) {
+      appendTextBlockImages(blockId, next);
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  return (
+    <View style={{ marginTop: 12 }}>
+      <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.32)', letterSpacing: 0.8, marginBottom: 8 }}>
+        Фото под этим абзацем
+      </Text>
+      <AttachedPhotosRow uris={uris} canEdit onPick={pick} onRemoveAt={(i) => removeTextBlockImageAt(blockId, i)} />
+    </View>
+  );
+}
+
+/** Единая статья: текст, вложенные фото под абзацами, отдельные блоки-картинки. */
 function GlobalVisionArticleRead({ blocks }: { blocks: GlobalVisionBlock[] }) {
   const visible = hasVisibleEssayContent(blocks);
   if (!visible) {
@@ -142,11 +360,15 @@ function GlobalVisionArticleRead({ blocks }: { blocks: GlobalVisionBlock[] }) {
       {blocks.map((block) => {
         if (block.kind === 'text') {
           const t = block.text.trim();
-          if (!t) return null;
+          const imgs = block.imageUris?.filter(Boolean) ?? [];
+          if (!t && imgs.length === 0) return null;
           return (
-            <Text key={block.id} style={[ARTICLE_TEXT, { marginBottom: 20 }]}>
-              {t}
-            </Text>
+            <View key={block.id} style={{ marginBottom: 22 }}>
+              {t ? (
+                <Text style={[ARTICLE_TEXT, { marginBottom: imgs.length > 0 ? 12 : 0 }]}>{t}</Text>
+              ) : null}
+              {imgs.length > 0 ? <AttachedPhotosRow uris={imgs} canEdit={false} /> : null}
+            </View>
           );
         }
         if (!block.imageUri?.trim()) return null;
@@ -193,17 +415,20 @@ function SphereVisionEditor({ sphere }: { sphere: AnnualSphere }) {
 }
 
 /**
- * Глобальное видение: эссе (режим статьи / режим редактора) + видение по сферам.
+ * Глобальное видение: три уровня целей (плашки + ваши фото), эссе, видение по сферам.
  */
 export function GlobalVisionScreen() {
   const { colors, spacing, typography } = useAppTheme();
   const insets = useSafeAreaInsets();
   const supabaseOn = useSupabaseConfigured;
+  const gvConfig = strategyPageConfig.globalVision;
 
   const doc = useGlobalVisionStore((s) => s.doc);
   const addBlock = useGlobalVisionStore((s) => s.addBlock);
   const removeBlock = useGlobalVisionStore((s) => s.removeBlock);
   const setBlockText = useGlobalVisionStore((s) => s.setBlockText);
+  const appendGoalLevelPhotos = useGlobalVisionStore((s) => s.appendGoalLevelPhotos);
+  const removeGoalLevelPhotoAt = useGlobalVisionStore((s) => s.removeGoalLevelPhotoAt);
 
   const [essayEditMode, setEssayEditMode] = useState(false);
   const [sphereTab, setSphereTab] = useState<AnnualSphere>('relationships');
@@ -224,7 +449,7 @@ export function GlobalVisionScreen() {
           <Link href={'/settings' as Href} asChild>
             <Pressable
               style={{
-                marginBottom: spacing.lg,
+                marginBottom: spacing.md,
                 alignSelf: 'flex-start',
                 paddingVertical: 8,
                 paddingHorizontal: 12,
@@ -240,10 +465,69 @@ export function GlobalVisionScreen() {
             </Pressable>
           </Link>
         ) : (
-          <Text style={[typography.caption, { color: 'rgba(255,255,255,0.35)', marginBottom: spacing.lg }]}>
+          <Text style={[typography.caption, { color: 'rgba(255,255,255,0.35)', marginBottom: spacing.md }]}>
             Локально на устройстве. Подключите Supabase в .env для синхронизации по почте.
           </Text>
         )}
+
+        <LinearGradient
+          colors={['rgba(168,85,247,0.18)', 'rgba(255,255,255,0.02)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 22,
+            paddingVertical: 20,
+            paddingHorizontal: 18,
+            marginBottom: spacing.lg,
+            borderWidth: 1,
+            borderColor: 'rgba(168,85,247,0.22)',
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '800',
+              letterSpacing: 1.4,
+              color: 'rgba(255,255,255,0.4)',
+              marginBottom: 6,
+            }}
+          >
+            РАЗДЕЛ ЦЕЛИ
+          </Text>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.8, lineHeight: 30 }}>
+            Глобальное видение
+          </Text>
+          <Text style={{ marginTop: 10, fontSize: 14, lineHeight: 21, color: 'rgba(248,250,252,0.48)', maxWidth: 320 }}>
+            Уровни из стратегии, ваше эссе и фото — всё сохраняется на устройстве и в облаке после входа.
+          </Text>
+        </LinearGradient>
+
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: '700',
+            letterSpacing: 1.3,
+            color: 'rgba(255,255,255,0.38)',
+            marginBottom: 8,
+          }}
+        >
+          {gvConfig.goalLevelsCapsTitle}
+        </Text>
+        <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, letterSpacing: -0.4, marginBottom: 16 }}>
+          {gvConfig.goalLevelsTitle}
+        </Text>
+
+        <View style={{ marginBottom: spacing.xl }}>
+          {gvConfig.goalLevels.map((level) => (
+            <GoalLevelCard
+              key={level.id}
+              level={level}
+              photos={doc.goalLevelPhotos[level.id] ?? []}
+              onAppend={(uris) => appendGoalLevelPhotos(level.id, uris)}
+              onRemoveAt={(i) => removeGoalLevelPhotoAt(level.id, i)}
+            />
+          ))}
+        </View>
 
         <View
           style={{
@@ -251,7 +535,7 @@ export function GlobalVisionScreen() {
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 12,
-            marginBottom: essayEditMode ? 14 : 20,
+            marginBottom: essayEditMode ? 14 : 16,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -266,8 +550,8 @@ export function GlobalVisionScreen() {
             >
               ЭССЕ
             </Text>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.5 }}>
-              Глобальное видение
+            <Text style={{ fontSize: 19, fontWeight: '800', color: colors.text, letterSpacing: -0.4 }}>
+              Своими словами
             </Text>
           </View>
           <Pressable
@@ -298,96 +582,107 @@ export function GlobalVisionScreen() {
           </Pressable>
         </View>
 
-        {essayEditMode ? (
-          <>
-            <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 16, lineHeight: 20 }}>
-              Блоки, фото и порядок — ниже. Нажмите «Готово», чтобы снова видеть статью целиком.
-            </Text>
-            {doc.blocks.map((block, index) => (
-              <View key={block.id} style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.35)', letterSpacing: 1.2 }}>
-                    Блок {index + 1} · {block.kind === 'text' ? 'Текст' : 'Фото'}
-                  </Text>
-                  <Pressable
-                    onPress={() =>
-                      Alert.alert('Удалить блок?', '', [
-                        { text: 'Отмена', style: 'cancel' },
-                        {
-                          text: 'Удалить',
-                          style: 'destructive',
-                          onPress: () => {
-                            removeBlock(block.id);
-                            if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        <View
+          style={{
+            borderRadius: CARD_R,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            paddingVertical: essayEditMode ? 16 : 18,
+            paddingHorizontal: essayEditMode ? 14 : 16,
+            marginBottom: spacing.xl,
+          }}
+        >
+          {essayEditMode ? (
+            <>
+              <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 16, lineHeight: 20 }}>
+                Блоки текста и отдельные фото — ниже. Под каждым абзацем можно прикрепить снимки. Нажмите «Готово» для режима чтения.
+              </Text>
+              {doc.blocks.map((block, index) => (
+                <View key={block.id} style={{ marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.35)', letterSpacing: 1.2 }}>
+                      Блок {index + 1} · {block.kind === 'text' ? 'Текст' : 'Фото'}
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        Alert.alert('Удалить блок?', '', [
+                          { text: 'Отмена', style: 'cancel' },
+                          {
+                            text: 'Удалить',
+                            style: 'destructive',
+                            onPress: () => {
+                              removeBlock(block.id);
+                              if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            },
                           },
-                        },
-                      ])
-                    }
-                    hitSlop={8}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="rgba(255,120,120,0.55)" />
-                  </Pressable>
-                </View>
-
-                {block.kind === 'text' ? (
-                  <View
-                    style={{
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: GOALS_BORDER,
-                      backgroundColor: 'rgba(255,255,255,0.03)',
-                      paddingVertical: 14,
-                      paddingHorizontal: 16,
-                    }}
-                  >
-                    <VisionTextInput value={block.text} onChangeText={(t) => setBlockText(block.id, t)} />
+                        ])
+                      }
+                      hitSlop={8}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="rgba(255,120,120,0.55)" />
+                    </Pressable>
                   </View>
-                ) : (
-                  <GlobalVisionImageBlockRow blockId={block.id} imageUri={block.imageUri} />
-                )}
-              </View>
-            ))}
 
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8, marginBottom: 36 }}>
-              <Pressable
-                onPress={() => {
-                  addBlock('text');
-                  if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(168,85,247,0.45)',
-                  backgroundColor: pressed ? 'rgba(168,85,247,0.14)' : 'rgba(168,85,247,0.08)',
-                })}
-              >
-                <Text style={{ color: GOALS_ACCENT_SOFT, fontWeight: '800', fontSize: 14 }}>+ Текст</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  addBlock('image');
-                  if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  backgroundColor: pressed ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
-                })}
-              >
-                <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '800', fontSize: 14 }}>+ Фото</Text>
-              </Pressable>
-            </View>
-          </>
-        ) : (
-          <View style={{ marginBottom: 36 }}>
+                  {block.kind === 'text' ? (
+                    <View
+                      style={{
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: GOALS_BORDER,
+                        backgroundColor: 'rgba(255,255,255,0.03)',
+                        paddingVertical: 14,
+                        paddingHorizontal: 16,
+                      }}
+                    >
+                      <VisionTextInput value={block.text} onChangeText={(t) => setBlockText(block.id, t)} />
+                      <TextBlockAttachedPhotosEditor blockId={block.id} uris={block.imageUris ?? []} />
+                    </View>
+                  ) : (
+                    <GlobalVisionImageBlockRow blockId={block.id} imageUri={block.imageUri} />
+                  )}
+                </View>
+              ))}
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    addBlock('text');
+                    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(168,85,247,0.45)',
+                    backgroundColor: pressed ? 'rgba(168,85,247,0.14)' : 'rgba(168,85,247,0.08)',
+                  })}
+                >
+                  <Text style={{ color: GOALS_ACCENT_SOFT, fontWeight: '800', fontSize: 14 }}>+ Текст</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    addBlock('image');
+                    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    backgroundColor: pressed ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+                  })}
+                >
+                  <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '800', fontSize: 14 }}>+ Фото</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
             <GlobalVisionArticleRead blocks={doc.blocks} />
-          </View>
-        )}
+          )}
+        </View>
 
         <Text
           style={{

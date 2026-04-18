@@ -24,11 +24,7 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { exportDayJournalPdf } from '@/services/dayJournalPdfExport';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
 import { repos } from '@/services/repositories';
-import {
-  buildDayJournalHealthExportDoc,
-  buildDayJournalNarrativeExportDoc,
-  useDayJournalStore,
-} from '@/stores/dayJournal.store';
+import { buildDayJournalNarrativeExportDoc, useDayJournalStore } from '@/stores/dayJournal.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { useAppTheme } from '@/theme';
 
@@ -40,6 +36,7 @@ type Props = {
   linkMoodToScreenDay?: boolean;
   onMoodStripChangeDay?: (dk: string) => void;
   onPickMood?: (dk: string, mood: JournalMoodId | null) => void;
+  onPickEnergy?: (dk: string, energy: JournalMoodId | null) => void;
 };
 
 export function DayJournalAccordion({
@@ -49,6 +46,7 @@ export function DayJournalAccordion({
   linkMoodToScreenDay = false,
   onMoodStripChangeDay,
   onPickMood,
+  onPickEnergy,
 }: Props) {
   const { colors, spacing, brand, radius } = useAppTheme();
   const qc = useQueryClient();
@@ -67,7 +65,6 @@ export function DayJournalAccordion({
   const navigateMoodDay = linkMoodToScreenDay ? onMoodStripChangeDay ?? (() => {}) : setInnerDay;
 
   const journalFields = useMemo(() => getFieldsBySection(doc.fields, 'journal'), [doc.fields]);
-  const healthFields = useMemo(() => getFieldsBySection(doc.fields, 'health'), [doc.fields]);
   const journalHabit = useMemo(() => findJournalHabit(habitsQ.data ?? []), [habitsQ.data]);
 
   const dayKeyRef = useRef(editingDay);
@@ -110,11 +107,11 @@ export function DayJournalAccordion({
     [setFieldValue, editingDay]
   );
 
-  const exportDoc = async (kind: 'journal' | 'health') => {
+  const exportJournalJson = async () => {
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const payload = kind === 'journal' ? buildDayJournalNarrativeExportDoc() : buildDayJournalHealthExportDoc();
+    const payload = buildDayJournalNarrativeExportDoc();
     await Clipboard.setStringAsync(JSON.stringify(payload, null, 2));
-    setExportHint(kind === 'journal' ? 'Весь дневник (JSON) в буфере' : 'Здоровье (JSON) в буфере');
+    setExportHint('Весь дневник (JSON) в буфере');
     setTimeout(() => setExportHint(null), 2800);
   };
 
@@ -242,7 +239,7 @@ export function DayJournalAccordion({
               ? 'Сохранено — привычка отмечена.'
               : entryHasFieldContent
                 ? 'Нажми «Сохранить», чтобы отметить привычку за этот день.'
-                : 'Раскрой блок: настроение, записи и здоровье. После заполнения нажми «Сохранить».'}
+                : 'Раскрой блок: настроение, энергия и записи. После заполнения нажми «Сохранить».'}
           </Text>
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
@@ -270,7 +267,33 @@ export function DayJournalAccordion({
                 todayKey={todayKey}
                 onViewDateChange={navigateMoodDay}
                 entries={doc.entries}
-                onPickMood={onPickMood}
+                stripPurpose="mood"
+                onPickLevel={onPickMood}
+              />
+            </>
+          ) : null}
+          {onPickEnergy ? (
+            <>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '900',
+                  letterSpacing: 1.4,
+                  color: 'rgba(249,115,22,0.95)',
+                  textTransform: 'uppercase',
+                  marginBottom: 8,
+                  marginTop: onPickMood ? 16 : 8,
+                }}
+              >
+                Энергия
+              </Text>
+              <JournalMoodStrip
+                viewDateKey={editingDay}
+                todayKey={todayKey}
+                onViewDateChange={navigateMoodDay}
+                entries={doc.entries}
+                stripPurpose="energy"
+                onPickLevel={onPickEnergy}
               />
             </>
           ) : null}
@@ -283,29 +306,12 @@ export function DayJournalAccordion({
               color: 'rgba(196,181,253,0.9)',
               textTransform: 'uppercase',
               marginBottom: 8,
-              marginTop: onPickMood ? 16 : 8,
+              marginTop: onPickMood || onPickEnergy ? 16 : 8,
             }}
           >
             Записи
           </Text>
           {journalFields.map((field) => (
-            <JournalFieldCard key={field.id} field={field} dateKey={editingDay} onValueCommit={commitFieldValue} />
-          ))}
-
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: '900',
-              letterSpacing: 1.4,
-              color: 'rgba(147,197,253,0.95)',
-              textTransform: 'uppercase',
-              marginBottom: 8,
-              marginTop: 8,
-            }}
-          >
-            Здоровье
-          </Text>
-          {healthFields.map((field) => (
             <JournalFieldCard key={field.id} field={field} dateKey={editingDay} onValueCommit={commitFieldValue} />
           ))}
 
@@ -337,7 +343,7 @@ export function DayJournalAccordion({
               <Text style={{ fontWeight: '800', color: colors.text }}>Скопировать день (текст)</Text>
             </Pressable>
             <Pressable
-              onPress={() => void exportDoc('journal')}
+              onPress={() => void exportJournalJson()}
               style={{
                 paddingVertical: 12,
                 paddingHorizontal: 14,
@@ -347,18 +353,6 @@ export function DayJournalAccordion({
               }}
             >
               <Text style={{ fontWeight: '700', color: colors.textMuted }}>Все дни (JSON)</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void exportDoc('health')}
-              style={{
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: radius.lg,
-                borderWidth: 1,
-                borderColor: brand.surfaceBorder,
-              }}
-            >
-              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Здоровье (JSON)</Text>
             </Pressable>
           </View>
 

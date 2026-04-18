@@ -243,7 +243,20 @@ function PlannerTaskLine({
         <View style={{ flex: 1, minWidth: 0 }}>
           {task.is_focus ? (
             <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1, color: ACCENT, marginBottom: 2 }}>
-              ФОКУС
+              ФОКУС ДНЯ
+            </Text>
+          ) : null}
+          {task.is_week_focus ? (
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: '900',
+                letterSpacing: 1,
+                color: 'rgba(245,158,11,0.95)',
+                marginBottom: task.is_focus ? 2 : 2,
+              }}
+            >
+              ФОКУС НЕДЕЛИ
             </Text>
           ) : null}
           <Text

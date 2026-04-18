@@ -60,26 +60,26 @@ function formatFieldBlock(field: JournalFieldDefinition, value: JournalFieldValu
 function buildDaySection(doc: JournalDocument, dateKey: string): string {
   const entry = doc.entries[dateKey];
   const journalFields = getFieldsBySection(doc.fields, 'journal');
-  const healthFields = getFieldsBySection(doc.fields, 'health');
   const mood = entry?.mood;
   const moodMeta = mood ? getMoodMeta(mood) : null;
   const moodHtml = moodMeta
-    ? `<p class="mood">${escapeHtml(moodMeta.emoji)} ${escapeHtml(moodMeta.label)}</p>`
+    ? `<p class="mood">Настроение: ${escapeHtml(moodMeta.emoji)} ${escapeHtml(moodMeta.label)}</p>`
+    : '';
+  const energy = entry?.energy;
+  const energyMeta = energy ? getMoodMeta(energy) : null;
+  const energyHtml = energyMeta
+    ? `<p class="mood">Энергия: ${escapeHtml(energyMeta.emoji)} ${escapeHtml(energyMeta.label)}</p>`
     : '';
 
   const journalHtml = journalFields.map((f) => formatFieldBlock(f, entry?.values[f.id])).join('');
-  const healthHtml =
-    healthFields.length > 0
-      ? `<h3 class="sub">Здоровье</h3>${healthFields.map((f) => formatFieldBlock(f, entry?.values[f.id])).join('')}`
-      : '';
 
   return `
 <section class="day">
   <h2 class="day-title">${escapeHtml(dateKeyToRuLong(dateKey))}</h2>
   <p class="day-key">${escapeHtml(dateKey)}</p>
   ${moodHtml}
+  ${energyHtml}
   ${journalHtml}
-  ${healthHtml}
 </section>`;
 }
 
@@ -93,7 +93,7 @@ export function buildJournalPdfHtml(
   const withContent = dayKeys.filter((k) => journalEntryHasContent(doc.entries[k], doc.fields));
   const bodyInner =
     withContent.length === 0
-      ? `<p class="empty">За выбранный период нет записей с текстом, числами, переключателями или настроением.</p>`
+      ? `<p class="empty">За выбранный период нет записей с текстом, числами, переключателями, настроением или энергией.</p>`
       : withContent.map((k) => buildDaySection(doc, k)).join('\n');
 
   const exportedStr = meta.exportedAt.toLocaleString('ru-RU');

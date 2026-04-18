@@ -4,7 +4,7 @@ import type { HabitsPersistSlice } from '@/features/habits/habitsPersistReducer'
 import { normalizeHabitsSlice } from '@/features/habits/habitsPersistReducer';
 
 /** Поднимите версию, если меняете набор привычек / правила миграции. */
-export const NIKOLAY_HABITS_PROFILE_VERSION = 2;
+export const NIKOLAY_HABITS_PROFILE_VERSION = 3;
 
 const REMOVE_IDS = new Set([
   'seed_steps_10k',
@@ -20,6 +20,7 @@ const BODY_IDS = new Set([
   'seed_sleep_0100',
   'seed_walk_without_goal',
   'seed_protein_140',
+  'seed_harmful_intake_daily',
   'seed_no_tarot_astro',
   'seed_workouts_3',
   'seed_bright_event_1',
@@ -69,6 +70,18 @@ function blueprintRows(): HabitPersisted[] {
       required: true,
       createdAt: t,
       completionDates: [],
+    },
+    {
+      id: 'seed_harmful_intake_daily',
+      name: 'Мучное / фастфуд / алкоголь сегодня?',
+      icon: 'warning-outline',
+      cadence: 'daily',
+      section: 'body',
+      required: false,
+      analyticsHeatMode: 'negative',
+      createdAt: t,
+      completionDates: [],
+      explicitCleanDates: [],
     },
   ];
 }

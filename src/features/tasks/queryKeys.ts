@@ -3,3 +3,5 @@ export const BACKLOG_TASKS_QUERY_KEY = ['backlog-tasks'] as const;
 
 export const PLANNER_TASKS_QUERY_KEY = ['planner-tasks'] as const;
 export const PLANNER_STATS_QUERY_KEY = ['planner-stats'] as const;
+/** Второй элемент ключа — понедельник недели YYYY-MM-DD. */
+export const PLANNER_WEEK_FOCUS_QUERY_KEY = ['planner-week-focus'] as const;

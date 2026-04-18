@@ -35,6 +35,7 @@ type State = {
   getEntry: (dateKey: string) => JournalEntry;
   setFieldValue: (dateKey: string, fieldId: string, value: JournalFieldValue) => void;
   setMood: (dateKey: string, mood: JournalMoodId | null) => void;
+  setEnergy: (dateKey: string, energy: JournalMoodId | null) => void;
   addField: (input: {
     label: string;
     prompt?: string;
@@ -87,6 +88,31 @@ export const useDayJournalStore = create<State>()(
             delete next.mood;
           } else {
             next.mood = mood;
+          }
+          return {
+            doc: {
+              ...doc,
+              entries: {
+                ...doc.entries,
+                [dateKey]: next,
+              },
+            },
+          };
+        });
+      },
+
+      setEnergy: (dateKey, energy) => {
+        set((state) => {
+          const doc = touch(state.doc);
+          const current = doc.entries[dateKey] ?? normalizeJournalEntry(dateKey, undefined, doc.fields);
+          const next: JournalEntry = {
+            ...current,
+            updatedAt: new Date().toISOString(),
+          };
+          if (energy == null) {
+            delete next.energy;
+          } else {
+            next.energy = energy;
           }
           return {
             doc: {
@@ -153,7 +179,8 @@ export const useDayJournalStore = create<State>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 4,
+      /** v5: energy в entry, без встроенного блока «здоровье». */
+      version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ doc: normalizeJournalDocument(s.doc) }),
       migrate: (persisted) => {

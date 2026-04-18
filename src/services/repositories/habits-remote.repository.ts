@@ -9,6 +9,7 @@ import {
   createHabitSlice,
   ensureDefaultHabitsSlice,
   removeHabitSlice,
+  setHarmfulDayChoiceSlice,
   setRequiredSlice,
   totalCompletionCount,
   undoWeeklySlice,
@@ -145,6 +146,13 @@ export function createRemoteHabitsRepository(baseUrl: string, syncKey: string): 
       return toList(slice);
     },
 
+    async setHarmfulDayChoice(id: string, dateKey: string, choice) {
+      let slice = await loadNormalized();
+      slice = setHarmfulDayChoiceSlice(slice, id, dateKey, choice);
+      await putState(slice);
+      return toList(slice);
+    },
+
     async undoWeekly(id: string, dateKey?: string) {
       let slice = await loadNormalized();
       const prev = slice.habits.find((h) => h.id === id);
@@ -179,6 +187,7 @@ export function createRemoteHabitsRepository(baseUrl: string, syncKey: string): 
           ...h,
           completionDates: [...h.completionDates],
           ...(h.countsByDate ? { countsByDate: { ...h.countsByDate } } : {}),
+          ...(h.explicitCleanDates?.length ? { explicitCleanDates: [...h.explicitCleanDates] } : {}),
         })),
         heroHistory: { ...slice.heroHistory },
       };

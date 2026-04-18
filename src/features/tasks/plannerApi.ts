@@ -1,4 +1,4 @@
-import { addDays } from '@/features/habits/habitLogic';
+import { addDays, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import type { BacklogPriority } from '@/features/tasks/backlog.types';
 import type { PlannerTaskRow, PlannerUserStatsRow } from '@/features/tasks/planner.types';
 import { getSupabase } from '@/lib/supabase';
@@ -66,14 +66,41 @@ export async function listPlannerTasks(dayDate: string): Promise<PlannerTaskRow[
   const userId = await requireUserId();
   const { data, error } = await sb
     .from('planner_tasks')
-    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
+    .select('id,day_date,title,priority,is_done,is_focus,is_week_focus,sort_order,created_at,updated_at')
     .eq('user_id', userId)
     .eq('day_date', dayDate)
     .order('is_done', { ascending: true })
     .order('sort_order', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []) as PlannerTaskRow[];
+  return (data ?? []).map(normalizePlannerTaskRow);
+}
+
+function normalizePlannerTaskRow(row: PlannerTaskRow & { is_week_focus?: boolean }): PlannerTaskRow {
+  return {
+    ...row,
+    is_week_focus: Boolean(row.is_week_focus),
+  };
+}
+
+export async function listPlannerWeekFocusTasks(anchorDateKey: string): Promise<PlannerTaskRow[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const userId = await requireUserId();
+  const start = startOfWeekMondayKey(anchorDateKey);
+  const end = addDays(start, 6);
+  const { data, error } = await sb
+    .from('planner_tasks')
+    .select('id,day_date,title,priority,is_done,is_focus,is_week_focus,sort_order,created_at,updated_at')
+    .eq('user_id', userId)
+    .gte('day_date', start)
+    .lte('day_date', end)
+    .eq('is_week_focus', true)
+    .order('day_date', { ascending: true })
+    .order('is_done', { ascending: true })
+    .order('sort_order', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => normalizePlannerTaskRow(r as PlannerTaskRow));
 }
 
 export async function createPlannerTask(input: {
@@ -82,6 +109,7 @@ export async function createPlannerTask(input: {
   priority: BacklogPriority;
   /** Одна задача с фокусом на день; остальные на этот день сбрасываются. */
   is_focus?: boolean;
+  is_week_focus?: boolean;
 }): Promise<PlannerTaskRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
@@ -97,13 +125,14 @@ export async function createPlannerTask(input: {
       title,
       priority: input.priority,
       is_focus: Boolean(input.is_focus),
+      is_week_focus: Boolean(input.is_week_focus),
       sort_order: Date.now() % 1_000_000_000,
       updated_at: new Date().toISOString(),
     })
-    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
+    .select('id,day_date,title,priority,is_done,is_focus,is_week_focus,sort_order,created_at,updated_at')
     .single();
   if (error) throw error;
-  return data as PlannerTaskRow;
+  return normalizePlannerTaskRow(data as PlannerTaskRow);
 }
 
 export async function updatePlannerTask(
@@ -114,6 +143,7 @@ export async function updatePlannerTask(
     is_done?: boolean;
     day_date?: string;
     is_focus?: boolean;
+    is_week_focus?: boolean;
   }
 ): Promise<PlannerTaskRow> {
   const sb = getSupabase();
@@ -137,14 +167,15 @@ export async function updatePlannerTask(
   if (patch.is_done !== undefined) row.is_done = patch.is_done;
   if (patch.day_date !== undefined) row.day_date = patch.day_date;
   if (patch.is_focus !== undefined) row.is_focus = patch.is_focus;
+  if (patch.is_week_focus !== undefined) row.is_week_focus = patch.is_week_focus;
   const { data, error } = await sb
     .from('planner_tasks')
     .update(row)
     .eq('id', id)
-    .select('id,day_date,title,priority,is_done,is_focus,sort_order,created_at,updated_at')
+    .select('id,day_date,title,priority,is_done,is_focus,is_week_focus,sort_order,created_at,updated_at')
     .single();
   if (error) throw error;
-  return data as PlannerTaskRow;
+  return normalizePlannerTaskRow(data as PlannerTaskRow);
 }
 
 export async function deletePlannerTask(id: string): Promise<void> {

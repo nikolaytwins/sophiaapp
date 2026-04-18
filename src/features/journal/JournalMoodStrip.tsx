@@ -23,7 +23,9 @@ type Props = {
   todayKey: string;
   onViewDateChange: (dateKey: string) => void;
   entries: Record<string, JournalEntry>;
-  onPickMood: (dateKey: string, mood: JournalMoodId | null) => void;
+  /** Настроение и энергия — две отдельные шкалы с теми же смайликами. */
+  stripPurpose: 'mood' | 'energy';
+  onPickLevel: (dateKey: string, value: JournalMoodId | null) => void;
 };
 
 function weekdayShortUpper(dateKey: string): string {
@@ -37,14 +39,27 @@ function dayNum(dateKey: string): string {
   return String(Number(dateKey.split('-')[2]));
 }
 
-export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entries, onPickMood }: Props) {
+export function JournalMoodStrip({
+  viewDateKey,
+  todayKey,
+  onViewDateChange,
+  entries,
+  stripPurpose,
+  onPickLevel,
+}: Props) {
   const { colors, radius, spacing } = useAppTheme();
   const stripKeys = useMemo(() => journalMoodStripDayKeys(viewDateKey, todayKey, 8), [viewDateKey, todayKey]);
   const [pickerKey, setPickerKey] = useState<string | null>(null);
 
   const closePicker = useCallback(() => setPickerKey(null), []);
 
-  const moodFor = useCallback((dk: string) => entries[dk]?.mood, [entries]);
+  const levelFor = useCallback(
+    (dk: string) => (stripPurpose === 'energy' ? entries[dk]?.energy : entries[dk]?.mood),
+    [entries, stripPurpose]
+  );
+
+  const purposeLabel = stripPurpose === 'energy' ? 'энергию' : 'настроение';
+  const purposeTitle = stripPurpose === 'energy' ? 'Энергия дня' : 'Настроение дня';
 
   return (
     <>
@@ -61,8 +76,8 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
       >
         {stripKeys.map((dk) => {
           const selected = dk === viewDateKey;
-          const mood = moodFor(dk);
-          const meta = getMoodMeta(mood);
+          const level = levelFor(dk);
+          const meta = getMoodMeta(level);
           const future = dk > todayKey;
           return (
             <View key={dk} style={{ alignItems: 'center', width: 58 }}>
@@ -127,7 +142,7 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
                   borderColor: meta ? 'transparent' : 'rgba(255,255,255,0.14)',
                   opacity: future ? 0.35 : 1,
                 }}
-                accessibilityLabel={meta ? `Настроение: ${meta.label}` : 'Выбрать настроение'}
+                accessibilityLabel={meta ? `${stripPurpose === 'energy' ? 'Энергия' : 'Настроение'}: ${meta.label}` : `Выбрать ${purposeLabel}`}
               >
                 <Text style={{ fontSize: 22 }}>{meta ? meta.emoji : '🙂'}</Text>
               </Pressable>
@@ -139,7 +154,7 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
       <Modal visible={pickerKey != null} transparent animationType="fade" onRequestClose={closePicker}>
         <Pressable style={styles.modalBackdrop} onPress={closePicker}>
           <Pressable style={[styles.modalCard, { borderRadius: radius.xl }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Настроение дня</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{purposeTitle}</Text>
             <Text style={[styles.modalSub, { color: colors.textMuted }]}>
               {pickerKey ? dayNum(pickerKey) + ' ' + weekdayShortUpper(pickerKey).toLowerCase() : ''}
             </Text>
@@ -148,8 +163,8 @@ export function JournalMoodStrip({ viewDateKey, todayKey, onViewDateChange, entr
                 key={m.id}
                 onPress={() => {
                   if (pickerKey) {
-                    const current = moodFor(pickerKey);
-                    onPickMood(pickerKey, current === m.id ? null : m.id);
+                    const current = levelFor(pickerKey);
+                    onPickLevel(pickerKey, current === m.id ? null : m.id);
                   }
                   closePicker();
                 }}

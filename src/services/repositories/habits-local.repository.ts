@@ -67,6 +67,12 @@ export const localHabitsRepository: HabitsRepository = {
     return useHabitsStore.getState().listView();
   },
 
+  async setHarmfulDayChoice(id, dateKey, choice) {
+    await ensureHabitsStoreHydrated();
+    useHabitsStore.getState().setHarmfulDayChoice(id, dateKey, choice);
+    return delay(useHabitsStore.getState().listView());
+  },
+
   async undoWeekly(id: string, dateKey?: string) {
     await ensureHabitsStoreHydrated();
     const prev = useHabitsStore.getState().habits.find((h) => h.id === id);
@@ -99,6 +105,7 @@ export const localHabitsRepository: HabitsRepository = {
         ...h,
         completionDates: [...h.completionDates],
         ...(h.countsByDate ? { countsByDate: { ...h.countsByDate } } : {}),
+        ...(h.explicitCleanDates?.length ? { explicitCleanDates: [...h.explicitCleanDates] } : {}),
       })),
       heroHistory: { ...slice.heroHistory },
     };

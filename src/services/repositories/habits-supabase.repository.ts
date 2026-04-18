@@ -14,6 +14,7 @@ import {
   ensureDefaultHabitsSlice,
   normalizeHabitsSlice,
   removeHabitSlice,
+  setHarmfulDayChoiceSlice,
   setRequiredSlice,
   totalCompletionCount,
   undoWeeklySlice,
@@ -192,6 +193,13 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
       return toList(slice);
     },
 
+    async setHarmfulDayChoice(id: string, dateKey: string, choice) {
+      let slice = await loadSliceForMutation();
+      slice = setHarmfulDayChoiceSlice(slice, id, dateKey, choice);
+      await putState(slice);
+      return toList(slice);
+    },
+
     async undoWeekly(id: string, dateKey?: string) {
       let slice = await loadSliceForMutation();
       const prev = slice.habits.find((h) => h.id === id);
@@ -226,6 +234,7 @@ export function createSupabaseHabitsRepository(getClient: () => SupabaseClient):
           ...h,
           completionDates: [...h.completionDates],
           ...(h.countsByDate ? { countsByDate: { ...h.countsByDate } } : {}),
+          ...(h.explicitCleanDates?.length ? { explicitCleanDates: [...h.explicitCleanDates] } : {}),
         })),
         heroHistory: { ...slice.heroHistory },
       };

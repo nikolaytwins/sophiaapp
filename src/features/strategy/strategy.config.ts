@@ -134,7 +134,12 @@ export type StrategyGoalsTabDef = {
   pageTitle: string;
   nearestSectionTitle: string;
   nearestDeadlineLine: string;
+  /** Заголовок блока с фото и карточками (доска желаний). */
   sideSectionTitle: string;
+  /** Подзаголовок списка целей без галочки «горизонт». */
+  boardNearSubheading: string;
+  /** Подзаголовок целей с отметкой «на горизонте». */
+  boardHorizonSubheading: string;
   sideGoalSeeds: StrategySideGoalSeedDef[];
 };
 
@@ -518,7 +523,9 @@ export const strategyData: StrategyPageConfig = {
     pageTitle: 'Цели',
     nearestSectionTitle: 'Ближайшие цели',
     nearestDeadlineLine: 'Китай и подушка · до 14 августа',
-    sideSectionTitle: 'Побочные цели',
+    sideSectionTitle: 'Доска желаний',
+    boardNearSubheading: 'Ближайшие',
+    boardHorizonSubheading: 'Горизонт',
     sideGoalSeeds: [
       { id: 'sg-bmw', title: 'BMW — 3 500 000 ₽', defaultTarget: 3_500_000 },
       { id: 'sg-subs', title: '1000 подписчиков', defaultTarget: 1000 },

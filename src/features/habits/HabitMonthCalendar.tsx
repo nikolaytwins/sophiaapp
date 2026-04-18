@@ -10,6 +10,11 @@ import { useAppTheme } from '@/theme';
 /** Фирменный фиолетовый: выполненный день. */
 const HEAT_DONE_BG = '#A855F7';
 const HEAT_DONE_TEXT = '#FAFAFC';
+/** «Срыв» — мучное / фастфуд / алкоголь (режим negative). */
+const HEAT_NEGATIVE_BG = '#DC2626';
+const HEAT_NEGATIVE_TEXT = '#FEF2F2';
+
+export type HabitCalendarHeatMode = 'default' | 'negative';
 
 const CELL_GAP = 8;
 const CELL_RADIUS = 10;
@@ -20,12 +25,14 @@ function CalendarDayCell({
   completedSet,
   colors,
   isLight,
+  heatMode,
 }: {
   cell: MonthGridCell;
   todayKey: string;
   completedSet: Set<string>;
   colors: AppPalette;
   isLight: boolean;
+  heatMode: HabitCalendarHeatMode;
 }) {
 
   if (!cell.dateKey) {
@@ -33,13 +40,16 @@ function CalendarDayCell({
   }
 
   const isFuture = cell.dateKey > todayKey;
-  const done = !isFuture && completedSet.has(cell.dateKey);
+  const marked = !isFuture && completedSet.has(cell.dateKey);
   const isToday = cell.dateKey === todayKey;
   const [, , dd] = cell.dateKey.split('-');
   const label = dd ?? '';
 
   const idleText = isLight ? colors.text : 'rgba(255,255,255,0.92)';
   const futureText = isLight ? 'rgba(15,17,24,0.28)' : 'rgba(255,255,255,0.28)';
+  const isNegative = heatMode === 'negative';
+  const fillBg = marked ? (isNegative ? HEAT_NEGATIVE_BG : HEAT_DONE_BG) : 'transparent';
+  const fillText = marked ? (isNegative ? HEAT_NEGATIVE_TEXT : HEAT_DONE_TEXT) : isFuture ? futureText : idleText;
 
   return (
     <View
@@ -50,7 +60,13 @@ function CalendarDayCell({
         padding: CELL_GAP / 2,
       }}
       accessibilityLabel={
-        isFuture ? `${label}, будущий день` : done ? `${label}, отмечено` : `${label}, без отметки`
+        isFuture
+          ? `${label}, будущий день`
+          : marked
+            ? isNegative
+              ? `${label}, отмечено как день со срывом`
+              : `${label}, отмечено`
+            : `${label}, без отметки`
       }
     >
       <View
@@ -59,18 +75,18 @@ function CalendarDayCell({
           borderRadius: CELL_RADIUS,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: done ? HEAT_DONE_BG : 'transparent',
-          borderWidth: !done && isToday && !isFuture ? StyleSheet.hairlineWidth * 2 : 0,
-          borderColor: !done && isToday ? (isLight ? colors.borderStrong : 'rgba(255,255,255,0.22)') : 'transparent',
+          backgroundColor: fillBg,
+          borderWidth: !marked && isToday && !isFuture ? StyleSheet.hairlineWidth * 2 : 0,
+          borderColor: !marked && isToday ? (isLight ? colors.borderStrong : 'rgba(255,255,255,0.22)') : 'transparent',
           opacity: isFuture ? 0.38 : 1,
         }}
       >
         <Text
           style={{
             fontSize: 13,
-            fontWeight: done ? '800' : isToday ? '700' : '600',
+            fontWeight: marked ? '800' : isToday ? '700' : '600',
             fontVariant: ['tabular-nums'],
-            color: done ? HEAT_DONE_TEXT : isFuture ? futureText : idleText,
+            color: fillText,
           }}
         >
           {label}
@@ -86,6 +102,8 @@ type Props = {
   monthStatLine?: string;
   monthWeekRows: MonthGridCell[][];
   completedSet: Set<string>;
+  /** `negative` — отмеченные дни красные (срыв). */
+  heatMode?: HabitCalendarHeatMode;
   todayKey: string;
   isViewingCurrentMonth: boolean;
   todayWeekdayIdx: number;
@@ -103,6 +121,7 @@ export function HabitMonthCalendar({
   monthStatLine,
   monthWeekRows,
   completedSet,
+  heatMode = 'default',
   todayKey,
   isViewingCurrentMonth,
   todayWeekdayIdx,
@@ -249,6 +268,7 @@ export function HabitMonthCalendar({
               completedSet={completedSet}
               colors={colors}
               isLight={isLight}
+              heatMode={heatMode}
             />
           ))}
         </View>

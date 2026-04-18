@@ -20,6 +20,10 @@ type GlobalVisionState = {
   doc: GlobalVisionDocument;
   setBlockText: (id: string, text: string) => void;
   setBlockImageUri: (id: string, imageUri: string | null) => void;
+  appendTextBlockImages: (blockId: string, uris: string[]) => void;
+  removeTextBlockImageAt: (blockId: string, index: number) => void;
+  appendGoalLevelPhotos: (levelId: string, uris: string[]) => void;
+  removeGoalLevelPhotoAt: (levelId: string, index: number) => void;
   addBlock: (kind: 'text' | 'image') => void;
   removeBlock: (id: string) => void;
   setSphereVision: (sphere: AnnualSphere, visionText: string) => void;
@@ -60,6 +64,64 @@ export const useGlobalVisionStore = create<GlobalVisionState>()(
           };
         }),
 
+      appendTextBlockImages: (blockId, uris) => {
+        if (uris.length === 0) return;
+        set((state) => {
+          const doc = touch(state.doc);
+          return {
+            doc: {
+              ...doc,
+              blocks: doc.blocks.map((b) => {
+                if (b.id !== blockId || b.kind !== 'text') return b;
+                const prev = b.imageUris ?? [];
+                return { ...b, imageUris: [...prev, ...uris] };
+              }),
+            },
+          };
+        });
+      },
+
+      removeTextBlockImageAt: (blockId, index) =>
+        set((state) => {
+          const doc = touch(state.doc);
+          return {
+            doc: {
+              ...doc,
+              blocks: doc.blocks.map((b) => {
+                if (b.id !== blockId || b.kind !== 'text') return b;
+                const prev = b.imageUris ?? [];
+                const next = prev.filter((_, i) => i !== index);
+                return next.length > 0 ? { ...b, imageUris: next } : { ...b, imageUris: undefined };
+              }),
+            },
+          };
+        }),
+
+      appendGoalLevelPhotos: (levelId, uris) => {
+        if (uris.length === 0) return;
+        set((state) => {
+          const doc = touch(state.doc);
+          const prev = doc.goalLevelPhotos[levelId] ?? [];
+          return {
+            doc: {
+              ...doc,
+              goalLevelPhotos: { ...doc.goalLevelPhotos, [levelId]: [...prev, ...uris] },
+            },
+          };
+        });
+      },
+
+      removeGoalLevelPhotoAt: (levelId, index) =>
+        set((state) => {
+          const doc = touch(state.doc);
+          const prev = doc.goalLevelPhotos[levelId] ?? [];
+          const next = prev.filter((_, i) => i !== index);
+          const goalLevelPhotos = { ...doc.goalLevelPhotos };
+          if (next.length === 0) delete goalLevelPhotos[levelId];
+          else goalLevelPhotos[levelId] = next;
+          return { doc: { ...doc, goalLevelPhotos } };
+        }),
+
       addBlock: (kind) =>
         set((state) => {
           const doc = touch(state.doc);
@@ -97,7 +159,13 @@ export const useGlobalVisionStore = create<GlobalVisionState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
+      migrate: (persisted) => {
+        if (!persisted || typeof persisted !== 'object' || !('doc' in persisted)) {
+          return persisted as { doc: GlobalVisionDocument };
+        }
+        return { doc: normalizeGlobalVisionDocument((persisted as { doc: unknown }).doc) };
+      },
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ doc: normalizeGlobalVisionDocument(s.doc) }),
     }

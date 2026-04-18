@@ -9,7 +9,7 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="day" options={{ title: 'День' }} />
-      <Tabs.Screen name="sprint" options={{ title: 'Спринт' }} />
+      <Tabs.Screen name="sprint" options={{ title: 'Спринт', href: null }} />
       <Tabs.Screen name="strategy" options={{ title: 'Стратегия' }} />
       <Tabs.Screen name="goals" options={{ title: 'Цели' }} />
       <Tabs.Screen name="tasks" options={{ title: 'Задачи' }} />

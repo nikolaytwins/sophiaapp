@@ -8,6 +8,8 @@ export type PlannerTaskRow = {
   is_done: boolean;
   /** Ровно одна на (user, day_date): главная задача дня. */
   is_focus: boolean;
+  /** Видна на «День» и «Задачи» весь календарный пн–вс; может быть несколько. */
+  is_week_focus: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;

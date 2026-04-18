@@ -7,6 +7,7 @@ import {
   getWeekDayKeys,
   habitCadenceLabel,
   habitDoneOnDate,
+  harmfulIntakeDayState,
 } from '@/features/day/dayHabitUi';
 import { journalEntryHasFieldContent } from '@/features/day/dayJournal.logic';
 import type { JournalEntry, JournalFieldDefinition } from '@/features/day/dayJournal.types';
@@ -41,12 +42,20 @@ type Props = {
   viewDateKey: string;
   todayKey: string;
   onToggle: (habit: Habit) => void;
+  /** Для привычки «вредное» (да / нет / сброс). */
+  onHarmfulChoice?: (habit: Habit, dateKey: string, choice: 'harmful' | 'clean' | 'clear') => void;
   onRequestDelete?: (habit: Habit) => void;
   journalRow?: DayJournalHabitRowConfig;
 };
 
 function streakSubtitle(h: Habit, viewDateKey: string, todayKey: string): string {
   if (h.cadence === 'daily') {
+    if (h.analyticsHeatMode === 'negative') {
+      const st = harmfulIntakeDayState(h, viewDateKey);
+      if (st === 'harmful') return 'Отмечено: был срыв';
+      if (st === 'clean') return 'Чистый день';
+      return 'Мучное, фастфуд или алкоголь — отметь ниже';
+    }
     if (h.streak > 0) return `Стрик · ${h.streak} дн.`;
     return habitCadenceLabel(h);
   }
@@ -218,6 +227,7 @@ export function DayHabitTimelineList({
   viewDateKey,
   todayKey,
   onToggle,
+  onHarmfulChoice,
   onRequestDelete,
   journalRow,
 }: Props) {
@@ -248,6 +258,7 @@ export function DayHabitTimelineList({
         const showLineBelow = !isLastRow;
         const future = viewDateKey > todayKey;
         const done = habitDoneOnDate(h, viewDateKey);
+        const intake = h.analyticsHeatMode === 'negative' ? harmfulIntakeDayState(h, viewDateKey) : 'none';
         const weekKeys = getWeekDayKeys(viewDateKey);
         const iconBg = ICON_BG[index % ICON_BG.length]!;
         const canDelete = onRequestDelete && !future;
@@ -262,27 +273,62 @@ export function DayHabitTimelineList({
             }}
           >
             <View style={{ width: 36, alignItems: 'center' }}>
-              <Pressable
-                disabled={future}
-                onPress={() => onToggle(h)}
-                accessibilityRole="button"
-                accessibilityLabel={done ? 'Снять отметку' : 'Отметить привычку'}
-                style={({ pressed }) => ({
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  borderWidth: done ? 0 : 2,
-                  borderColor: 'rgba(255,255,255,0.22)',
-                  backgroundColor: done ? colors.accent : 'transparent',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: future ? 0.4 : pressed ? 0.88 : 1,
-                })}
-              >
-                {done ? (
-                  <Ionicons name="checkmark" size={18} color={isLight ? '#FFFFFF' : 'rgba(22,22,28,0.94)'} />
-                ) : null}
-              </Pressable>
+              {h.analyticsHeatMode === 'negative' ? (
+                <View
+                  accessibilityRole="text"
+                  accessibilityLabel={
+                    intake === 'harmful'
+                      ? 'День со срывом'
+                      : intake === 'clean'
+                        ? 'Чистый день'
+                        : 'Нет отметки'
+                  }
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    borderWidth: intake === 'none' ? 2 : 0,
+                    borderColor: 'rgba(255,255,255,0.22)',
+                    backgroundColor:
+                      intake === 'harmful'
+                        ? 'rgba(220,38,38,0.85)'
+                        : intake === 'clean'
+                          ? colors.accent
+                          : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: future ? 0.4 : 1,
+                  }}
+                >
+                  {intake === 'harmful' ? (
+                    <Ionicons name="alert" size={16} color="#FEF2F2" />
+                  ) : intake === 'clean' ? (
+                    <Ionicons name="checkmark" size={18} color={isLight ? '#FFFFFF' : 'rgba(22,22,28,0.94)'} />
+                  ) : null}
+                </View>
+              ) : (
+                <Pressable
+                  disabled={future}
+                  onPress={() => onToggle(h)}
+                  accessibilityRole="button"
+                  accessibilityLabel={done ? 'Снять отметку' : 'Отметить привычку'}
+                  style={({ pressed }) => ({
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    borderWidth: done ? 0 : 2,
+                    borderColor: 'rgba(255,255,255,0.22)',
+                    backgroundColor: done ? colors.accent : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: future ? 0.4 : pressed ? 0.88 : 1,
+                  })}
+                >
+                  {done ? (
+                    <Ionicons name="checkmark" size={18} color={isLight ? '#FFFFFF' : 'rgba(22,22,28,0.94)'} />
+                  ) : null}
+                </Pressable>
+              )}
               {showLineBelow ? (
                 <View
                   style={{
@@ -311,7 +357,11 @@ export function DayHabitTimelineList({
                 style={{
                   borderRadius: radius.xl,
                   borderWidth: 1,
-                  borderColor: done ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)',
+                  borderColor: done
+                    ? 'rgba(255,255,255,0.14)'
+                    : intake === 'harmful'
+                      ? 'rgba(248,113,113,0.42)'
+                      : 'rgba(255,255,255,0.08)',
                   backgroundColor: 'rgba(255,255,255,0.045)',
                   paddingVertical: spacing.md,
                   paddingHorizontal: spacing.md,
@@ -338,7 +388,7 @@ export function DayHabitTimelineList({
                 </View>
 
                 <Pressable
-                  disabled={future}
+                  disabled={future || h.analyticsHeatMode === 'negative'}
                   onPress={() => onToggle(h)}
                   onLongPress={canDelete ? () => promptDeleteHabit(h, () => onRequestDelete!(h)) : undefined}
                   delayLongPress={480}
@@ -372,6 +422,47 @@ export function DayHabitTimelineList({
                     >
                       {streakSubtitle(h, viewDateKey, todayKey)}
                     </Text>
+                    {h.cadence === 'daily' && h.analyticsHeatMode === 'negative' && !future && onHarmfulChoice ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                        <Pressable
+                          onPress={() => onHarmfulChoice(h, viewDateKey, 'harmful')}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            backgroundColor:
+                              intake === 'harmful' ? 'rgba(220,38,38,0.35)' : 'rgba(220,38,38,0.12)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(248,113,113,0.5)',
+                          }}
+                        >
+                          <Text style={{ fontWeight: '900', color: '#FECACA', fontSize: 14 }}>Да</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => onHarmfulChoice(h, viewDateKey, 'clean')}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            backgroundColor:
+                              intake === 'clean' ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.05)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(74,222,128,0.45)',
+                          }}
+                        >
+                          <Text style={{ fontWeight: '900', color: '#BBF7D0', fontSize: 14 }}>Нет</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                    {intake !== 'none' && h.analyticsHeatMode === 'negative' && !future && onHarmfulChoice ? (
+                      <Pressable onPress={() => onHarmfulChoice(h, viewDateKey, 'clear')} style={{ marginTop: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.38)', textDecorationLine: 'underline' }}>
+                          Сбросить
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     {h.cadence === 'weekly' ? (
                       <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
                         {weekKeys.map((dk) => {

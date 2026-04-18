@@ -14,6 +14,7 @@ export function totalHabitCompletionsInMonth(
     const dk = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     if (dk > todayKey) break;
     for (const h of habits) {
+      if (h.analyticsHeatMode === 'negative') continue;
       if (habitDoneOnDate(h, dk)) total += 1;
     }
   }

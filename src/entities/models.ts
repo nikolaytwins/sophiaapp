@@ -62,6 +62,9 @@ export type HabitCheckInKind = 'binary' | 'counter';
  */
 export type HabitListSection = 'media' | 'money' | 'body' | 'life';
 
+/** Календарь аналитики: `negative` — отмеченные дни красные («было вредное»). */
+export type HabitAnalyticsHeatMode = 'default' | 'negative';
+
 /** Persisted shape — completions are local YYYY-MM-DD; weekly allows duplicate days. */
 export interface HabitPersisted {
   id: string;
@@ -72,10 +75,15 @@ export interface HabitPersisted {
   checkInKind?: HabitCheckInKind;
   /** Для counter: сколько чек-инов нужно за день (≥2). */
   dailyTarget?: number;
+  /** Для counter: шаг +/- за одно нажатие (по умолчанию 1). */
+  counterIncrementStep?: number;
   /** Для counter: фактические отметки по датам YYYY-MM-DD. */
   countsByDate?: Record<string, number>;
   /** Подпись под кольцом: «стаканов», «раз» и т.п. */
   counterUnit?: string;
+  /** Для `negative`: дни, когда отмечено «без вредного». */
+  explicitCleanDates?: string[];
+  analyticsHeatMode?: HabitAnalyticsHeatMode;
   /** 1–7 when cadence === 'weekly' */
   weeklyTarget?: number;
   /** Опционально: отдельная секция на экране привычек. */
@@ -98,8 +106,11 @@ export interface Habit {
   section?: HabitListSection;
   checkInKind?: HabitCheckInKind;
   dailyTarget?: number;
+  counterIncrementStep?: number;
   countsByDate?: Record<string, number>;
   counterUnit?: string;
+  explicitCleanDates?: string[];
+  analyticsHeatMode?: HabitAnalyticsHeatMode;
   /** Daily: completed today. Weekly: at least one check-in today. */
   todayDone: boolean;
   cadence: HabitCadence;

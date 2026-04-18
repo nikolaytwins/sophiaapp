@@ -21,8 +21,10 @@ import {
   HABITS_SEED_ROWS,
   normalizeHabitsSlice,
   removeHabitSlice,
+  setHarmfulDayChoiceSlice,
   setRequiredSlice,
   type HabitsPersistSlice,
+  type HarmfulDayChoice,
   type UpdateHabitPersistInput,
   undoWeeklySlice,
   updateHabitSlice,
@@ -49,20 +51,24 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
     raw.dailyTarget >= 1;
 
   const streak =
-    raw.cadence === 'daily'
-      ? isCounterDaily
-        ? dailyStreakCounter(raw.countsByDate, raw.dailyTarget!, todayKey)
-        : dailyStreak(raw.completionDates, todayKey)
-      : raw.cadence === 'weekly' && raw.weeklyTarget != null
-        ? weeklyStreak(raw.completionDates, raw.weeklyTarget, todayKey)
-        : 0;
+    raw.analyticsHeatMode === 'negative'
+      ? 0
+      : raw.cadence === 'daily'
+        ? isCounterDaily
+          ? dailyStreakCounter(raw.countsByDate, raw.dailyTarget!, todayKey)
+          : dailyStreak(raw.completionDates, todayKey)
+        : raw.cadence === 'weekly' && raw.weeklyTarget != null
+          ? weeklyStreak(raw.completionDates, raw.weeklyTarget, todayKey)
+          : 0;
 
   const todayDone =
-    raw.cadence === 'daily'
-      ? isCounterDaily
-        ? counterCountOnDate(raw.countsByDate, todayKey) >= (raw.dailyTarget ?? 1)
-        : hasDailyCompletionOn(raw.completionDates, todayKey)
-      : countToday(raw.completionDates, todayKey) > 0;
+    raw.analyticsHeatMode === 'negative'
+      ? raw.completionDates.includes(todayKey) || Boolean(raw.explicitCleanDates?.includes(todayKey))
+      : raw.cadence === 'daily'
+        ? isCounterDaily
+          ? counterCountOnDate(raw.countsByDate, todayKey) >= (raw.dailyTarget ?? 1)
+          : hasDailyCompletionOn(raw.completionDates, todayKey)
+        : countToday(raw.completionDates, todayKey) > 0;
 
   const weekQuotaMet =
     raw.cadence === 'weekly' && raw.weeklyTarget != null && weeklyDone != null
@@ -85,8 +91,13 @@ function toHabitView(raw: HabitPersisted, todayKey: string): Habit {
           dailyTarget: raw.dailyTarget,
           countsByDate: { ...(raw.countsByDate ?? {}) },
           ...(raw.counterUnit ? { counterUnit: raw.counterUnit } : {}),
+          ...(typeof raw.counterIncrementStep === 'number' && raw.counterIncrementStep > 1
+            ? { counterIncrementStep: raw.counterIncrementStep }
+            : {}),
         }
       : {}),
+    ...(raw.analyticsHeatMode === 'negative' ? { analyticsHeatMode: 'negative' as const } : {}),
+    ...(raw.explicitCleanDates?.length ? { explicitCleanDates: [...raw.explicitCleanDates] } : {}),
     streak,
     todayDone,
     weeklyCompleted: weeklyDone,
@@ -115,6 +126,7 @@ type State = HabitsPersistSlice & {
   remove: (id: string) => void;
   checkIn: (id: string, dateKey?: string) => void;
   adjustCounter: (id: string, dateKey: string, delta: 1 | -1) => void;
+  setHarmfulDayChoice: (id: string, dateKey: string, choice: HarmfulDayChoice) => void;
   undoWeekly: (id: string, dateKey?: string) => void;
   setRequired: (id: string, required: boolean) => void;
   update: (id: string, patch: UpdateHabitPersistInput) => void;
@@ -142,6 +154,8 @@ export const useHabitsStore = create<State>()(
       checkIn: (id, dateKey) => set((s) => checkInSlice(s, id, dateKey)),
 
       adjustCounter: (id, dateKey, delta) => set((s) => counterAdjustSlice(s, id, dateKey, delta)),
+
+      setHarmfulDayChoice: (id, dateKey, choice) => set((s) => setHarmfulDayChoiceSlice(s, id, dateKey, choice)),
 
       undoWeekly: (id, dateKey) => set((s) => undoWeeklySlice(s, id, dateKey)),
 

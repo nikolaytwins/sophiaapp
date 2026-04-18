@@ -7,8 +7,6 @@ import { counterCountOnDate } from '@/features/habits/habitLogic';
 import { ProgressRing } from '@/shared/ui/ProgressRing';
 import { useAppTheme } from '@/theme';
 
-const COUNTER_DAY_MAX = 99;
-
 type Props = {
   habit: Habit;
   viewDateKey: string;
@@ -37,7 +35,8 @@ export function HabitCounterRingCard({
   const future = viewDateKey > todayKey;
   const value01 = target > 0 ? Math.min(1, cur / target) : 0;
   const atMin = cur <= 0;
-  const atCeiling = cur >= COUNTER_DAY_MAX;
+  const ceiling = Math.max(target, 99);
+  const atCeiling = cur >= ceiling;
 
   const fire = (delta: 1 | -1) => {
     if (future) return;

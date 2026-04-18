@@ -247,7 +247,7 @@ export default function HabitNewScreen() {
                     marginTop: spacing.md,
                   }}
                 >
-                  {[2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((n) => {
+                  {[2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 50, 100, 140].map((n) => {
                     const on = n === counterTarget;
                     return (
                       <Pressable

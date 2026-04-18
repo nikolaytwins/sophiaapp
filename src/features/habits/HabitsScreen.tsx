@@ -26,6 +26,7 @@ import type { Habit } from '@/entities/models';
 import {
   chunkMonthIntoWeekRows,
   monthAnchorKey,
+  monthCompletionPercentDays,
   monthCompletionPercentDaysForHabit,
   monthCompletionPercentWeekly,
   monthGridCells,
@@ -192,6 +193,7 @@ function HabitCard({
   onDelete,
   onToggleRequired,
   onAdjustCounter,
+  onHarmfulChoice,
   todayKey,
 }: {
   habit: Habit;
@@ -203,11 +205,14 @@ function HabitCard({
   onDelete?: () => void;
   onToggleRequired?: () => void;
   onAdjustCounter?: (id: string, dateKey: string, delta: 1 | -1) => void;
+  /** Для привычек с analyticsHeatMode === 'negative'. */
+  onHarmfulChoice?: (habitId: string, dateKey: string, choice: 'harmful' | 'clean' | 'clear') => void;
   todayKey: string;
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
   const analyticsUi = variant === 'analytics';
   const isDaily = habit.cadence === 'daily';
+  const isNegativeDaily = isDaily && habit.analyticsHeatMode === 'negative';
   const isCounterDaily = isDaily && habit.checkInKind === 'counter' && habit.dailyTarget != null;
   const accent = isDaily ? ACCENT : WEEKLY;
   const target = habit.weeklyTarget ?? 1;
@@ -216,6 +221,7 @@ function HabitCard({
 
   const completedDailySet = useMemo(() => {
     if (!isDaily) return new Set<string>();
+    if (isNegativeDaily) return new Set(habit.completionDates ?? []);
     if (isCounterDaily && habit.dailyTarget != null) {
       const s = new Set<string>();
       for (const [k, v] of Object.entries(habit.countsByDate ?? {})) {
@@ -224,7 +230,7 @@ function HabitCard({
       return s;
     }
     return new Set(habit.completionDates ?? []);
-  }, [habit.completionDates, habit.countsByDate, habit.dailyTarget, isCounterDaily, isDaily]);
+  }, [habit.completionDates, habit.countsByDate, habit.dailyTarget, isCounterDaily, isDaily, isNegativeDaily]);
 
   const completedWeeklySet = useMemo(() => {
     if (isDaily) return new Set<string>();
@@ -241,8 +247,11 @@ function HabitCard({
   const monthGridTitle = useMemo(() => monthGridTitleRu(gridAnchorKey), [gridAnchorKey]);
   const todayWeekdayIdx = useMemo(() => weekdayIndexMondayFirst(todayKey), [todayKey]);
   const monthPct = useMemo(
-    () => monthCompletionPercentDaysForHabit(habit, viewYm.y, viewYm.m, todayKey),
-    [habit, viewYm.y, viewYm.m, todayKey]
+    () =>
+      isNegativeDaily
+        ? monthCompletionPercentDays(habit.completionDates, viewYm.y, viewYm.m, todayKey)
+        : monthCompletionPercentDaysForHabit(habit, viewYm.y, viewYm.m, todayKey),
+    [habit, isNegativeDaily, viewYm.y, viewYm.m, todayKey]
   );
   const monthPctWeekly = useMemo(
     () =>
@@ -263,16 +272,46 @@ function HabitCard({
   );
   const canGoPrevMonth = useMemo(() => ymToIndex(viewYm.y, viewYm.m) > ymToIndex(2000, 1), [viewYm]);
 
+  const [actionDayKey, setActionDayKey] = useState(todayKey);
+  useEffect(() => {
+    setActionDayKey(todayKey);
+  }, [todayKey]);
+
+  const harmfulOnAction = Boolean(habit.completionDates?.includes(actionDayKey));
+  const cleanOnAction = Boolean(habit.explicitCleanDates?.includes(actionDayKey));
+
   const statusLine = useMemo(() => {
     if (!isDaily) return '';
+    if (isNegativeDaily) {
+      if (harmfulOnAction) return 'Отмечено: был срыв (мучное / фастфуд / алкоголь)';
+      if (cleanOnAction) return 'Чистый день';
+      return 'Отметь «да» или «нет» за выбранный день';
+    }
     if (isCounterDaily && habit.dailyTarget != null) {
       const c = counterCountOnDate(habit.countsByDate, todayKey);
       return c >= habit.dailyTarget ? 'Цель дня выполнена' : `${c} из ${habit.dailyTarget} сегодня`;
     }
     return habit.todayDone ? 'Сегодня закрыто' : 'Ждёт отметки сегодня';
-  }, [habit.countsByDate, habit.dailyTarget, habit.todayDone, isCounterDaily, isDaily, todayKey]);
+  }, [
+    actionDayKey,
+    cleanOnAction,
+    habit.countsByDate,
+    habit.dailyTarget,
+    habit.todayDone,
+    harmfulOnAction,
+    isCounterDaily,
+    isDaily,
+    isNegativeDaily,
+    todayKey,
+  ]);
 
-  const needsAttention = readOnly ? false : isDaily ? !habit.todayDone : !habit.weekQuotaMet;
+  const needsAttention = readOnly
+    ? false
+    : isNegativeDaily
+      ? !(harmfulOnAction || cleanOnAction)
+      : isDaily
+        ? !habit.todayDone
+        : !habit.weekQuotaMet;
 
   const confirmDelete = useCallback(() => {
     if (readOnly || !onDelete) return;
@@ -295,11 +334,6 @@ function HabitCard({
 
   const [expanded, setExpanded] = useState(true);
   const expandedSv = useSharedValue(1);
-
-  const [actionDayKey, setActionDayKey] = useState(todayKey);
-  useEffect(() => {
-    setActionDayKey(todayKey);
-  }, [todayKey]);
 
   const effectiveExpanded = analyticsUi || expanded;
 
@@ -484,7 +518,9 @@ function HabitCard({
                   <Text style={[typography.caption, { color: accent, fontWeight: '700' }]}>
                     {isCounterDaily && habit.dailyTarget != null
                       ? `счётчик · ${habit.dailyTarget}×`
-                      : 'каждый день'}
+                      : isNegativeDaily
+                        ? 'да / нет'
+                        : 'каждый день'}
                   </Text>
                 </View>
               </View>
@@ -551,9 +587,16 @@ function HabitCard({
               >
                 <HabitMonthCalendar
                   monthTitle={monthGridTitle}
-                  monthStatLine={readOnly ? undefined : `${monthPct}% за месяц`}
+                  monthStatLine={
+                    isNegativeDaily
+                      ? `${monthPct}% дней со срывом`
+                      : readOnly
+                        ? undefined
+                        : `${monthPct}% за месяц`
+                  }
                   monthWeekRows={monthWeekRows}
                   completedSet={completedDailySet}
+                  heatMode={isNegativeDaily ? 'negative' : 'default'}
                   todayKey={todayKey}
                   isViewingCurrentMonth={isViewingCurrentMonth}
                   todayWeekdayIdx={todayWeekdayIdx}
@@ -592,6 +635,60 @@ function HabitCard({
                     ringSize={124}
                     progressColor={accent}
                   />
+                ) : isNegativeDaily ? (
+                  <View style={{ gap: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          onHarmfulChoice?.(habit.id, actionDayKey, 'harmful');
+                        }}
+                        style={{
+                          flex: 1,
+                          minHeight: 48,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: harmfulOnAction ? 'rgba(220,38,38,0.35)' : 'rgba(220,38,38,0.12)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(248,113,113,0.55)',
+                        }}
+                      >
+                        <Text style={{ fontWeight: '900', color: '#FECACA', fontSize: 15 }}>Да, было</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          onHarmfulChoice?.(habit.id, actionDayKey, 'clean');
+                        }}
+                        style={{
+                          flex: 1,
+                          minHeight: 48,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: cleanOnAction ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.05)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(74,222,128,0.45)',
+                        }}
+                      >
+                        <Text style={{ fontWeight: '900', color: '#BBF7D0', fontSize: 15 }}>Нет</Text>
+                      </Pressable>
+                    </View>
+                    {harmfulOnAction || cleanOnAction ? (
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          onHarmfulChoice?.(habit.id, actionDayKey, 'clear');
+                        }}
+                        style={{ alignSelf: 'center', paddingVertical: 6 }}
+                      >
+                        <Text style={[typography.caption, { color: colors.textMuted, textDecorationLine: 'underline' }]}>
+                          Сбросить день
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 ) : (
                   <CheckInControl
                     active={Boolean(habit.completionDates?.includes(actionDayKey))}
@@ -813,6 +910,7 @@ export function HabitsScreen() {
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const setMood = useDayJournalStore((s) => s.setMood);
+  const setEnergy = useDayJournalStore((s) => s.setEnergy);
 
   useEffect(() => {
     const sb = getSupabase();
@@ -1152,6 +1250,7 @@ export function HabitsScreen() {
                 todayKey={todayKey}
                 sessionEmail={accountEmail}
                 onPickMood={(dk, mood) => setMood(dk, mood)}
+                onPickEnergy={(dk, energy) => setEnergy(dk, energy)}
               />
               <HabitsPlannerTodayCard todayKey={todayKey} userId={userId} />
             </View>

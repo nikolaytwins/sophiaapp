@@ -10,6 +10,9 @@ export function getWeekDayKeys(anchorDateKey: string): string[] {
 /** Отметка на конкретный день (для UI выбранного дня в календаре «Дня»). */
 export function habitDoneOnDate(h: Habit, dayKey: string): boolean {
   if (h.cadence === 'daily') {
+    if (h.analyticsHeatMode === 'negative') {
+      return Boolean(h.explicitCleanDates?.includes(dayKey));
+    }
     const target = h.dailyTarget;
     if (h.checkInKind === 'counter' && target != null && target >= 1) {
       const c = h.countsByDate?.[dayKey] ?? 0;
@@ -18,6 +21,17 @@ export function habitDoneOnDate(h: Habit, dayKey: string): boolean {
     return (h.completionDates ?? []).includes(dayKey);
   }
   return (h.completionDates ?? []).some((d) => d === dayKey);
+}
+
+/** Состояние дня для привычки «вредное» (красная аналитика). */
+export function harmfulIntakeDayState(
+  h: Habit,
+  dayKey: string
+): 'none' | 'harmful' | 'clean' {
+  if (h.analyticsHeatMode !== 'negative') return 'none';
+  if (h.completionDates?.includes(dayKey)) return 'harmful';
+  if (h.explicitCleanDates?.includes(dayKey)) return 'clean';
+  return 'none';
 }
 
 export function habitCadenceLabel(h: Habit): string {

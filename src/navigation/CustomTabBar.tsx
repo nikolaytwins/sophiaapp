@@ -43,8 +43,8 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   habits: 'stats-chart-outline',
 };
 
-/** Порядок и состав нижнего меню (`inbox` скрыт — только `router.push`). */
-const TAB_BAR_ROUTE_ORDER = ['day', 'sprint', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
+/** Порядок и состав нижнего меню (`inbox` скрыт — только `router.push`). `sprint` временно скрыт. */
+const TAB_BAR_ROUTE_ORDER = ['day', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
