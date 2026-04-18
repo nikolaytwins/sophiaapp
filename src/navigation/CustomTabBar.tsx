@@ -12,6 +12,7 @@ import { useAppTheme } from '@/theme';
 const TAB_HREF: Record<string, Href> = {
   day: '/day',
   sprint: '/sprint' as Href,
+  strategy: '/strategy' as Href,
   tasks: '/tasks' as Href,
   inbox: '/inbox' as Href,
   finance: '/finance' as Href,
@@ -21,6 +22,7 @@ const TAB_HREF: Record<string, Href> = {
 const LABELS: Record<string, string> = {
   day: 'День',
   sprint: 'Спринт',
+  strategy: 'Стратегия',
   tasks: 'Задачи',
   inbox: 'Входящие',
   finance: 'Финансы',
@@ -30,6 +32,7 @@ const LABELS: Record<string, string> = {
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
   sprint: 'flag-outline',
+  strategy: 'navigate-circle-outline',
   tasks: 'list-outline',
   inbox: 'file-tray-stacked-outline',
   finance: 'wallet-outline',
@@ -38,7 +41,7 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 /** В нижнем меню только эти вкладки (остальные экраны — вне `(tabs)` или со `href: null`). */
-const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'tasks', 'inbox', 'finance', 'habits']);
+const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'strategy', 'tasks', 'inbox', 'finance', 'habits']);
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
