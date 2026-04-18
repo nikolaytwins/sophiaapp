@@ -13,6 +13,7 @@ const TAB_HREF: Record<string, Href> = {
   day: '/day',
   sprint: '/sprint' as Href,
   strategy: '/strategy' as Href,
+  goals: '/goals' as Href,
   tasks: '/tasks' as Href,
   inbox: '/inbox' as Href,
   finance: '/finance' as Href,
@@ -23,6 +24,7 @@ const LABELS: Record<string, string> = {
   day: 'День',
   sprint: 'Спринт',
   strategy: 'Стратегия',
+  goals: 'Цели',
   tasks: 'Задачи',
   inbox: 'Входящие',
   finance: 'Финансы',
@@ -33,6 +35,7 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
   sprint: 'flag-outline',
   strategy: 'navigate-circle-outline',
+  goals: 'trophy-outline',
   tasks: 'list-outline',
   inbox: 'file-tray-stacked-outline',
   finance: 'wallet-outline',
@@ -40,8 +43,8 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   habits: 'stats-chart-outline',
 };
 
-/** В нижнем меню только эти вкладки (остальные экраны — вне `(tabs)` или со `href: null`). */
-const TAB_BAR_ROUTE_NAMES = new Set(['day', 'sprint', 'strategy', 'tasks', 'inbox', 'finance', 'habits']);
+/** Порядок и состав нижнего меню (`inbox` скрыт — только `router.push`). */
+const TAB_BAR_ROUTE_ORDER = ['day', 'sprint', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -105,7 +108,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     [colors, isLight, shadows, typography]
   );
 
-  const visibleRoutes = state.routes.filter((route) => TAB_BAR_ROUTE_NAMES.has(route.name));
+  const visibleRoutes = TAB_BAR_ROUTE_ORDER.map((name) => state.routes.find((r) => r.name === name)).filter(
+    (r): r is (typeof state.routes)[number] => r != null
+  );
 
   const row = (
     <View style={styles.row}>

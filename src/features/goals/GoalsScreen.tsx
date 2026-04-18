@@ -26,7 +26,7 @@ const GOALS_MAIN_TABS: {
 ];
 
 /**
- * Раздел «Цели»: hero + табы (годовые / глобальное видение) + контент.
+ * Годовые цели и глобальное видение (отдельный маршрут `/annual-goals`, не нижнее меню).
  */
 export function GoalsScreen() {
   const insets = useSafeAreaInsets();

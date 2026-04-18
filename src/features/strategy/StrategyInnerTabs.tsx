@@ -10,7 +10,7 @@ type Props = {
   onChange: (tab: StrategyMainTabId) => void;
 };
 
-const TAB_ORDER: StrategyMainTabId[] = ['strategy', 'vision', 'notes', 'goals'];
+const TAB_ORDER: StrategyMainTabId[] = ['strategy', 'vision', 'notes'];
 
 export function StrategyInnerTabs({ labels, active, onChange }: Props) {
   const { typography, spacing, radius, colors, isLight } = useAppTheme();

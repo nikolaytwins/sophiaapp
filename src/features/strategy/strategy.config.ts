@@ -112,14 +112,22 @@ export type PersonalBrandSectionDef = {
   narratives: PersonalBrandNarrativeDef[];
 };
 
-export const STRATEGY_MAIN_TABS = ['strategy', 'vision', 'notes', 'goals'] as const;
+export const STRATEGY_MAIN_TABS = ['strategy', 'vision', 'notes'] as const;
 export type StrategyMainTabId = (typeof STRATEGY_MAIN_TABS)[number];
 
 export type StrategyTabsLabelsDef = {
   strategy: string;
   vision: string;
   notes: string;
-  goals: string;
+};
+
+/** Стартовые побочные цели (id стабильны — прогресс в AsyncStorage). */
+export type StrategySideGoalSeedDef = {
+  id: string;
+  title: string;
+  /** Для шкалы: рубли, подписчики или 1 = «ещё / сделано». */
+  defaultTarget: number;
+  defaultCurrent?: number;
 };
 
 export type StrategyGoalsTabDef = {
@@ -127,7 +135,7 @@ export type StrategyGoalsTabDef = {
   nearestSectionTitle: string;
   nearestDeadlineLine: string;
   sideSectionTitle: string;
-  sideGoals: string[];
+  sideGoalSeeds: StrategySideGoalSeedDef[];
 };
 
 export type GlobalVisionGoalLevelDef = {
@@ -466,7 +474,6 @@ export const strategyData: StrategyPageConfig = {
     strategy: 'Стратегия',
     vision: 'Глобальное видение',
     notes: 'Важные заметки обо мне',
-    goals: 'Цели',
   },
   globalVision: {
     whatIBuild: {
@@ -512,11 +519,15 @@ export const strategyData: StrategyPageConfig = {
     nearestSectionTitle: 'Ближайшие цели',
     nearestDeadlineLine: 'Китай и подушка · до 14 августа',
     sideSectionTitle: 'Побочные цели',
-    sideGoals: [
-      'BMW — 3 500 000 ₽',
-      '1000 подписчиков',
-      'Июль — отдых в глэмпинге или красивом отеле, 2 суток',
-      'Ноябрь — отдых в классном отеле',
+    sideGoalSeeds: [
+      { id: 'sg-bmw', title: 'BMW — 3 500 000 ₽', defaultTarget: 3_500_000 },
+      { id: 'sg-subs', title: '1000 подписчиков', defaultTarget: 1000 },
+      {
+        id: 'sg-jul',
+        title: 'Июль — отдых в глэмпинге или красивом отеле, 2 суток',
+        defaultTarget: 1,
+      },
+      { id: 'sg-nov', title: 'Ноябрь — отдых в классном отеле', defaultTarget: 1 },
     ],
   },
   aboutMeNotes: {

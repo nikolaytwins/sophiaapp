@@ -6,7 +6,6 @@ import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { strategyPageConfig, type StrategyMainTabId } from '@/features/strategy/strategy.config';
 import { StrategyAboutNotesPanel } from '@/features/strategy/StrategyAboutNotesPanel';
 import { StrategyGlobalVisionPanel } from '@/features/strategy/StrategyGlobalVisionPanel';
-import { StrategyGoalsTabPanel } from '@/features/strategy/StrategyGoalsTabPanel';
 import { StrategyInnerTabs } from '@/features/strategy/StrategyInnerTabs';
 import { StrategyStrategyTabPanel } from '@/features/strategy/StrategyStrategyTabPanel';
 import { getSupabase } from '@/lib/supabase';
@@ -88,7 +87,6 @@ export function StrategyScreen() {
             ) : null}
             {mainTab === 'vision' ? <StrategyGlobalVisionPanel config={strategyPageConfig.globalVision} /> : null}
             {mainTab === 'notes' ? <StrategyAboutNotesPanel config={strategyPageConfig.aboutMeNotes} /> : null}
-            {mainTab === 'goals' ? <StrategyGoalsTabPanel config={strategyPageConfig.goalsTab} /> : null}
           </>
         )}
       </ScrollView>
