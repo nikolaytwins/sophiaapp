@@ -219,6 +219,7 @@ function subsectionHeadingStyle() {
 function SideGoalsEditorBlock({ config }: { config: StrategyGoalsTabDef }) {
   const { typography, spacing, colors } = useAppTheme();
   const goals = useSideGoalsStore((s) => s.goals);
+  const addSideGoal = useSideGoalsStore((s) => s.addSideGoal);
   const updateSideGoal = useSideGoalsStore((s) => s.updateSideGoal);
   const appendSideGoalPhotos = useSideGoalsStore((s) => s.appendSideGoalPhotos);
   const removeSideGoalPhotoAt = useSideGoalsStore((s) => s.removeSideGoalPhotoAt);
@@ -303,6 +304,32 @@ function SideGoalsEditorBlock({ config }: { config: StrategyGoalsTabDef }) {
           <SideGoalProgressCard key={g.id} goal={g} onEdit={() => setEditId(g.id)} />
         ))}
       </View>
+
+      <Pressable
+        onPress={() => {
+          if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          const id = addSideGoal();
+          setEditId(id);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Добавить новую цель"
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          marginTop: spacing.sm,
+          paddingVertical: 14,
+          paddingHorizontal: spacing.lg,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: 'rgba(232,121,249,0.45)',
+          backgroundColor: pressed ? 'rgba(232,121,249,0.16)' : 'rgba(232,121,249,0.08)',
+        })}
+      >
+        <Ionicons name="add-circle-outline" size={22} color="#F0ABFC" />
+        <Text style={{ fontSize: 15, fontWeight: '800', color: '#F5D0FE' }}>Добавить цель</Text>
+      </Pressable>
 
       <Text style={[subsectionHeadingStyle(), { marginTop: spacing.md }]}>{config.boardHorizonSubheading}</Text>
       {horizonGoals.length > 0 ? (

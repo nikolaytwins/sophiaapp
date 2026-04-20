@@ -33,6 +33,8 @@ function normalizeGoal(raw: unknown): SideGoalPersisted | null {
 type State = {
   goals: SideGoalPersisted[];
   seedFromSeedsIfEmpty: (seeds: StrategySideGoalSeedDef[]) => void;
+  /** Новая цель на доске (id генерируется внутри). */
+  addSideGoal: () => string;
   updateSideGoal: (
     id: string,
     patch: Partial<Pick<SideGoalPersisted, 'title' | 'current' | 'target' | 'isHorizon' | 'photoUris'>>
@@ -61,6 +63,19 @@ export const useSideGoalsStore = create<State>()(
             })),
           };
         }),
+      addSideGoal: () => {
+        const id = `sg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const goal: SideGoalPersisted = {
+          id,
+          title: 'Новая цель',
+          current: 0,
+          target: 1000,
+          photoUris: [],
+          isHorizon: false,
+        };
+        set((s) => ({ goals: [...s.goals, goal] }));
+        return id;
+      },
       updateSideGoal: (id, patch) =>
         set((s) => ({
           goals: s.goals.map((g) => {
