@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 
+import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import type {
   StrategyCheckpointDef,
   StrategyPhaseBadgeVariant,
@@ -115,18 +116,18 @@ function ColumnCard({
   onToggle: (id: string) => void;
   disabled: boolean;
 }) {
-  const { typography, spacing, brand, radius } = useAppTheme();
+  const { typography, spacing, radius, colors } = useAppTheme();
 
   return (
     <View
       style={{
         flex: 1,
         minWidth: 200,
-        borderRadius: radius.lg,
+        borderRadius: STRATEGY.cardRadiusMd,
         borderWidth: 1,
-        borderColor: brand.surfaceBorder,
-        backgroundColor: 'rgba(13,13,13,0.55)',
-        padding: spacing.md,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        padding: spacing.lg,
         gap: spacing.sm,
       }}
     >
@@ -189,11 +190,11 @@ export function StrategyPhaseAccordion({ phase, checkedMap, onToggleCheckpoint, 
               <Text style={[typography.title2, { color: VIOLET }]}>{m.title}</Text>
               <View
                 style={{
-                  borderRadius: radius.lg,
+                  borderRadius: STRATEGY.cardRadiusMd,
                   borderWidth: 1,
-                  borderColor: brand.surfaceBorder,
-                  backgroundColor: 'rgba(13,13,13,0.45)',
-                  paddingHorizontal: spacing.sm,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: spacing.md,
                 }}
               >
                 {m.checkpoints.map((cp) => (
@@ -212,10 +213,10 @@ export function StrategyPhaseAccordion({ phase, checkedMap, onToggleCheckpoint, 
       );
     }
     return null;
-  }, [phase, checkedMap, multiColumn, onToggleCheckpoint, readOnly, brand, radius, spacing, typography]);
+  }, [phase, checkedMap, multiColumn, onToggleCheckpoint, readOnly, brand, radius, spacing, typography, colors]);
 
   return (
-    <AppSurfaceCard glow={open} padded style={{ padding: spacing.lg }}>
+    <AppSurfaceCard glow={open} padded style={{ padding: spacing.xl, borderRadius: STRATEGY.cardRadiusLg }}>
       <Pressable
         onPress={() => {
           if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -256,14 +257,14 @@ export function StrategyPhaseAccordion({ phase, checkedMap, onToggleCheckpoint, 
           {phase.footnoteCard ? (
             <View
               style={{
-                borderLeftWidth: 4,
+                borderLeftWidth: 3,
                 borderLeftColor: VIOLET_DEEP,
-                borderRadius: radius.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.md,
-                backgroundColor: 'rgba(13,13,13,0.72)',
+                borderRadius: STRATEGY.cardRadiusMd,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: spacing.lg,
+                backgroundColor: colors.surface,
                 borderWidth: 1,
-                borderColor: 'rgba(124,58,237,0.25)',
+                borderColor: colors.border,
               }}
             >
               <Text style={[typography.body, { color: colors.text }]}>{phase.footnoteCard.text}</Text>

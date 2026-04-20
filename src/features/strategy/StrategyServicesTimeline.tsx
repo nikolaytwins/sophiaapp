@@ -1,57 +1,65 @@
-import { Text, useWindowDimensions, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useState } from 'react';
+import { Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 
+import { STRATEGY, strategyEyebrow } from '@/features/strategy/strategyDashboardUi';
 import type { TimelineSectionDef, TimelineSegmentKind } from '@/features/strategy/strategy.config';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { useAppTheme } from '@/theme';
 
-const TIMELINE_COLORS: Record<
-  TimelineSegmentKind,
-  { bg: string; fg: string; border?: string }
-> = {
-  internal: { bg: '#65a30d', fg: '#FFFFFF' },
-  dev: { bg: '#2563eb', fg: '#FFFFFF' },
-  launch: { bg: '#7c3aed', fg: '#FFFFFF' },
-  scale: { bg: '#ea580c', fg: '#FFFFFF' },
-  pause: { bg: '#262626', fg: 'rgba(255,255,255,0.92)', border: '#404040' },
+/** Семантика: зелёный — внутреннее/результат, синий — разработка, фиолетовый — запуск, оранжевый — масштаб/риск-напор, пауза — нейтрально. */
+const TIMELINE_GRADIENT: Record<TimelineSegmentKind, readonly [string, string]> = {
+  internal: ['#3f6212', '#65a30d'],
+  dev: ['#1e3a8a', '#2563eb'],
+  launch: ['#5b21b6', '#7c3aed'],
+  scale: ['#9a3412', '#ea580c'],
+  pause: ['#171717', '#404040'],
 };
+
+const TIMELINE_FG = '#fafafa';
 
 type Props = {
   config: TimelineSectionDef;
 };
 
 export function StrategyServicesTimeline({ config }: Props) {
-  const { typography, spacing, colors } = useAppTheme();
+  const { typography, spacing, colors, brand, shadows } = useAppTheme();
   const { width } = useWindowDimensions();
   const narrow = width < 560;
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   return (
-    <AppSurfaceCard padded style={{ padding: spacing.lg, gap: spacing.lg }}>
-      <Text
-        style={{
-          fontSize: 11,
-          lineHeight: 15,
-          fontWeight: '600',
-          letterSpacing: 1.1,
-          textTransform: 'uppercase',
-          color: 'rgba(247,244,250,0.52)',
-        }}
-      >
-        {config.heading}
-      </Text>
+    <AppSurfaceCard
+      glow
+      padded
+      style={{
+        padding: spacing.xl,
+        gap: spacing.lg,
+        borderRadius: STRATEGY.cardRadiusLg,
+        ...(Platform.OS === 'web' ? {} : shadows.card),
+      }}
+    >
+      <Text style={strategyEyebrow(colors.textMuted)}>{config.heading}</Text>
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, rowGap: spacing.sm }}>
         {config.legend.map((item) => {
-          const c = TIMELINE_COLORS[item.kind];
+          const g = TIMELINE_GRADIENT[item.kind];
           return (
-            <View key={item.kind} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
+            <View key={item.kind} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <LinearGradient
+                colors={[...g]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 2,
-                  backgroundColor: c.bg,
+                  width: 14,
+                  height: 14,
+                  borderRadius: 4,
                   borderWidth: item.kind === 'pause' ? 1 : 0,
-                  borderColor: c.border ?? 'transparent',
+                  borderColor: 'rgba(255,255,255,0.12)',
                 }}
               />
               <Text style={[typography.caption, { color: colors.textMuted, fontSize: 12 }]}>{item.label}</Text>
@@ -60,95 +68,121 @@ export function StrategyServicesTimeline({ config }: Props) {
         })}
       </View>
 
-      <View style={{ marginTop: spacing.xs }}>
-        {config.rows.map((row, rowIndex) => (
-          <View
-            key={row.id}
-            style={{
-              paddingVertical: 18,
-              borderBottomWidth: rowIndex < config.rows.length - 1 ? 1 : 0,
-              borderBottomColor: 'rgba(255,255,255,0.07)',
-              gap: 12,
-            }}
-          >
+      <View style={{ marginTop: spacing.xs, gap: 0 }}>
+        {config.rows.map((row, rowIndex) => {
+          const isOpen = Boolean(expanded[row.id]);
+          return (
             <View
+              key={row.id}
               style={{
-                flexDirection: narrow ? 'column' : 'row',
-                alignItems: narrow ? 'stretch' : 'center',
-                gap: narrow ? spacing.sm : spacing.md,
+                paddingVertical: STRATEGY.blockGap,
+                borderBottomWidth: rowIndex < config.rows.length - 1 ? 1 : 0,
+                borderBottomColor: colors.border,
+                gap: spacing.md,
               }}
             >
-              <Text
-                style={[
-                  typography.title2,
-                  {
-                    fontSize: 16,
-                    fontWeight: '700',
-                    color: colors.text,
-                    minWidth: narrow ? undefined : 118,
-                    maxWidth: narrow ? undefined : 140,
-                  },
-                ]}
-              >
-                {row.title}
-              </Text>
-
               <View
                 style={{
-                  flex: 1,
-                  minHeight: 38,
-                  minWidth: narrow ? undefined : 160,
-                  borderRadius: 6,
-                  overflow: 'hidden',
-                  flexDirection: 'row',
+                  flexDirection: narrow ? 'column' : 'row',
+                  alignItems: narrow ? 'stretch' : 'center',
+                  gap: narrow ? spacing.md : spacing.lg,
                 }}
               >
-                {row.segments.map((seg, i) => {
-                  const c = TIMELINE_COLORS[seg.kind];
-                  return (
-                    <View
-                      key={`${row.id}-seg-${i}`}
-                      style={{
-                        flex: seg.flex,
-                        backgroundColor: c.bg,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        paddingHorizontal: 4,
-                        paddingVertical: 6,
-                        borderLeftWidth: i > 0 ? 1 : 0,
-                        borderLeftColor: 'rgba(0,0,0,0.35)',
-                      }}
-                    >
-                      <Text
-                        numberOfLines={3}
+                <Text
+                  style={[
+                    typography.title2,
+                    {
+                      fontSize: 17,
+                      fontWeight: '700',
+                      color: colors.text,
+                      letterSpacing: -0.35,
+                      minWidth: narrow ? undefined : 120,
+                      maxWidth: narrow ? undefined : 148,
+                    },
+                  ]}
+                >
+                  {row.title}
+                </Text>
+
+                <View
+                  style={{
+                    flex: 1,
+                    minHeight: STRATEGY.timelineBarHeight,
+                    minWidth: narrow ? undefined : 168,
+                    borderRadius: STRATEGY.timelineBarRadius,
+                    overflow: 'hidden',
+                    flexDirection: 'row',
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  {row.segments.map((seg, i) => {
+                    const grad = TIMELINE_GRADIENT[seg.kind];
+                    return (
+                      <LinearGradient
+                        key={`${row.id}-seg-${i}`}
+                        colors={[...grad]}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
                         style={{
-                          fontSize: 10,
-                          lineHeight: 13,
-                          fontWeight: '700',
-                          color: c.fg,
-                          textAlign: 'center',
+                          flex: seg.flex,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          paddingHorizontal: 6,
+                          paddingVertical: 10,
+                          borderLeftWidth: i > 0 ? 1 : 0,
+                          borderLeftColor: 'rgba(0,0,0,0.28)',
                         }}
                       >
-                        {seg.label}
-                      </Text>
-                    </View>
-                  );
-                })}
+                        <Text
+                          numberOfLines={3}
+                          style={{
+                            fontSize: 11,
+                            lineHeight: 14,
+                            fontWeight: '800',
+                            color: TIMELINE_FG,
+                            textAlign: 'center',
+                            letterSpacing: 0.2,
+                          }}
+                        >
+                          {seg.label}
+                        </Text>
+                      </LinearGradient>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View>
+                <Text
+                  numberOfLines={isOpen ? undefined : 3}
+                  style={{
+                    ...typography.body,
+                    fontSize: 14,
+                    lineHeight: 22,
+                    color: colors.textMuted,
+                  }}
+                >
+                  {row.description}
+                </Text>
+                <Pressable
+                  onPress={() => toggleRow(row.id)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    alignSelf: 'flex-start',
+                    marginTop: spacing.sm,
+                    paddingVertical: 4,
+                    opacity: pressed ? 0.75 : 1,
+                  })}
+                >
+                  <Text style={[typography.caption, { color: brand.primarySoft, fontWeight: '700', fontSize: 12 }]}>
+                    {isOpen ? 'Свернуть' : 'Подробнее'}
+                  </Text>
+                </Pressable>
               </View>
             </View>
-
-            <Text
-              style={{
-                ...typography.body,
-                fontSize: 13,
-                lineHeight: 19,
-                color: 'rgba(247,244,250,0.55)',
-              }}
-            >
-              {row.description}
-            </Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </AppSurfaceCard>
   );

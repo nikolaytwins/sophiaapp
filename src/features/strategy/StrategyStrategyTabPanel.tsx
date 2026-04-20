@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 
+import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import { strategyPageConfig } from '@/features/strategy/strategy.config';
-import { StrategyHeader } from '@/features/strategy/StrategyHeader';
 import { StrategyMonthlyPlansPanel } from '@/features/strategy/StrategyMonthlyPlansPanel';
 import { StrategyPhaseAccordion } from '@/features/strategy/StrategyPhaseAccordion';
 import { StrategyPersonalBrand } from '@/features/strategy/StrategyPersonalBrand';
@@ -15,22 +15,20 @@ type Props = {
 };
 
 export function StrategyStrategyTabPanel({ checked, onToggleCheckpoint }: Props) {
-  const { typography, spacing } = useAppTheme();
+  const { typography, spacing, colors } = useAppTheme();
 
   return (
-    <View style={{ gap: spacing.lg }}>
+    <View style={{ gap: STRATEGY.sectionGap }}>
       <StrategyMonthlyPlansPanel plans={strategyPageConfig.monthlyPlans} />
 
-      <StrategyHeader config={strategyPageConfig.meta} />
-
       <View style={{ gap: spacing.xs }}>
-        <Text style={[typography.title1, { letterSpacing: -0.2 }]}>
+        <Text style={[typography.title1, { letterSpacing: -0.35, fontSize: 22 }]}>
           {strategyPageConfig.strategySectionTitle}
         </Text>
-        <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
+        <View style={{ height: 1, backgroundColor: colors.border, marginTop: spacing.xs, borderRadius: 1 }} />
       </View>
 
-      <View style={{ gap: spacing.md }}>
+      <View style={{ gap: spacing.lg }}>
         {strategyPageConfig.phases.map((phase) => (
           <StrategyPhaseAccordion
             key={phase.id}

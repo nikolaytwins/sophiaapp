@@ -11,27 +11,33 @@ type Props = {
 };
 
 export function StrategyHeader({ config }: Props) {
-  const { typography, spacing, radius, colors } = useAppTheme();
+  const { typography, spacing, radius, colors, brand } = useAppTheme();
 
   return (
-    <View style={{ gap: spacing.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: spacing.sm }}>
-        <Text style={[typography.sectionTitle, { flex: 1, minWidth: 200 }]}>{config.title}</Text>
+    <View style={{ gap: spacing.lg }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: spacing.md }}>
+        <Text style={[typography.sectionTitle, { flex: 1, minWidth: 200, letterSpacing: -0.65, lineHeight: 32 }]}>
+          {config.title}
+        </Text>
         <View
           style={{
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.xs + 2,
+            paddingHorizontal: spacing.md + 2,
+            paddingVertical: spacing.sm,
             borderRadius: radius.full,
             borderWidth: 1,
-            borderColor: 'rgba(139,92,246,0.45)',
-            backgroundColor: 'rgba(124,58,237,0.14)',
+            borderColor: brand.surfaceBorderStrong,
+            backgroundColor: brand.primaryMuted,
           }}
         >
-          <Text style={[typography.caption, { color: VIOLET, fontWeight: '700' }]}>{config.headerBadge}</Text>
+          <Text style={[typography.caption, { color: VIOLET, fontWeight: '800', fontSize: 12 }]}>{config.headerBadge}</Text>
         </View>
       </View>
-      <Text style={[typography.body, { color: colors.textMuted }]}>{config.subtitle}</Text>
-      <Text style={[typography.caption, { color: colors.textMuted }]}>{config.lastContentUpdate}</Text>
+      <Text style={[typography.body, { color: colors.text, fontSize: 16, lineHeight: 24, opacity: 0.92 }]}>
+        {config.subtitle}
+      </Text>
+      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 12, letterSpacing: 0.2 }]}>
+        {config.lastContentUpdate}
+      </Text>
     </View>
   );
 }

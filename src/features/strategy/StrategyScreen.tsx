@@ -3,7 +3,9 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
+import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import { strategyPageConfig, type StrategyMainTabId } from '@/features/strategy/strategy.config';
+import { StrategyHero } from '@/features/strategy/StrategyHero';
 import { StrategyAboutNotesPanel } from '@/features/strategy/StrategyAboutNotesPanel';
 import { StrategyGlobalVisionPanel } from '@/features/strategy/StrategyGlobalVisionPanel';
 import { StrategyInnerTabs } from '@/features/strategy/StrategyInnerTabs';
@@ -59,10 +61,10 @@ export function StrategyScreen() {
     <ScreenCanvas>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: Math.max(insets.top, 12) + spacing.sm,
-          paddingHorizontal: spacing.lg,
-          paddingBottom: 120,
-          gap: spacing.lg,
+          paddingTop: Math.max(insets.top, 12) + spacing.md,
+          paddingHorizontal: spacing.xl,
+          paddingBottom: 140,
+          gap: STRATEGY.sectionGap,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -71,8 +73,8 @@ export function StrategyScreen() {
         </View>
 
         {!isNikolay ? (
-          <AppSurfaceCard>
-            <Text style={[typography.body, { color: colors.textMuted }]}>
+          <AppSurfaceCard glow style={{ borderRadius: STRATEGY.cardRadiusLg }}>
+            <Text style={[typography.body, { color: colors.textMuted, lineHeight: 24 }]}>
               Этот раздел персональный: чекпоинты и контент привязаны к аккаунту{' '}
               <Text style={{ color: colors.text }}>nikolaytwins@gmail.com</Text>. Войди под этим пользователем, чтобы
               видеть дорожную карту и отмечать пункты.
@@ -80,6 +82,11 @@ export function StrategyScreen() {
           </AppSurfaceCard>
         ) : (
           <>
+            <StrategyHero
+              overline={strategyPageConfig.meta.headerBadge}
+              headline={strategyPageConfig.meta.title}
+              microcopy={`${strategyPageConfig.meta.subtitle}\n\n${strategyPageConfig.meta.lastContentUpdate}`}
+            />
             <StrategyInnerTabs labels={strategyPageConfig.tabs} active={mainTab} onChange={setMainTab} />
 
             {mainTab === 'strategy' ? (

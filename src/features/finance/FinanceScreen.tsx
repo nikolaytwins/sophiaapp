@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link, useRouter } from 'expo-router';
@@ -45,6 +46,12 @@ import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { useAppTheme } from '@/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+const FINANCE_HERO_IMAGE = require('../../assets/images/finance-hero-sophia.png');
+
+/** Кроп маскота: справа в кадре, как на референсе «Финансы». */
+const FINANCE_HERO_IMG_POS = { top: '10%', right: '6%' } as const;
+const FINANCE_HERO_IMG_POS_STACK = { top: '6%', right: '4%' } as const;
 
 const HERO_BASE_GRADIENT = ['#141018', '#0a090f', '#06060a'] as const;
 const HERO_GLOW_A = ['rgba(76,29,149,0.45)', 'rgba(20,16,28,0.25)', 'transparent'] as const;
@@ -283,6 +290,8 @@ export function FinanceScreen() {
 
   const padH = spacing.xl;
   const heroPageW = SCREEN_W - padH * 2;
+  const stackFinanceHero = heroPageW < 430;
+  const balanceHeroFont = Math.min(38, Math.max(24, Math.round(heroPageW * 0.09)));
 
   useEffect(() => {
     const sb = getSupabase();
@@ -505,57 +514,136 @@ export function FinanceScreen() {
                         end={{ x: 1, y: 1 }}
                         style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
                       />
-                      <View style={{ paddingVertical: 22, paddingHorizontal: 22, position: 'relative', zIndex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: '800',
-                            letterSpacing: 2,
-                            color: 'rgba(255,255,255,0.82)',
-                            textAlign: 'center',
-                          }}
-                        >
-                          ТВОЙ БАЛАНС
-                        </Text>
+                      <View style={{ paddingVertical: 18, paddingHorizontal: 16, position: 'relative', zIndex: 1 }}>
                         <View
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 10,
-                            marginTop: 10,
+                            flexDirection: stackFinanceHero ? 'column' : 'row',
+                            alignItems: 'stretch',
+                            gap: stackFinanceHero ? 12 : 6,
+                            minHeight: stackFinanceHero ? undefined : 236,
                           }}
                         >
-                          <Text style={{ fontSize: 36, fontWeight: '800', color: '#FAFAFC', letterSpacing: -1 }}>
-                            {fmtMoney(overview.totalBalance)}
-                          </Text>
-                          <Pressable
-                            onPress={openDetail}
-                            hitSlop={10}
-                            accessibilityRole="button"
-                            accessibilityLabel="Редактировать структуру счетов"
+                          <View
                             style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 18,
-                              backgroundColor: 'rgba(255,255,255,0.12)',
-                              alignItems: 'center',
+                              flex: stackFinanceHero ? undefined : 1,
+                              minWidth: 0,
                               justifyContent: 'center',
+                              paddingRight: stackFinanceHero ? 0 : 6,
+                              alignItems: stackFinanceHero ? 'center' : 'flex-start',
                             }}
                           >
-                            <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.9)" />
-                          </Pressable>
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: '800',
+                                letterSpacing: 2,
+                                color: 'rgba(255,255,255,0.82)',
+                                textAlign: stackFinanceHero ? 'center' : 'left',
+                              }}
+                            >
+                              ТВОЙ БАЛАНС
+                            </Text>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: stackFinanceHero ? 'center' : 'flex-start',
+                                gap: 10,
+                                marginTop: 10,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: balanceHeroFont,
+                                  fontWeight: '800',
+                                  color: '#FAFAFC',
+                                  letterSpacing: -1,
+                                  fontVariant: ['tabular-nums'],
+                                }}
+                              >
+                                {fmtMoney(overview.totalBalance)}
+                              </Text>
+                              <Pressable
+                                onPress={openDetail}
+                                hitSlop={10}
+                                accessibilityRole="button"
+                                accessibilityLabel="Редактировать структуру счетов"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 18,
+                                  backgroundColor: 'rgba(255,255,255,0.12)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.9)" />
+                              </Pressable>
+                            </View>
+                            <Text
+                              style={{
+                                textAlign: stackFinanceHero ? 'center' : 'left',
+                                marginTop: 8,
+                                fontSize: 12,
+                                color: 'rgba(255,255,255,0.55)',
+                              }}
+                            >
+                              {monthLabel}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              width: stackFinanceHero ? '100%' : Math.min(Math.round(heroPageW * 0.42), 220),
+                              minHeight: stackFinanceHero ? 200 : 236,
+                              alignSelf: 'stretch',
+                              position: 'relative',
+                              overflow: 'hidden',
+                              borderRadius: stackFinanceHero ? 18 : 14,
+                            }}
+                          >
+                            <View style={StyleSheet.absoluteFillObject}>
+                              <Image
+                                source={FINANCE_HERO_IMAGE}
+                                style={StyleSheet.absoluteFillObject}
+                                contentFit="cover"
+                                contentPosition={stackFinanceHero ? FINANCE_HERO_IMG_POS_STACK : FINANCE_HERO_IMG_POS}
+                                accessibilityIgnoresInvertColors
+                              />
+                            </View>
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={['rgba(8,8,14,0.88)', 'rgba(10,10,18,0.35)', 'rgba(14,12,22,0.08)', 'transparent']}
+                              locations={[0, 0.35, 0.65, 1]}
+                              start={{ x: 0, y: 0.5 }}
+                              end={{ x: 1, y: 0.5 }}
+                              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '72%', zIndex: 2 }}
+                            />
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={['rgba(6,6,10,0.2)', 'transparent']}
+                              start={{ x: 0.5, y: 0 }}
+                              end={{ x: 0.5, y: 0.4 }}
+                              style={[StyleSheet.absoluteFillObject, { zIndex: 2 }]}
+                            />
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={['transparent', 'rgba(6,6,10,0.45)', 'rgba(5,5,8,0.7)']}
+                              locations={[0, 0.55, 1]}
+                              start={{ x: 0, y: 0.5 }}
+                              end={{ x: 1, y: 0.5 }}
+                              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '38%', zIndex: 2 }}
+                            />
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={['transparent', 'rgba(55,20,90,0.18)']}
+                              start={{ x: 0.12, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={[StyleSheet.absoluteFillObject, { zIndex: 1 }]}
+                            />
+                          </View>
                         </View>
-                        <Text
-                          style={{
-                            textAlign: 'center',
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: 'rgba(255,255,255,0.55)',
-                          }}
-                        >
-                          {monthLabel}
-                        </Text>
 
                         <View
                           style={{

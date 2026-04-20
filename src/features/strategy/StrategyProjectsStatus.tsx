@@ -1,5 +1,6 @@
-import { Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
+import { STRATEGY, strategyEyebrow, strategySurfacePressStyle } from '@/features/strategy/strategyDashboardUi';
 import type {
   ProjectsGridCardDef,
   ProjectsHighlightBadgeVariant,
@@ -15,38 +16,38 @@ const BADGE_STYLES: Record<
   { bg: string; border: string; text: string }
 > = {
   fullGas: {
-    bg: 'rgba(134,239,172,0.14)',
-    border: 'rgba(134,239,172,0.42)',
+    bg: 'rgba(134,239,172,0.12)',
+    border: 'rgba(134,239,172,0.28)',
     text: '#bbf7d0',
   },
   priority2: {
-    bg: 'rgba(167,139,250,0.14)',
-    border: 'rgba(167,139,250,0.42)',
+    bg: 'rgba(167,139,250,0.12)',
+    border: 'rgba(167,139,250,0.28)',
     text: '#e9d5ff',
   },
   inside: {
-    bg: 'rgba(147,197,253,0.14)',
-    border: 'rgba(147,197,253,0.42)',
+    bg: 'rgba(147,197,253,0.12)',
+    border: 'rgba(147,197,253,0.28)',
     text: '#bfdbfe',
   },
   october: {
-    bg: 'rgba(251,146,60,0.14)',
-    border: 'rgba(251,146,60,0.45)',
+    bg: 'rgba(251,146,60,0.12)',
+    border: 'rgba(251,146,60,0.32)',
     text: '#fdba74',
   },
   year2026: {
-    bg: 'rgba(255,255,255,0.06)',
-    border: 'rgba(255,255,255,0.14)',
+    bg: 'rgba(255,255,255,0.05)',
+    border: 'rgba(255,255,255,0.12)',
     text: 'rgba(247,244,250,0.72)',
   },
 };
 
 const TAG_STYLES: Record<ProjectsMilestoneTagVariant, { color: string; border: string }> = {
-  milestoneGreen: { color: '#86efac', border: 'rgba(134,239,172,0.5)' },
-  milestoneOrange: { color: '#fb923c', border: 'rgba(251,146,60,0.5)' },
-  milestoneBrown: { color: '#d6a577', border: 'rgba(180,83,9,0.42)' },
-  milestoneGrey: { color: 'rgba(247,244,250,0.55)', border: 'rgba(255,255,255,0.22)' },
-  milestoneBlue: { color: '#93c5fd', border: 'rgba(147,197,253,0.5)' },
+  milestoneGreen: { color: '#86efac', border: 'rgba(134,239,172,0.35)' },
+  milestoneOrange: { color: '#fb923c', border: 'rgba(251,146,60,0.35)' },
+  milestoneBrown: { color: '#d6a577', border: 'rgba(180,83,9,0.32)' },
+  milestoneGrey: { color: 'rgba(247,244,250,0.55)', border: 'rgba(255,255,255,0.16)' },
+  milestoneBlue: { color: '#93c5fd', border: 'rgba(147,197,253,0.35)' },
 };
 
 function StatusBadge({ label, variant }: { label: string; variant: ProjectsHighlightBadgeVariant }) {
@@ -56,7 +57,7 @@ function StatusBadge({ label, variant }: { label: string; variant: ProjectsHighl
     <View
       style={{
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs + 1,
+        paddingVertical: spacing.xs + 2,
         borderRadius: radius.full,
         backgroundColor: s.bg,
         borderWidth: 1,
@@ -69,98 +70,127 @@ function StatusBadge({ label, variant }: { label: string; variant: ProjectsHighl
 }
 
 function HighlightCard({ card }: { card: ProjectsHighlightCardDef }) {
-  const { typography, spacing, colors } = useAppTheme();
+  const { typography, spacing, colors, shadows } = useAppTheme();
 
   return (
-    <AppSurfaceCard padded style={{ padding: spacing.lg, gap: spacing.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md }}>
-        <Text style={[typography.title2, { fontSize: 17, fontWeight: '700', flex: 1, color: colors.text }]}>
-          {card.title}
-        </Text>
-        <StatusBadge label={card.badge.label} variant={card.badge.variant} />
-      </View>
-
-      <Text style={[typography.body, { fontSize: 14, lineHeight: 21, color: 'rgba(247,244,250,0.62)' }]}>
-        {card.description}
-      </Text>
-
-      <View
+    <Pressable style={(state) => [strategySurfacePressStyle(state)]}>
+      <AppSurfaceCard
+        glow
+        padded
         style={{
-          borderRadius: 6,
-          overflow: 'hidden',
-          flexDirection: 'row',
-          minHeight: 40,
+          padding: spacing.xl,
+          gap: spacing.lg,
+          borderRadius: STRATEGY.cardRadiusLg,
+          ...(Platform.OS === 'web' ? {} : shadows.card),
         }}
       >
-        {card.segments.map((seg, i) => (
-          <View
-            key={`${card.id}-s-${i}`}
-            style={{
-              flex: seg.flex,
-              backgroundColor: seg.backgroundColor,
-              justifyContent: 'center',
-              alignItems: 'center',
-              paddingHorizontal: 6,
-              paddingVertical: 8,
-              borderLeftWidth: i > 0 ? 1 : 0,
-              borderLeftColor: 'rgba(0,0,0,0.2)',
-            }}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.lg }}>
+          <Text
+            style={[
+              typography.title2,
+              { fontSize: 19, fontWeight: '700', flex: 1, color: colors.text, letterSpacing: -0.4, lineHeight: 26 },
+            ]}
           >
-            <Text
-              numberOfLines={2}
-              style={{
-                fontSize: 11,
-                lineHeight: 14,
-                fontWeight: '700',
-                color: seg.textColor,
-                textAlign: 'center',
-              }}
-            >
-              {seg.label}
-            </Text>
-          </View>
-        ))}
-      </View>
+            {card.title}
+          </Text>
+          <StatusBadge label={card.badge.label} variant={card.badge.variant} />
+        </View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, rowGap: 10 }}>
-        {card.tags.map((tag) => {
-          const t = TAG_STYLES[tag.variant];
-          return (
+        <Text style={[typography.body, { fontSize: 15, lineHeight: 24, color: colors.textMuted }]}>
+          {card.description}
+        </Text>
+
+        <View
+          style={{
+            borderRadius: STRATEGY.timelineBarRadius,
+            overflow: 'hidden',
+            flexDirection: 'row',
+            minHeight: 44,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          {card.segments.map((seg, i) => (
             <View
-              key={tag.label}
+              key={`${card.id}-s-${i}`}
               style={{
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: t.border,
-                backgroundColor: 'rgba(13,13,13,0.35)',
+                flex: seg.flex,
+                backgroundColor: seg.backgroundColor,
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingHorizontal: 8,
+                paddingVertical: 10,
+                borderLeftWidth: i > 0 ? 1 : 0,
+                borderLeftColor: 'rgba(0,0,0,0.12)',
               }}
             >
-              <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: t.color }}>{tag.label}</Text>
+              <Text
+                numberOfLines={2}
+                style={{
+                  fontSize: 11,
+                  lineHeight: 14,
+                  fontWeight: '800',
+                  color: seg.textColor,
+                  textAlign: 'center',
+                }}
+              >
+                {seg.label}
+              </Text>
             </View>
-          );
-        })}
-      </View>
-    </AppSurfaceCard>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, rowGap: 10 }}>
+          {card.tags.map((tag) => {
+            const t = TAG_STYLES[tag.variant];
+            return (
+              <View
+                key={tag.label}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                  backgroundColor: 'rgba(255,255,255,0.04)',
+                }}
+              >
+                <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: t.color }}>{tag.label}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </AppSurfaceCard>
+    </Pressable>
   );
 }
 
 function GridCard({ card }: { card: ProjectsGridCardDef }) {
-  const { typography, spacing, colors } = useAppTheme();
+  const { typography, spacing, colors, isLight } = useAppTheme();
 
   return (
-    <AppSurfaceCard padded style={{ padding: spacing.md, flex: 1, gap: spacing.sm, minHeight: 120 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
-        <Text style={[typography.title2, { fontSize: 15, fontWeight: '700', flex: 1, color: colors.text }]}>
-          {card.title}
-        </Text>
-        <StatusBadge label={card.badge.label} variant={card.badge.variant} />
+    <Pressable style={(state) => [{ flex: 1 }, strategySurfacePressStyle(state)]}>
+      <View
+        style={{
+          padding: spacing.lg,
+          flex: 1,
+          gap: spacing.sm,
+          minHeight: 128,
+          borderRadius: STRATEGY.cardRadiusMd,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: isLight ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.035)',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+          <Text style={[typography.title2, { fontSize: 15, fontWeight: '700', flex: 1, color: colors.text }]}>
+            {card.title}
+          </Text>
+          <StatusBadge label={card.badge.label} variant={card.badge.variant} />
+        </View>
+        <Text style={[typography.body, { fontSize: 13, lineHeight: 20, color: colors.textMuted }]}>{card.description}</Text>
       </View>
-      <Text style={[typography.body, { fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.58)' }]}>
-        {card.description}
-      </Text>
-    </AppSurfaceCard>
+    </Pressable>
   );
 }
 
@@ -169,36 +199,26 @@ type Props = {
 };
 
 export function StrategyProjectsStatus({ config }: Props) {
-  const { spacing } = useAppTheme();
+  const { spacing, colors } = useAppTheme();
   const [g1, g2, g3, g4] = config.grid;
+  const gap = spacing.lg + spacing.md;
 
   return (
-    <View style={{ gap: spacing.lg }}>
-      <Text
-        style={{
-          fontSize: 11,
-          lineHeight: 15,
-          fontWeight: '600',
-          letterSpacing: 1.1,
-          textTransform: 'uppercase',
-          color: 'rgba(247,244,250,0.52)',
-        }}
-      >
-        {config.heading}
-      </Text>
+    <View style={{ gap }}>
+      <Text style={strategyEyebrow(colors.textMuted)}>{config.heading}</Text>
 
-      <View style={{ gap: spacing.md }}>
+      <View style={{ gap: spacing.lg }}>
         {config.highlights.map((h) => (
           <HighlightCard key={h.id} card={h} />
         ))}
       </View>
 
-      <View style={{ gap: 12 }}>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+      <View style={{ gap: spacing.lg }}>
+        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
           <GridCard card={g1} />
           <GridCard card={g2} />
         </View>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
           <GridCard card={g3} />
           <GridCard card={g4} />
         </View>

@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 
+import { STRATEGY, strategyEyebrow } from '@/features/strategy/strategyDashboardUi';
 import type { AboutMeNotesDef, NotesPatternAccent, NotesScenarioItemDef } from '@/features/strategy/strategy.config';
 import { useAppTheme } from '@/theme';
 
@@ -87,14 +88,14 @@ function PatternCard({
   return (
     <View
       style={{
-        borderRadius: 16,
+        borderRadius: STRATEGY.cardRadiusMd,
         paddingVertical: 16,
         paddingHorizontal: 16,
         paddingLeft: 14,
         backgroundColor: 'rgba(22,22,28,0.96)',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
-        borderLeftWidth: 4,
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderLeftWidth: 3,
         borderLeftColor: line,
         gap: 10,
       }}
@@ -119,28 +120,17 @@ export function StrategyAboutNotesPanel({ config }: Props) {
   const { typography, spacing, colors } = useAppTheme();
 
   return (
-    <View style={{ gap: spacing.xl }}>
+    <View style={{ gap: STRATEGY.sectionGap }}>
       <View style={{ gap: spacing.md }}>
-        <Text style={[typography.title1, { letterSpacing: -0.2 }]}>{config.pageTitle}</Text>
-        <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
+        <Text style={[typography.title1, { letterSpacing: -0.35, fontSize: 22 }]}>{config.pageTitle}</Text>
+        <View style={{ height: 1, backgroundColor: colors.border, borderRadius: 1 }} />
         <Text style={[typography.title2, { fontSize: 20, fontWeight: '800', color: colors.text }]}>
           {config.sectionTitle}
         </Text>
       </View>
 
       <View style={{ gap: spacing.sm }}>
-        <Text
-          style={{
-            fontSize: 11,
-            lineHeight: 15,
-            fontWeight: '600',
-            letterSpacing: 1.1,
-            textTransform: 'uppercase',
-            color: 'rgba(247,244,250,0.52)',
-          }}
-        >
-          {config.tragic.capsAboveCard}
-        </Text>
+        <Text style={strategyEyebrow(colors.textMuted)}>{config.tragic.capsAboveCard}</Text>
 
         <View
           style={{
@@ -212,18 +202,7 @@ export function StrategyAboutNotesPanel({ config }: Props) {
       </View>
 
       <View style={{ gap: spacing.md, paddingTop: spacing.sm }}>
-        <Text
-          style={{
-            fontSize: 11,
-            lineHeight: 15,
-            fontWeight: '600',
-            letterSpacing: 1.1,
-            textTransform: 'uppercase',
-            color: 'rgba(247,244,250,0.52)',
-          }}
-        >
-          {config.patterns.heading}
-        </Text>
+        <Text style={strategyEyebrow(colors.textMuted)}>{config.patterns.heading}</Text>
         <View style={{ gap: 14 }}>
           {config.patterns.cards.map((c) => (
             <PatternCard

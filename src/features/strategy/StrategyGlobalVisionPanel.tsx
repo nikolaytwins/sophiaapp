@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 
+import { STRATEGY, strategyEyebrow } from '@/features/strategy/strategyDashboardUi';
 import type { GlobalVisionDef, GlobalVisionGoalLevelDef } from '@/features/strategy/strategy.config';
 import { useAppTheme } from '@/theme';
 
@@ -17,14 +18,14 @@ export function StrategyGlobalVisionPanel({ config }: Props) {
   const { typography, spacing, colors } = useAppTheme();
 
   return (
-    <View style={{ gap: spacing.xl }}>
-      <View style={{ gap: spacing.md }}>
-        <Text style={[typography.title1, { letterSpacing: -0.2 }]}>{config.whatIBuild.title}</Text>
-        <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
+    <View style={{ gap: STRATEGY.sectionGap }}>
+      <View style={{ gap: spacing.lg }}>
+        <Text style={[typography.title1, { letterSpacing: -0.35, fontSize: 22 }]}>{config.whatIBuild.title}</Text>
+        <View style={{ height: 1, backgroundColor: colors.border, borderRadius: 1 }} />
         {config.whatIBuild.paragraphs.map((p, i) => (
           <Text
             key={i}
-            style={[typography.body, { fontSize: 15, lineHeight: 23, color: 'rgba(247,244,250,0.78)' }]}
+            style={[typography.body, { fontSize: 15, lineHeight: 24, color: colors.textMuted }]}
           >
             {p}
           </Text>
@@ -32,42 +33,37 @@ export function StrategyGlobalVisionPanel({ config }: Props) {
       </View>
 
       <View style={{ gap: spacing.lg, paddingTop: spacing.md }}>
-        <Text
-          style={{
-            fontSize: 11,
-            lineHeight: 15,
-            fontWeight: '600',
-            letterSpacing: 1.1,
-            textTransform: 'uppercase',
-            color: 'rgba(247,244,250,0.52)',
-          }}
-        >
-          {config.goalLevelsCapsTitle}
-        </Text>
-        <Text style={[typography.title1, { letterSpacing: -0.2 }]}>{config.goalLevelsTitle}</Text>
+        <Text style={strategyEyebrow(colors.textMuted)}>{config.goalLevelsCapsTitle}</Text>
+        <Text style={[typography.title1, { letterSpacing: -0.35, fontSize: 22 }]}>{config.goalLevelsTitle}</Text>
 
-        <View style={{ gap: 28 }}>
-          {config.goalLevels.map((level) => (
-            <View key={level.id} style={{ gap: spacing.sm }}>
+        <View style={{ gap: STRATEGY.blockGap }}>
+          {config.goalLevels.map((level, idx) => (
+            <View
+              key={level.id}
+              style={{
+                gap: spacing.sm,
+                paddingVertical: spacing.md,
+                borderBottomWidth: idx < config.goalLevels.length - 1 ? 1 : 0,
+                borderBottomColor: colors.border,
+              }}
+            >
               <Text
                 style={[
                   typography.caption,
                   {
                     fontSize: 11,
                     fontWeight: '700',
-                    letterSpacing: 0.6,
+                    letterSpacing: 0.65,
                     color: LABEL_COLOR[level.accent],
                   },
                 ]}
               >
                 {level.label}
               </Text>
-              <Text style={[typography.title2, { fontSize: 18, fontWeight: '700', color: colors.text }]}>
+              <Text style={[typography.title2, { fontSize: 18, fontWeight: '700', color: colors.text, letterSpacing: -0.3 }]}>
                 {level.headline}
               </Text>
-              <Text style={[typography.body, { fontSize: 15, lineHeight: 23, color: 'rgba(247,244,250,0.62)' }]}>
-                {level.body}
-              </Text>
+              <Text style={[typography.body, { fontSize: 15, lineHeight: 24, color: colors.textMuted }]}>{level.body}</Text>
             </View>
           ))}
         </View>
