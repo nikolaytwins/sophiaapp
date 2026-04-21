@@ -14,6 +14,8 @@ import {
 import { useAppTheme } from '@/theme';
 
 const CHART_HEIGHT = 168;
+/** Фиксированная высота трека столбца: % высоты внутри flex на web часто даёт 0px. */
+const BAR_TRACK_PX = 110;
 const TOTAL_MONTHS = 30;
 const VISIBLE_MONTHS = 8;
 const STEP_MONTHS = 2;
@@ -176,12 +178,13 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
                 alignItems: 'flex-end',
                 height: CHART_HEIGHT,
                 paddingTop: 20,
+                minHeight: 0,
               }}
             >
               {sliceBuckets.map((b, j) => {
                 const v = sliceCounts[j] ?? 0;
-                const hRatio = yMax > 0 ? v / yMax : 0;
-                const fillH = Math.max(hRatio * 100, v > 0 ? 6 : 0);
+                const fillPx =
+                  yMax > 0 ? Math.max(v > 0 ? 4 : 0, Math.round((v / yMax) * BAR_TRACK_PX)) : 0;
                 const showYear = j === 0 || b.y !== sliceBuckets[j - 1]!.y;
                 return (
                   <View
@@ -191,6 +194,7 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
                       minWidth: 0,
                       marginHorizontal: 1,
                       alignItems: 'center',
+                      minHeight: 0,
                     }}
                   >
                     <View
@@ -227,7 +231,7 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
                     </View>
                     <View
                       style={{
-                        flex: 1,
+                        height: BAR_TRACK_PX,
                         width: '100%',
                         maxWidth: 26,
                         justifyContent: 'flex-end',
@@ -236,7 +240,7 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
                     >
                       <View
                         style={{
-                          flex: 1,
+                          height: BAR_TRACK_PX,
                           width: '100%',
                           borderRadius: 999,
                           backgroundColor: trackBg,
@@ -250,8 +254,7 @@ export function HabitsMonthlyCompletionsChart({ habits }: Props) {
                           end={{ x: 0.5, y: 0 }}
                           style={{
                             width: '100%',
-                            height: `${fillH}%`,
-                            minHeight: v > 0 ? 4 : 0,
+                            height: fillPx,
                             borderRadius: 999,
                           }}
                         />

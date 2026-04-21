@@ -17,6 +17,9 @@ export interface Task {
 
 export type EventCategory = 'work' | 'life';
 
+/** Откуда пришло событие в агрегаторе календаря. */
+export type CalendarEventSource = 'local' | 'apple' | 'web' | 'device' | 'ics';
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -26,7 +29,7 @@ export interface CalendarEvent {
   category: EventCategory;
   note?: string;
   location?: string;
-  source: 'local' | 'apple' | 'web';
+  source: CalendarEventSource;
 }
 
 export interface DailyScoreFactor {

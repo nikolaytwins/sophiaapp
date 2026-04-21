@@ -48,7 +48,8 @@ export function sideGoalDatedOutsideYear(g: SideGoalPersisted, year: number): bo
   return !sideGoalInCalendarYear(g, year);
 }
 
-export type SideGoalBoardTab = 'nearest' | 'year' | 'wish' | 'horizon';
+/** `all` — все разделы подряд; остальные — фильтр одной вкладки. */
+export type SideGoalBoardTab = 'all' | 'nearest' | 'year' | 'wish' | 'horizon';
 
 export function normalizeDateKey(raw: string): string | null {
   const t = raw.trim();

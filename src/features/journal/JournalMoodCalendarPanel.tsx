@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import {
   chunkMonthIntoWeekRows,
@@ -14,11 +14,13 @@ import {
   type MonthGridCell,
 } from '@/features/habits/habitCardVisual';
 import { localDateKey } from '@/features/habits/habitLogic';
-import type { JournalDocument } from '@/features/day/dayJournal.types';
+import type { JournalDocument, JournalMoodId } from '@/features/day/dayJournal.types';
 import {
   JOURNAL_MOODS,
+  aggregateEnergyInMonth,
   aggregateMoodsInMonth,
   getMoodMeta,
+  journalEnergyForDateKey,
   journalMoodForDateKey,
   totalMoodDaysInMonth,
 } from '@/features/journal/journalMood';
@@ -28,24 +30,29 @@ import { useAppTheme } from '@/theme';
 /** Как в `HabitMonthCalendar` — одинаковая сетка с календарём привычек. */
 const CELL_GAP = 8;
 const CELL_RADIUS = 10;
+const TWO_COL_MIN_WIDTH = 880;
 
 function shiftMonth(y: number, m: number, delta: number): { y: number; m: number } {
   const d = new Date(y, m - 1 + delta, 1);
   return { y: d.getFullYear(), m: d.getMonth() + 1 };
 }
 
-function MoodCalendarCell({
+function JournalFaceCalendarCell({
   cell,
   todayKey,
   doc,
   colors,
   isLight,
+  pickId,
+  uncapturedPhrase,
 }: {
   cell: MonthGridCell;
   todayKey: string;
   doc: JournalDocument;
   colors: { text: string; textMuted: string; borderStrong: string };
   isLight: boolean;
+  pickId: (doc: JournalDocument, dateKey: string) => JournalMoodId | null;
+  uncapturedPhrase: string;
 }) {
   if (!cell.dateKey) {
     return <View style={{ flex: 1, aspectRatio: 1, minWidth: 0 }} />;
@@ -53,8 +60,8 @@ function MoodCalendarCell({
 
   const isFuture = cell.dateKey > todayKey;
   const isToday = cell.dateKey === todayKey;
-  const moodId = journalMoodForDateKey(doc, cell.dateKey);
-  const meta = getMoodMeta(moodId);
+  const faceId = pickId(doc, cell.dateKey);
+  const meta = getMoodMeta(faceId);
   const [, , dd] = cell.dateKey.split('-');
   const dayNum = dd ?? '';
 
@@ -68,7 +75,7 @@ function MoodCalendarCell({
           ? `${dayNum}, ${meta.label}`
           : isFuture
             ? `${dayNum}, будущий день`
-            : `${dayNum}, настроение не отмечено`
+            : `${dayNum}, ${uncapturedPhrase}`
       }
     >
       <View
@@ -108,10 +115,11 @@ type Props = {
 };
 
 /**
- * Календарь месяца с эмодзи настроения по дням + сводка по типам за месяц.
+ * Календари месяца: настроение и энергия (одни и те же шкалы). На широком вебе — в один ряд.
  */
 export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
   const { colors, isLight, radius, spacing, typography } = useAppTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const doc = useDayJournalStore((s) => s.doc);
   const todayKey = localDateKey();
   const [ty, tm] = todayKey.split('-').map(Number);
@@ -130,8 +138,11 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
   const canGoPrev = ymToIndex(y, m) > ymToIndex(2020, 1);
   const canGoNext = ymToIndex(y, m) < todayIdx;
 
-  const counts = useMemo(() => aggregateMoodsInMonth(doc, y, m, todayKey), [doc, y, m, todayKey]);
-  const totalMarked = totalMoodDaysInMonth(counts);
+  const moodCounts = useMemo(() => aggregateMoodsInMonth(doc, y, m, todayKey), [doc, y, m, todayKey]);
+  const energyCounts = useMemo(() => aggregateEnergyInMonth(doc, y, m, todayKey), [doc, y, m, todayKey]);
+  const totalMood = totalMoodDaysInMonth(moodCounts);
+  const totalEnergy = totalMoodDaysInMonth(energyCounts);
+  const twoCol = Platform.OS === 'web' && windowWidth >= TWO_COL_MIN_WIDTH;
 
   const bump = (delta: number) => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -145,7 +156,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
       onLayout={(e) => onLayoutRoot?.(e.nativeEvent.layout.y)}
       style={{
         width: '100%',
-        ...(Platform.OS === 'web' ? { maxWidth: 400, alignSelf: 'flex-start' as const } : {}),
+        ...(Platform.OS === 'web' && !twoCol ? { maxWidth: 400, alignSelf: 'flex-start' as const } : {}),
         borderRadius: radius.xl,
         padding: spacing.md,
         backgroundColor: isLight ? 'rgba(15,17,24,0.04)' : 'rgba(10,10,14,0.92)',
@@ -166,7 +177,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
           },
         ]}
       >
-        Настроение · календарь
+        Настроение и энергия · календарь
       </Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
@@ -192,7 +203,7 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             {monthTitle}
           </Text>
           <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '600', color: colors.textMuted }}>
-            Отмечено дней: {totalMarked}
+            Настроение: {totalMood} дн. · Энергия: {totalEnergy} дн.
           </Text>
         </View>
         <Pressable
@@ -214,66 +225,310 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
-        {WEEKDAY_LABELS_SHORT.map((label, i) => {
-          const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
-          return (
-            <View key={label} style={{ flex: 1, alignItems: 'center' }}>
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: isTodayCol ? '800' : '600',
-                  letterSpacing: 0.4,
+      {twoCol ? (
+        <View style={{ flexDirection: 'row', gap: spacing.lg, alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[
+                typography.caption,
+                {
+                  color: 'rgba(232,121,249,0.85)',
+                  letterSpacing: 1.1,
                   textTransform: 'uppercase',
-                  color: isTodayCol ? colors.text : colors.textMuted,
+                  marginBottom: spacing.sm,
+                },
+              ]}
+            >
+              Настроение
+            </Text>
+            <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
+              {WEEKDAY_LABELS_SHORT.map((label, i) => {
+                const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+                return (
+                  <View key={`m-${label}`} style={{ flex: 1, alignItems: 'center' }}>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: isTodayCol ? '800' : '600',
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
+                        color: isTodayCol ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            {monthWeekRows.map((row, ri) => (
+              <View key={`mood-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
+                {row.map((cell, ci) => (
+                  <JournalFaceCalendarCell
+                    key={cell.dateKey ?? `e-${ri}-${ci}`}
+                    cell={cell}
+                    todayKey={todayKey}
+                    doc={doc}
+                    colors={colors}
+                    isLight={isLight}
+                    pickId={journalMoodForDateKey}
+                    uncapturedPhrase="настроение не отмечено"
+                  />
+                ))}
+              </View>
+            ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
+              {JOURNAL_MOODS.map((row) => (
+                <View
+                  key={row.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: radius.md,
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{moodCounts[row.id]}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <View
+            style={{
+              width: StyleSheet.hairlineWidth,
+              alignSelf: 'stretch',
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              marginVertical: 4,
+            }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[
+                typography.caption,
+                {
+                  color: 'rgba(147,197,253,0.9)',
+                  letterSpacing: 1.1,
+                  textTransform: 'uppercase',
+                  marginBottom: spacing.sm,
+                },
+              ]}
+            >
+              Энергия / продуктивность
+            </Text>
+            <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
+              {WEEKDAY_LABELS_SHORT.map((label, i) => {
+                const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+                return (
+                  <View key={`e-${label}`} style={{ flex: 1, alignItems: 'center' }}>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: isTodayCol ? '800' : '600',
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
+                        color: isTodayCol ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            {monthWeekRows.map((row, ri) => (
+              <View key={`energy-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
+                {row.map((cell, ci) => (
+                  <JournalFaceCalendarCell
+                    key={`en-${cell.dateKey ?? `${ri}-${ci}`}`}
+                    cell={cell}
+                    todayKey={todayKey}
+                    doc={doc}
+                    colors={colors}
+                    isLight={isLight}
+                    pickId={journalEnergyForDateKey}
+                    uncapturedPhrase="энергия не отмечена"
+                  />
+                ))}
+              </View>
+            ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
+              {JOURNAL_MOODS.map((row) => (
+                <View
+                  key={`ec-${row.id}`}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: radius.md,
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{energyCounts[row.id]}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      ) : (
+        <>
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: 'rgba(232,121,249,0.85)',
+                letterSpacing: 1.1,
+                textTransform: 'uppercase',
+                marginBottom: spacing.sm,
+              },
+            ]}
+          >
+            Настроение
+          </Text>
+          <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
+            {WEEKDAY_LABELS_SHORT.map((label, i) => {
+              const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+              return (
+                <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: isTodayCol ? '800' : '600',
+                      letterSpacing: 0.4,
+                      textTransform: 'uppercase',
+                      color: isTodayCol ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          {monthWeekRows.map((row, ri) => (
+            <View key={`mood-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
+              {row.map((cell, ci) => (
+                <JournalFaceCalendarCell
+                  key={cell.dateKey ?? `e-${ri}-${ci}`}
+                  cell={cell}
+                  todayKey={todayKey}
+                  doc={doc}
+                  colors={colors}
+                  isLight={isLight}
+                  pickId={journalMoodForDateKey}
+                  uncapturedPhrase="настроение не отмечено"
+                />
+              ))}
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
+            {JOURNAL_MOODS.map((row) => (
+              <View
+                key={row.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: radius.md,
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: 'rgba(255,255,255,0.08)',
                 }}
               >
-                {label}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {monthWeekRows.map((row, ri) => (
-        <View key={`mood-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
-          {row.map((cell, ci) => (
-            <MoodCalendarCell
-              key={cell.dateKey ?? `e-${ri}-${ci}`}
-              cell={cell}
-              todayKey={todayKey}
-              doc={doc}
-              colors={colors}
-              isLight={isLight}
-            />
-          ))}
-        </View>
-      ))}
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
-        {JOURNAL_MOODS.map((row) => (
-          <View
-            key={row.id}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: radius.md,
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: 'rgba(255,255,255,0.08)',
-            }}
-          >
-            <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{counts[row.id]}</Text>
+                <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{moodCounts[row.id]}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: 'rgba(147,197,253,0.9)',
+                letterSpacing: 1.1,
+                textTransform: 'uppercase',
+                marginTop: spacing.lg,
+                marginBottom: spacing.sm,
+              },
+            ]}
+          >
+            Энергия / продуктивность
+          </Text>
+          <View style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP, marginBottom: CELL_GAP }}>
+            {WEEKDAY_LABELS_SHORT.map((label, i) => {
+              const isTodayCol = isViewingCurrentMonth && i === todayWeekdayIdx;
+              return (
+                <View key={`e-h-${label}`} style={{ flex: 1, alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: isTodayCol ? '800' : '600',
+                      letterSpacing: 0.4,
+                      textTransform: 'uppercase',
+                      color: isTodayCol ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          {monthWeekRows.map((row, ri) => (
+            <View key={`energy-cal-${ri}`} style={{ flexDirection: 'row', width: '100%', gap: CELL_GAP }}>
+              {row.map((cell, ci) => (
+                <JournalFaceCalendarCell
+                  key={`en-${cell.dateKey ?? `${ri}-${ci}`}`}
+                  cell={cell}
+                  todayKey={todayKey}
+                  doc={doc}
+                  colors={colors}
+                  isLight={isLight}
+                  pickId={journalEnergyForDateKey}
+                  uncapturedPhrase="энергия не отмечена"
+                />
+              ))}
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md }}>
+            {JOURNAL_MOODS.map((row) => (
+              <View
+                key={`e-${row.id}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: radius.md,
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: 'rgba(255,255,255,0.08)',
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{energyCounts[row.id]}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
 
       <Text style={{ marginTop: spacing.sm, fontSize: 12, lineHeight: 17, color: colors.textMuted }}>
-        Меняй настроение на экране «День». Здесь — обзор месяца.
+        Отмечай настроение и энергию на экране «День». Здесь — обзор месяца.
       </Text>
     </View>
   );

@@ -34,6 +34,11 @@ export function journalMoodForDateKey(doc: JournalDocument, dateKey: string): Jo
   return m && MOOD_SET.has(m) ? m : null;
 }
 
+export function journalEnergyForDateKey(doc: JournalDocument, dateKey: string): JournalMoodId | null {
+  const e = doc.entries[dateKey]?.energy;
+  return e && MOOD_SET.has(e) ? e : null;
+}
+
 /** Дни для горизонтальной ленты: центр — anchorKey, не дальше todayKey в будущее. */
 export function journalMoodStripDayKeys(anchorKey: string, todayKey: string, radius = 8): string[] {
   const keys: string[] = [];
@@ -72,4 +77,29 @@ export function aggregateMoodsInMonth(
 
 export function totalMoodDaysInMonth(counts: Record<JournalMoodId, number>): number {
   return JOURNAL_MOOD_IDS.reduce((s, id) => s + counts[id], 0);
+}
+
+export function aggregateEnergyInMonth(
+  doc: JournalDocument,
+  year: number,
+  month: number,
+  todayKey: string
+): Record<JournalMoodId, number> {
+  const init: Record<JournalMoodId, number> = {
+    death: 0,
+    sad: 0,
+    neutral: 0,
+    smile: 0,
+    stars: 0,
+  };
+  const dim = new Date(year, month, 0).getDate();
+  const ym = `${year}-${String(month).padStart(2, '0')}-`;
+  for (let day = 1; day <= dim; day++) {
+    const dk = `${ym}${String(day).padStart(2, '0')}`;
+    if (dk > todayKey) break;
+    const entry = doc.entries[dk];
+    const e = entry?.energy;
+    if (e && MOOD_SET.has(e)) init[e]++;
+  }
+  return init;
 }

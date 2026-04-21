@@ -43,16 +43,13 @@ import { FinanceAnalyticsTabPanel } from '@/features/finance/FinanceAnalyticsTab
 import { HabitsMonthlyCompletionsChart } from '@/features/habits/HabitsMonthlyCompletionsChart';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
-import { DayJournalAccordion } from '@/features/day/DayJournalAccordion';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { JournalMoodCalendarPanel } from '@/features/journal/JournalMoodCalendarPanel';
-import { HabitsPlannerTodayCard } from '@/features/tasks/HabitsPlannerTodayCard';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
-import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useAppTheme } from '@/theme';
 
 /** Локальная палитра экрана: глубокий чёрный + графит, фиолет только акцентом. */
@@ -66,6 +63,9 @@ const WEEKLY_FILL = 'rgba(196,181,253,0.10)';
 const HABITS_ANALYTICS_LG_MIN = 1024;
 const HABITS_ANALYTICS_3COL_MIN = 1200;
 const HABITS_ANALYTICS_GRID_GAP = 24;
+
+/** Дневник — только на экране «День»; эта привычка не дублирует календарь в аналитике. */
+const HABIT_ID_HIDDEN_ON_ANALYTICS_PAGE = 'nikolay_journal_braindump';
 function headlineDate(): string {
   const d = new Date();
   return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -954,9 +954,13 @@ export function HabitsScreen() {
   }, [windowWidth]);
 
   const data = habits.data ?? [];
-  const coreDaily = data.filter((h) => h.cadence === 'daily' && h.section !== 'media');
-  const coreWeekly = data.filter((h) => h.cadence === 'weekly' && h.section !== 'media');
-  const mediaHabits = data.filter((h) => h.section === 'media');
+  const pageHabits = useMemo(
+    () => data.filter((h) => h.id !== HABIT_ID_HIDDEN_ON_ANALYTICS_PAGE),
+    [data]
+  );
+  const coreDaily = pageHabits.filter((h) => h.cadence === 'daily' && h.section !== 'media');
+  const coreWeekly = pageHabits.filter((h) => h.cadence === 'weekly' && h.section !== 'media');
+  const mediaHabits = pageHabits.filter((h) => h.section === 'media');
 
   const todayKey = localDateKey();
 
@@ -978,9 +982,6 @@ export function HabitsScreen() {
   const supabaseOn = useSupabaseConfigured;
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const setMood = useDayJournalStore((s) => s.setMood);
-  const setEnergy = useDayJournalStore((s) => s.setEnergy);
-
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) {
@@ -1081,7 +1082,7 @@ export function HabitsScreen() {
           <>
             <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
 
-            {data.length > 0 ? <HabitsMonthlyCompletionsChart habits={data} /> : null}
+            {pageHabits.length > 0 ? <HabitsMonthlyCompletionsChart habits={pageHabits} /> : null}
 
             {data.length === 0 ? (
           <SurfaceCard
@@ -1308,14 +1309,6 @@ export function HabitsScreen() {
                 </Text>
               ) : null}
 
-              <DayJournalAccordion
-                viewDateKey={todayKey}
-                todayKey={todayKey}
-                sessionEmail={accountEmail}
-                onPickMood={(dk, mood) => setMood(dk, mood)}
-                onPickEnergy={(dk, energy) => setEnergy(dk, energy)}
-              />
-              <HabitsPlannerTodayCard todayKey={todayKey} userId={userId} />
             </View>
           </>
         )}

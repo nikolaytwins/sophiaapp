@@ -53,9 +53,11 @@ const DAY_ACCENT_TEXT_ON_FILL = '#FAFAFC';
 
 /** Порог «lg» (как Tailwind) только для веб-десктопа. Мобильная вёрстка не меняется. */
 const DAY_SCREEN_LG_MIN_WIDTH = 1024;
-const DAY_SCREEN_CONTENT_MAX_WIDTH = 1200;
-/** gap-6 между колонками bento и внутри левой колонки на десктопе */
+const DAY_SCREEN_CONTENT_MAX_WIDTH = 1440;
+/** gap между колонками «задачи | привычки» и внутри левой колонки на десктопе */
 const DAY_SCREEN_DESKTOP_GAP = 24;
+/** горизонтальные отступы контента на десктопе (~px-8) */
+const DAY_SCREEN_DESKTOP_PADDING_X = 32;
 
 function greetingForHour(h: number): string {
   if (h < 5) return 'Доброй ночи';
@@ -337,7 +339,7 @@ export function DayScreen() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: insets.top + spacing.lg,
-          paddingHorizontal: isDesktopLayout ? DAY_SCREEN_DESKTOP_GAP : spacing.lg + 4,
+          paddingHorizontal: isDesktopLayout ? DAY_SCREEN_DESKTOP_PADDING_X : spacing.lg + 4,
           paddingBottom: insets.bottom + 120,
         }}
         showsVerticalScrollIndicator={false}
@@ -544,14 +546,14 @@ export function DayScreen() {
           <View
             style={
               isDesktopLayout
-                ? { flex: 8, minWidth: 0, gap: DAY_SCREEN_DESKTOP_GAP }
+                ? { flex: 5, minWidth: 0, maxWidth: 520, gap: DAY_SCREEN_DESKTOP_GAP }
                 : {}
             }
           >
             <DayWeekFocusStrip viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
             <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
           </View>
-          <View style={isDesktopLayout ? { flex: 4, minWidth: 0 } : {}}>
+          <View style={isDesktopLayout ? { flex: 7, minWidth: 0 } : {}}>
         <View style={{ marginBottom: spacing.lg }}>
           <View
             style={{
@@ -679,6 +681,7 @@ export function DayScreen() {
           <DayHabitTimelineList
             habits={timelineHabits}
             loading={habits.isLoading}
+            desktopTwoColumn={isDesktopLayout}
             emptyHint={
               timelineHabits.length === 0 && counterHabits.length > 0
                 ? 'Обычные привычки добавь через «Привычки» в шапке блока.'

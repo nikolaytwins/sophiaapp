@@ -6,6 +6,13 @@ export const PLANNER_PRIORITY_OPTIONS: { id: BacklogPriority; label: string; sho
   { id: 'low', label: 'Низкий', short: 'Низкий' },
 ];
 
+/** Подсказка при наведении (web `title`) у кружка приоритета. */
+export const PLANNER_PRIORITY_WEB_HINT: Record<BacklogPriority, string> = {
+  high: 'Высокий приоритет — в первую очередь',
+  medium: 'Средний — обычная очередь',
+  low: 'Низкий — когда освободится время',
+};
+
 /** Полоска слева у карточки — главный сигнал важности. */
 export function priorityStripStyle(
   priority: BacklogPriority,

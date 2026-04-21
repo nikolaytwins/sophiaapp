@@ -246,6 +246,7 @@ function SideGoalProgressCard({
 }
 
 const BOARD_TABS: { id: SideGoalBoardTab; label: string }[] = [
+  { id: 'all', label: 'Все цели' },
   { id: 'nearest', label: 'Ближайшие' },
   { id: 'year', label: 'Год' },
   { id: 'wish', label: 'Доска желаний' },
@@ -423,6 +424,11 @@ function SideGoalsBoardBlock({
   const openAddForTab = (tab: SideGoalBoardTab) => {
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const y = calendarYear;
+    if (tab === 'all') {
+      const id = addSideGoal({ dateMode: 'none', isHorizon: false, isNearestPinned: false });
+      setEditId(id);
+      return;
+    }
     if (tab === 'horizon') {
       const id = addSideGoal({ isHorizon: true, isNearestPinned: false, dateMode: 'none' });
       setEditId(id);
@@ -450,13 +456,15 @@ function SideGoalsBoardBlock({
   };
 
   const tabIntro =
-    boardTab === 'nearest'
-      ? 'Закреплённые «ближайшие» карточки + Китай и подушка.'
-      : boardTab === 'year'
-        ? `Цели с датой в ${calendarYear} году (один день или период).`
-        : boardTab === 'wish'
-          ? 'Цели без даты — доска желаний.'
-          : 'Дальний горизонт: отдельный список.';
+    boardTab === 'all'
+      ? 'Ниже подряд: ближайшие, год, доска желаний и горизонт. Вкладка оставляет на экране только выбранный раздел.'
+      : boardTab === 'nearest'
+        ? 'Закреплённые «ближайшие» карточки + Китай и подушка.'
+        : boardTab === 'year'
+          ? `Цели с датой в ${calendarYear} году (один день или период).`
+          : boardTab === 'wish'
+            ? 'Цели без даты — доска желаний.'
+            : 'Дальний горизонт: отдельный список.';
 
   return (
     <View style={{ gap: spacing.md }}>
@@ -474,7 +482,7 @@ function SideGoalsBoardBlock({
           {config.sideSectionTitle}
         </Text>
         <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.45)', fontWeight: '600' }}>
-          Фото загружаются в Supabase и не пропадают на вебе. Разделы открываются по вкладкам.
+          Фото загружаются в Supabase и не пропадают на вебе. По умолчанию видны все цели; вкладка — фильтр по одному разделу.
         </Text>
       </View>
 
@@ -511,8 +519,23 @@ function SideGoalsBoardBlock({
 
       <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(247,244,250,0.42)', lineHeight: 17 }}>{tabIntro}</Text>
 
-      {boardTab === 'nearest' ? (
+      {boardTab === 'all' || boardTab === 'nearest' ? (
         <View style={{ gap: spacing.lg }}>
+          {boardTab === 'all' ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(168,85,247,0.85)',
+                marginBottom: 2,
+              }}
+            >
+              Ближайшие
+            </Text>
+          ) : null}
           {nearestSlot}
           {pinnedGoals.length === 0 ? (
             <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
@@ -524,21 +547,37 @@ function SideGoalsBoardBlock({
         </View>
       ) : null}
 
-      {boardTab === 'year' ? (
+      {boardTab === 'all' || boardTab === 'year' ? (
         <View style={{ gap: spacing.lg }}>
-          <Text
-            style={{
-              fontSize: 11,
-              lineHeight: 15,
-              fontWeight: '700',
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: 'rgba(251,191,36,0.75)',
-              marginBottom: 2,
-            }}
-          >
-            {config.boardYearSubheading} · {calendarYear}
-          </Text>
+          {boardTab === 'all' ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(168,85,247,0.85)',
+                marginBottom: 2,
+              }}
+            >
+              {config.boardYearSubheading} · {calendarYear}
+            </Text>
+          ) : (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(251,191,36,0.75)',
+                marginBottom: 2,
+              }}
+            >
+              {config.boardYearSubheading} · {calendarYear}
+            </Text>
+          )}
           {yearGoals.length === 0 ? (
             <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
               Пока пусто — добавь цель с датой в этом году.
@@ -568,21 +607,37 @@ function SideGoalsBoardBlock({
         </View>
       ) : null}
 
-      {boardTab === 'wish' ? (
+      {boardTab === 'all' || boardTab === 'wish' ? (
         <View style={{ gap: spacing.lg }}>
-          <Text
-            style={{
-              fontSize: 11,
-              lineHeight: 15,
-              fontWeight: '700',
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: 'rgba(251,191,36,0.75)',
-              marginBottom: 2,
-            }}
-          >
-            Без даты
-          </Text>
+          {boardTab === 'all' ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(168,85,247,0.85)',
+                marginBottom: 2,
+              }}
+            >
+              Доска желаний · без даты
+            </Text>
+          ) : (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(251,191,36,0.75)',
+                marginBottom: 2,
+              }}
+            >
+              Без даты
+            </Text>
+          )}
           {wishGoals.length === 0 ? (
             <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
               Пока пусто — добавь цель и оставь режим даты «без даты».
@@ -593,21 +648,37 @@ function SideGoalsBoardBlock({
         </View>
       ) : null}
 
-      {boardTab === 'horizon' ? (
+      {boardTab === 'all' || boardTab === 'horizon' ? (
         <View style={{ gap: spacing.lg }}>
-          <Text
-            style={{
-              fontSize: 11,
-              lineHeight: 15,
-              fontWeight: '700',
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: 'rgba(251,191,36,0.75)',
-              marginBottom: 2,
-            }}
-          >
-            {config.boardHorizonSubheading}
-          </Text>
+          {boardTab === 'all' ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(168,85,247,0.85)',
+                marginBottom: 2,
+              }}
+            >
+              {config.boardHorizonSubheading}
+            </Text>
+          ) : (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(251,191,36,0.75)',
+                marginBottom: 2,
+              }}
+            >
+              {config.boardHorizonSubheading}
+            </Text>
+          )}
           {horizonGoals.length === 0 ? (
             <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
               Пока пусто — добавь цель и включи «На горизонте».
@@ -989,7 +1060,7 @@ export function PersonalTargetsScreen() {
   const { typography, spacing, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string | null>(null);
-  const [boardTab, setBoardTab] = useState<SideGoalBoardTab>('nearest');
+  const [boardTab, setBoardTab] = useState<SideGoalBoardTab>('all');
   const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
   const seedFromSeedsIfEmpty = useSideGoalsStore((s) => s.seedFromSeedsIfEmpty);
 
