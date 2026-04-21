@@ -149,6 +149,8 @@ export type StrategyGoalsTabDef = {
   boardNearSubheading: string;
   /** Подзаголовок целей с отметкой «на горизонте». */
   boardHorizonSubheading: string;
+  /** Вкладка целей с датой в текущем календарном годе. */
+  boardYearSubheading: string;
   sideGoalSeeds: StrategySideGoalSeedDef[];
 };
 
@@ -980,6 +982,7 @@ export const strategyData: StrategyPageConfig = {
     nearestDeadlineLine: 'Китай и подушка · до 14 августа',
     sideSectionTitle: 'Доска желаний',
     boardNearSubheading: 'Ближайшие',
+    boardYearSubheading: 'На этот год',
     boardHorizonSubheading: 'Горизонт',
     sideGoalSeeds: [
       { id: 'sg-bmw', title: 'BMW — 3 500 000 ₽', defaultTarget: 3_500_000 },

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured } from '@/config/env';
@@ -50,6 +50,12 @@ const COUNTER_RING_COLORS = ['#A855F7', '#7C3AED', '#38BDF8', '#F472B6'] as cons
 /** Акцент полосы дней и календаря — фирменный фиолетовый. */
 const DAY_ACCENT = '#A855F7';
 const DAY_ACCENT_TEXT_ON_FILL = '#FAFAFC';
+
+/** Порог «lg» (как Tailwind) только для веб-десктопа. Мобильная вёрстка не меняется. */
+const DAY_SCREEN_LG_MIN_WIDTH = 1024;
+const DAY_SCREEN_CONTENT_MAX_WIDTH = 1200;
+/** gap-6 между колонками bento и внутри левой колонки на десктопе */
+const DAY_SCREEN_DESKTOP_GAP = 24;
 
 function greetingForHour(h: number): string {
   if (h < 5) return 'Доброй ночи';
@@ -103,6 +109,8 @@ export function DayScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [greetingName, setGreetingName] = useState('ты');
   const supabaseOn = useSupabaseConfigured;
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktopLayout = Platform.OS === 'web' && windowWidth >= DAY_SCREEN_LG_MIN_WIDTH;
 
   useEffect(() => {
     const sb = getSupabase();
@@ -329,12 +337,20 @@ export function DayScreen() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: insets.top + spacing.lg,
-          paddingHorizontal: spacing.lg + 4,
+          paddingHorizontal: isDesktopLayout ? DAY_SCREEN_DESKTOP_GAP : spacing.lg + 4,
           paddingBottom: insets.bottom + 120,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <View
+          style={{
+            width: '100%',
+            ...(isDesktopLayout
+              ? { maxWidth: DAY_SCREEN_CONTENT_MAX_WIDTH, alignSelf: 'center' }
+              : {}),
+          }}
+        >
         <View
           style={{
             flexDirection: 'row',
@@ -509,13 +525,33 @@ export function DayScreen() {
             sprintId={activeSprint?.id ?? null}
             chinaGoal={nikolayMoneyGoals.china}
             cushionGoal={nikolayMoneyGoals.cushion}
+            desktopTwoColumn={isDesktopLayout}
           />
         ) : null}
 
-        <DayWeekFocusStrip viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
-
-        <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
-
+        <View
+          style={
+            isDesktopLayout
+              ? {
+                  flexDirection: 'row',
+                  gap: DAY_SCREEN_DESKTOP_GAP,
+                  alignItems: 'flex-start',
+                  marginBottom: spacing.lg,
+                }
+              : {}
+          }
+        >
+          <View
+            style={
+              isDesktopLayout
+                ? { flex: 8, minWidth: 0, gap: DAY_SCREEN_DESKTOP_GAP }
+                : {}
+            }
+          >
+            <DayWeekFocusStrip viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
+            <DayPlannerTasksBlock viewDateKey={viewDateKey} todayKey={todayKey} userId={userId} />
+          </View>
+          <View style={isDesktopLayout ? { flex: 4, minWidth: 0 } : {}}>
         <View style={{ marginBottom: spacing.lg }}>
           <View
             style={{
@@ -662,6 +698,8 @@ export function DayScreen() {
             }}
           />
         </View>
+          </View>
+        </View>
 
         <DayJournalAccordion
           viewDateKey={viewDateKey}
@@ -683,6 +721,7 @@ export function DayScreen() {
             </Text>
           </AppSurfaceCard>
         ) : null}
+        </View>
       </ScrollView>
     </ScreenCanvas>
   );

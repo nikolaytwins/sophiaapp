@@ -21,7 +21,14 @@ export type StrategyMonthlyPlansPersistedSlice = {
   extraCardsByPlanId: Record<string, StrategyMonthlyPlanCardDef[]>;
 };
 
-function mergeCard(base: StrategyMonthlyPlanCardDef, patch?: MonthlyPlanCardPatch): StrategyMonthlyPlanCardDef {
+/** Снимок для Supabase (payload jsonb). */
+export type MonthlyPlansCloudPayload = StrategyMonthlyPlansPersistedSlice & { updatedAt: string };
+
+function touchNow(): string {
+  return new Date().toISOString();
+}
+
+export function mergeCard(base: StrategyMonthlyPlanCardDef, patch?: MonthlyPlanCardPatch): StrategyMonthlyPlanCardDef {
   if (!patch) return base;
   return {
     ...base,
@@ -54,17 +61,40 @@ function newUserCardId(): string {
 }
 
 export type StrategyMonthlyPlansOverlayState = StrategyMonthlyPlansPersistedSlice & {
+  /** ISO для merge с облаком. */
+  payloadUpdatedAt: string;
   patchCard: (cardId: string, partial: MonthlyPlanCardPatch) => void;
   deleteCard: (planId: string, cardId: string) => void;
   addCardToPlan: (planId: string) => void;
+  replaceFromCloud: (payload: MonthlyPlansCloudPayload) => void;
+  exportPayload: () => MonthlyPlansCloudPayload;
 };
 
 export const useStrategyMonthlyPlansStore = create<StrategyMonthlyPlansOverlayState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       cardPatches: {},
       deletedCardIds: [],
       extraCardsByPlanId: {},
+      payloadUpdatedAt: '',
+
+      exportPayload: () => ({
+        cardPatches: get().cardPatches,
+        deletedCardIds: get().deletedCardIds,
+        extraCardsByPlanId: get().extraCardsByPlanId,
+        updatedAt: get().payloadUpdatedAt || '',
+      }),
+
+      replaceFromCloud: (payload) =>
+        set({
+          cardPatches: payload.cardPatches && typeof payload.cardPatches === 'object' ? payload.cardPatches : {},
+          deletedCardIds: Array.isArray(payload.deletedCardIds) ? payload.deletedCardIds : [],
+          extraCardsByPlanId:
+            payload.extraCardsByPlanId && typeof payload.extraCardsByPlanId === 'object'
+              ? payload.extraCardsByPlanId
+              : {},
+          payloadUpdatedAt: typeof payload.updatedAt === 'string' && payload.updatedAt ? payload.updatedAt : touchNow(),
+        }),
 
       patchCard: (cardId, partial) =>
         set((s) => {
@@ -74,7 +104,10 @@ export const useStrategyMonthlyPlansStore = create<StrategyMonthlyPlansOverlaySt
             ...partial,
             tag: partial.tag !== undefined ? { ...prev.tag, ...partial.tag } : prev.tag,
           };
-          return { cardPatches: { ...s.cardPatches, [cardId]: merged } };
+          return {
+            cardPatches: { ...s.cardPatches, [cardId]: merged },
+            payloadUpdatedAt: touchNow(),
+          };
         }),
 
       deleteCard: (planId, cardId) =>
@@ -93,16 +126,18 @@ export const useStrategyMonthlyPlansStore = create<StrategyMonthlyPlansOverlaySt
               extraCardsByPlanId: nextExtrasMap,
               cardPatches: restPatches,
               deletedCardIds: s.deletedCardIds.filter((id) => id !== cardId),
+              payloadUpdatedAt: touchNow(),
             };
           }
 
           if (s.deletedCardIds.includes(cardId)) {
-            return { cardPatches: restPatches };
+            return { cardPatches: restPatches, payloadUpdatedAt: touchNow() };
           }
 
           return {
             deletedCardIds: [...s.deletedCardIds, cardId],
             cardPatches: restPatches,
+            payloadUpdatedAt: touchNow(),
           };
         }),
 
@@ -121,18 +156,37 @@ export const useStrategyMonthlyPlansStore = create<StrategyMonthlyPlansOverlaySt
               ...s.extraCardsByPlanId,
               [planId]: [...(s.extraCardsByPlanId[planId] ?? []), card],
             },
+            payloadUpdatedAt: touchNow(),
           };
         }),
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         cardPatches: s.cardPatches,
         deletedCardIds: s.deletedCardIds,
         extraCardsByPlanId: s.extraCardsByPlanId,
+        payloadUpdatedAt: s.payloadUpdatedAt,
       }),
+      migrate: (persisted, fromVersion) => {
+        const p = persisted as Partial<StrategyMonthlyPlansPersistedSlice & { payloadUpdatedAt?: string }> | undefined;
+        const cardPatches =
+          p?.cardPatches && typeof p.cardPatches === 'object' && !Array.isArray(p.cardPatches)
+            ? (p.cardPatches as Record<string, MonthlyPlanCardPatch>)
+            : {};
+        const deletedCardIds = Array.isArray(p?.deletedCardIds)
+          ? p.deletedCardIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        const extraCardsByPlanId =
+          p?.extraCardsByPlanId && typeof p.extraCardsByPlanId === 'object' && !Array.isArray(p.extraCardsByPlanId)
+            ? (p.extraCardsByPlanId as Record<string, StrategyMonthlyPlanCardDef[]>)
+            : {};
+        const payloadUpdatedAt =
+          typeof p?.payloadUpdatedAt === 'string' ? p.payloadUpdatedAt : fromVersion < 2 ? '' : '';
+        return { cardPatches, deletedCardIds, extraCardsByPlanId, payloadUpdatedAt };
+      },
     }
   )
 );

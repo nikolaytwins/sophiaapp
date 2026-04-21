@@ -2,8 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type Href, Link, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -112,6 +111,9 @@ export function TasksPlannerScreen() {
   const [weekFocusMonday, setWeekFocusMonday] = useState(() => startOfWeekMondayKey(localDateKey()));
   const [weekFocusDraftTitle, setWeekFocusDraftTitle] = useState('');
   const [weekFocusDraftPriority, setWeekFocusDraftPriority] = useState<BacklogPriority>('medium');
+  const [weekFocusOpen, setWeekFocusOpen] = useState(false);
+
+  const taskComposerRef = useRef<TextInput>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<PlannerTaskRow | null>(null);
@@ -510,362 +512,19 @@ export function TasksPlannerScreen() {
               >
                 <Pressable
                   onPress={() => router.push('/inbox' as Href)}
-                  style={StyleSheet.flatten([
-                    {
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      borderColor: 'rgba(168,85,247,0.35)',
-                      backgroundColor: 'rgba(168,85,247,0.1)',
-                    },
-                    webPtr,
-                  ])}
+                  hitSlop={8}
+                  style={StyleSheet.flatten([{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }, webPtr])}
                 >
                   <Ionicons name="layers-outline" size={18} color={ACCENT} />
-                  <Text style={{ marginLeft: 8, fontWeight: '800', color: ACCENT, fontSize: 14 }}>Входящие</Text>
-                  <Ionicons name="chevron-forward" size={16} color={ACCENT} style={{ marginLeft: 4 }} />
+                  <Text style={{ marginLeft: 8, fontWeight: '700', color: ACCENT, fontSize: 14 }}>Входящие</Text>
+                  <Ionicons name="chevron-forward" size={16} color={ACCENT} style={{ marginLeft: 2, opacity: 0.7 }} />
                 </Pressable>
-                <View
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: radius.full,
-                    backgroundColor: isLight ? 'rgba(124,58,237,0.08)' : 'rgba(168,85,247,0.14)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(168,85,247,0.28)',
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: ACCENT }}>
-                    Закрыто всего · {completedTotal}
-                  </Text>
-                </View>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted }}>
+                  Закрыто всего · {completedTotal}
+                </Text>
               </View>
 
               <View style={{ marginTop: spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '900',
-                    letterSpacing: 1.6,
-                    color: WEEK_FOCUS,
-                    textTransform: 'uppercase',
-                    marginBottom: spacing.sm,
-                  }}
-                >
-                  Фокус недели
-                </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: spacing.sm,
-                    flexWrap: 'wrap',
-                    gap: 8,
-                  }}
-                >
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      setWeekFocusMonday((m) => addDays(m, -7));
-                    }}
-                    hitSlop={12}
-                    style={webPtr}
-                  >
-                    <Ionicons name="chevron-back" size={24} color={colors.textMuted} />
-                  </Pressable>
-                  <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm, minWidth: 160 }}>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: '900',
-                        color: colors.text,
-                        textAlign: 'center',
-                      }}
-                      numberOfLines={2}
-                    >
-                      {formatWeekRangeRu(weekFocusMonday)}
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
-                      Календарная неделя · пн — вс
-                    </Text>
-                    {weekFocusMonday === startOfWeekMondayKey(todayKey) ? (
-                      <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '700', color: WEEK_FOCUS }}>Текущая</Text>
-                    ) : null}
-                  </View>
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      setWeekFocusMonday((m) => addDays(m, 7));
-                    }}
-                    hitSlop={12}
-                    style={webPtr}
-                  >
-                    <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md }}>
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      setWeekFocusMonday(startOfWeekMondayKey(todayKey));
-                    }}
-                    style={StyleSheet.flatten([
-                      {
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: 'rgba(245,158,11,0.4)',
-                        backgroundColor: 'rgba(245,158,11,0.12)',
-                      },
-                      webPtr,
-                    ])}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: WEEK_FOCUS }}>Эта неделя</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      setWeekFocusMonday(startOfWeekMondayKey(selectedDay));
-                    }}
-                    style={StyleSheet.flatten([
-                      {
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.05)',
-                      },
-                      webPtr,
-                    ])}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted }}>
-                      Неделя выбранного дня
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {weekFocusQ.isLoading ? (
-                  <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-                    <ActivityIndicator color={WEEK_FOCUS} />
-                  </View>
-                ) : (
-                  <LinearGradient
-                    colors={['rgba(245,158,11,0.42)', 'rgba(168,85,247,0.2)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{ borderRadius: 20, padding: 2 }}
-                  >
-                    <View
-                      style={{
-                        borderRadius: 18,
-                        paddingVertical: spacing.sm,
-                        paddingHorizontal: spacing.md,
-                        gap: 4,
-                        backgroundColor: isLight ? 'rgba(255,255,255,0.92)' : 'rgba(14,14,18,0.96)',
-                      }}
-                    >
-                      {(weekFocusQ.data ?? []).length === 0 ? (
-                        <Text
-                          style={{
-                            paddingVertical: 12,
-                            paddingHorizontal: 4,
-                            fontSize: 14,
-                            fontWeight: '600',
-                            color: colors.textMuted,
-                            lineHeight: 20,
-                          }}
-                        >
-                          Пока пусто. Ниже добавь фокус без даты — или отметь задачу дня кнопкой пламени в списке.
-                        </Text>
-                      ) : (
-                        (weekFocusQ.data ?? []).map((item: PlannerWeekFocusListItem) => {
-                          const key = item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`;
-                          const done = item.kind === 'task' ? item.task.is_done : item.row.is_done;
-                          const title = item.kind === 'task' ? item.task.title : item.row.title;
-                          const badgeLabel =
-                            item.kind === 'task'
-                              ? `${weekdayShortRu(item.task.day_date)} ${item.task.day_date.slice(5)}`
-                              : 'Без дня';
-                          return (
-                            <Pressable
-                              key={key}
-                              onPress={() => {
-                                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                                if (item.kind === 'task') openTaskEditor(item.task);
-                                else openStandaloneEditor(item.row);
-                              }}
-                              style={StyleSheet.flatten([
-                                {
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 10,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 4,
-                                  borderRadius: radius.md,
-                                },
-                                webPtr,
-                              ])}
-                            >
-                              <View
-                                style={{
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 4,
-                                  borderRadius: 10,
-                                  backgroundColor: 'rgba(245,158,11,0.18)',
-                                  borderWidth: 1,
-                                  borderColor: 'rgba(245,158,11,0.35)',
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: '900',
-                                    color: WEEK_FOCUS,
-                                    fontVariant: ['tabular-nums'],
-                                  }}
-                                >
-                                  {badgeLabel}
-                                </Text>
-                              </View>
-                              <Text
-                                style={{
-                                  flex: 1,
-                                  fontSize: 15,
-                                  fontWeight: '800',
-                                  color: colors.text,
-                                  textDecorationLine: done ? 'line-through' : 'none',
-                                  opacity: done ? 0.55 : 1,
-                                }}
-                                numberOfLines={2}
-                              >
-                                {title}
-                              </Text>
-                              <Ionicons name="flame" size={20} color={WEEK_FOCUS} />
-                            </Pressable>
-                          );
-                        })
-                      )}
-                    </View>
-                  </LinearGradient>
-                )}
-
-                <Text
-                  style={{
-                    marginTop: spacing.md,
-                    fontSize: 11,
-                    fontWeight: '800',
-                    color: colors.textMuted,
-                    marginBottom: 6,
-                  }}
-                >
-                  Новый фокус этой недели (без дня)
-                </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    borderRadius: radius.lg,
-                    borderWidth: 1,
-                    borderColor: 'rgba(245,158,11,0.35)',
-                    backgroundColor: isLight ? 'rgba(255,251,235,0.85)' : 'rgba(245,158,11,0.08)',
-                    paddingLeft: spacing.md,
-                    paddingVertical: 6,
-                  }}
-                >
-                  <TextInput
-                    value={weekFocusDraftTitle}
-                    onChangeText={setWeekFocusDraftTitle}
-                    placeholder="Смысл недели, без привязки к дате"
-                    placeholderTextColor={colors.textMuted}
-                    style={[
-                      typography.body,
-                      { flex: 1, color: colors.text, paddingVertical: 10, minHeight: 44 },
-                    ]}
-                    onSubmitEditing={() => {
-                      if (weekFocusDraftTitle.trim()) addWeekFocusStandaloneMut.mutate();
-                    }}
-                  />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 6 }}>
-                    {PLANNER_PRIORITY_OPTIONS.map((p) => {
-                      const on = weekFocusDraftPriority === p.id;
-                      const strip = priorityStripStyle(p.id, isLight);
-                      return (
-                        <Pressable
-                          key={p.id}
-                          onPress={() => {
-                            if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                            setWeekFocusDraftPriority(p.id);
-                          }}
-                          style={StyleSheet.flatten([
-                            {
-                              marginHorizontal: 3,
-                              width: 10,
-                              height: 28,
-                              borderRadius: 5,
-                              backgroundColor: strip.backgroundColor,
-                              opacity: on ? 1 : 0.35,
-                              borderWidth: on ? 2 : 0,
-                              borderColor: '#FAFAFC',
-                            },
-                            webPtr,
-                          ])}
-                          accessibilityLabel={p.label}
-                        />
-                      );
-                    })}
-                    <Pressable
-                      onPress={() => {
-                        if (!weekFocusDraftTitle.trim()) {
-                          alertInfo('Фокус недели', 'Введи текст');
-                          return;
-                        }
-                        addWeekFocusStandaloneMut.mutate();
-                      }}
-                      disabled={addWeekFocusStandaloneMut.isPending}
-                      style={StyleSheet.flatten([
-                        {
-                          marginLeft: 8,
-                          width: 46,
-                          height: 46,
-                          borderRadius: 14,
-                          backgroundColor: 'rgba(245,158,11,0.45)',
-                          borderWidth: 1,
-                          borderColor: 'rgba(245,158,11,0.65)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        },
-                        webPtr,
-                      ])}
-                    >
-                      {addWeekFocusStandaloneMut.isPending ? (
-                        <ActivityIndicator color="#FAFAFC" size="small" />
-                      ) : (
-                        <Ionicons name="add" size={28} color="#FAFAFC" />
-                      )}
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-
-              <View style={{ marginTop: spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '900',
-                    letterSpacing: 1.4,
-                    color: colors.textMuted,
-                    textTransform: 'uppercase',
-                    marginBottom: spacing.sm,
-                  }}
-                >
-                  День для списка задач
-                </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
                   <Pressable
                     onPress={() => {
@@ -879,19 +538,26 @@ export function TasksPlannerScreen() {
                   </Pressable>
                   <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm }}>
                     <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: '900',
-                        color: colors.text,
-                        textAlign: 'center',
-                      }}
+                      style={[
+                        typography.title1,
+                        {
+                          fontSize: 22,
+                          fontWeight: '900',
+                          color: colors.text,
+                          textAlign: 'center',
+                        },
+                      ]}
                       numberOfLines={2}
                     >
                       {formatLongDateLabel(selectedDay, todayKey)}
                     </Text>
                     {selectedDay === todayKey ? (
-                      <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '700', color: ACCENT }}>Сегодня</Text>
-                    ) : null}
+                      <Text style={{ marginTop: 4, fontSize: 13, fontWeight: '700', color: ACCENT }}>Сегодня</Text>
+                    ) : (
+                      <Text style={{ marginTop: 4, fontSize: 12, fontWeight: '600', color: colors.textMuted }}>
+                        Задачи на выбранную дату
+                      </Text>
+                    )}
                   </View>
                   <Pressable
                     onPress={() => {
@@ -930,15 +596,13 @@ export function TasksPlannerScreen() {
                             borderWidth: 1,
                             alignItems: 'center',
                             backgroundColor: sel
-                              ? 'rgba(168,85,247,0.22)'
+                              ? 'rgba(168,85,247,0.16)'
                               : isToday
-                                ? 'rgba(168,85,247,0.08)'
-                                : 'rgba(255,255,255,0.04)',
-                            borderColor: sel
-                              ? 'rgba(168,85,247,0.55)'
-                              : isToday
-                                ? 'rgba(168,85,247,0.3)'
-                                : 'rgba(255,255,255,0.1)',
+                                ? isLight
+                                  ? 'rgba(124,58,237,0.06)'
+                                  : 'rgba(255,255,255,0.04)'
+                                : 'transparent',
+                            borderColor: sel ? 'rgba(168,85,247,0.45)' : colors.border,
                           },
                           webPtr,
                         ])}
@@ -968,121 +632,109 @@ export function TasksPlannerScreen() {
                     );
                   })}
                 </ScrollView>
-              </View>
 
-              <View style={{ marginTop: spacing.xl }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '900',
-                    letterSpacing: 1.6,
-                    color: colors.textMuted,
-                    textTransform: 'uppercase',
-                    marginBottom: spacing.sm,
+                <TextInput
+                  ref={taskComposerRef}
+                  value={draftTitle}
+                  onChangeText={setDraftTitle}
+                  placeholder="Название задачи"
+                  placeholderTextColor={colors.textMuted}
+                  style={[
+                    typography.body,
+                    {
+                      marginTop: spacing.md,
+                      color: colors.text,
+                      paddingVertical: 14,
+                      paddingHorizontal: spacing.md,
+                      minHeight: 48,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isLight ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.04)',
+                    },
+                  ]}
+                  onSubmitEditing={() => {
+                    if (draftTitle.trim()) addMut.mutate();
                   }}
-                >
-                  Быстро добавить
-                </Text>
+                />
+
                 <View
                   style={{
+                    marginTop: spacing.sm,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    borderRadius: radius.xl,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: isLight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.05)',
-                    paddingLeft: spacing.md,
-                    paddingVertical: 6,
+                    flexWrap: 'wrap',
+                    gap: 8,
                   }}
                 >
-                  <TextInput
-                    value={draftTitle}
-                    onChangeText={setDraftTitle}
-                    placeholder="Что сделать в этот день?"
-                    placeholderTextColor={colors.textMuted}
-                    style={[
-                      typography.body,
-                      { flex: 1, color: colors.text, paddingVertical: 10, minHeight: 44 },
-                    ]}
-                    onSubmitEditing={() => {
-                      if (draftTitle.trim()) addMut.mutate();
-                    }}
-                  />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 6 }}>
-                    {PLANNER_PRIORITY_OPTIONS.map((p) => {
-                      const on = draftPriority === p.id;
-                      const strip = priorityStripStyle(p.id, isLight);
-                      return (
-                        <Pressable
-                          key={p.id}
-                          onPress={() => {
-                            if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                            setDraftPriority(p.id);
-                          }}
-                          style={StyleSheet.flatten([
-                            {
-                              marginHorizontal: 3,
-                              width: 10,
-                              height: 28,
-                              borderRadius: 5,
-                              backgroundColor: strip.backgroundColor,
-                              opacity: on ? 1 : 0.35,
-                              borderWidth: on ? 2 : 0,
-                              borderColor: '#FAFAFC',
-                            },
-                            webPtr,
-                          ])}
-                          accessibilityLabel={p.label}
-                        />
-                      );
-                    })}
-                    <Pressable
-                      onPress={() => {
-                        if (!draftTitle.trim()) {
-                          alertInfo('Задача', 'Введи текст');
-                          return;
-                        }
-                        addMut.mutate();
-                      }}
-                      disabled={addMut.isPending}
-                      style={StyleSheet.flatten([
-                        {
-                          marginLeft: 8,
-                          width: 46,
-                          height: 46,
-                          borderRadius: 14,
-                          backgroundColor: 'rgba(168,85,247,0.35)',
-                          borderWidth: 1,
-                          borderColor: 'rgba(168,85,247,0.55)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        },
-                        webPtr,
-                      ])}
-                    >
-                      {addMut.isPending ? (
-                        <ActivityIndicator color="#FAFAFC" size="small" />
-                      ) : (
-                        <Ionicons name="add" size={28} color="#FAFAFC" />
-                      )}
-                    </Pressable>
-                  </View>
+                  {PLANNER_PRIORITY_OPTIONS.map((p) => {
+                    const on = draftPriority === p.id;
+                    const strip = priorityStripStyle(p.id, isLight);
+                    return (
+                      <Pressable
+                        key={p.id}
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setDraftPriority(p.id);
+                        }}
+                        style={StyleSheet.flatten([
+                          {
+                            width: 12,
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: strip.backgroundColor,
+                            opacity: on ? 1 : 0.35,
+                            borderWidth: on ? 2 : 0,
+                            borderColor: '#FAFAFC',
+                          },
+                          webPtr,
+                        ])}
+                        accessibilityLabel={p.label}
+                      />
+                    );
+                  })}
                 </View>
+
+                <Pressable
+                  onPress={() => {
+                    if (!draftTitle.trim()) {
+                      alertInfo('Задача', 'Введи текст');
+                      return;
+                    }
+                    addMut.mutate();
+                  }}
+                  disabled={addMut.isPending}
+                  style={StyleSheet.flatten([
+                    {
+                      marginTop: spacing.md,
+                      paddingVertical: 14,
+                      borderRadius: radius.lg,
+                      backgroundColor: 'rgba(124,58,237,0.92)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                    webPtr,
+                  ])}
+                >
+                  {addMut.isPending ? (
+                    <ActivityIndicator color="#FAFAFC" />
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC' }}>Добавить задачу</Text>
+                  )}
+                </Pressable>
+
                 <View
                   style={{
                     marginTop: spacing.md,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    paddingVertical: 4,
+                    paddingVertical: 2,
                   }}
                 >
-                  <View style={{ flex: 1, paddingRight: spacing.md }}>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>Фокус дня</Text>
-                    <Text style={{ marginTop: 2, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
-                      Одна главная задача — в списке ниже, сверху
-                    </Text>
-                  </View>
+                  <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textMuted, paddingRight: spacing.md }}>
+                    Фокус дня — одна главная задача вверху списка
+                  </Text>
                   <Switch
                     value={draftAsFocus}
                     onValueChange={(v) => {
@@ -1093,27 +745,20 @@ export function TasksPlannerScreen() {
                     thumbColor={draftAsFocus ? ACCENT : colors.textMuted}
                   />
                 </View>
-                <Text style={{ marginTop: 8, fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
-                  Полоски справа: важный · средний · низкий приоритет
-                </Text>
-                <Text style={{ marginTop: 6, fontSize: 11, fontWeight: '600', color: colors.textMuted, lineHeight: 16 }}>
-                  В названии: завтра, послезавтра, день недели (вторник, пятница) или кратко пн … вс — задача уйдёт на
-                  эту дату, слово из заголовка уберется. От выбранного дня на экране считается «завтра» и ближайший
-                  будний день.
+                <Text style={{ marginTop: 6, fontSize: 11, fontWeight: '500', color: colors.textMuted, lineHeight: 15 }}>
+                  В названии можно написать «завтра», день недели или «пн»…«вс» — дата подставится, слово уберётся.
                 </Text>
               </View>
 
               <Text
                 style={{
                   marginTop: spacing.xl,
-                  fontSize: 11,
-                  fontWeight: '900',
-                  letterSpacing: 1.6,
-                  color: colors.textMuted,
-                  textTransform: 'uppercase',
+                  fontSize: 13,
+                  fontWeight: '800',
+                  color: colors.text,
                 }}
               >
-                На этот день
+                Задачи
               </Text>
 
               {tasksQ.isLoading ? (
@@ -1121,15 +766,41 @@ export function TasksPlannerScreen() {
                   <ActivityIndicator color={ACCENT} />
                 </View>
               ) : sortedTasks.length === 0 ? (
-                <Text
-                  style={[
-                    typography.body,
-                    { marginTop: spacing.md, color: colors.textMuted, lineHeight: 22 },
-                  ]}
-                >
-                  Пока пусто. Добавь задачу выше — она привязана к выбранной дате. Старые дни очищаются через месяц,
-                  счётчик «закрыто» сохраняется.
-                </Text>
+                <View style={{ marginTop: spacing.lg }}>
+                  <Text style={[typography.title2, { fontSize: 18, fontWeight: '800', color: colors.text }]}>
+                    {selectedDay === todayKey ? 'Сегодня нет задач' : 'На эту дату задач нет'}
+                  </Text>
+                  <Text style={{ marginTop: spacing.sm, fontSize: 14, fontWeight: '500', color: colors.textMuted, lineHeight: 20 }}>
+                    Добавь задачу выше — она появится в списке. Старые дни очищаются через месяц, счётчик «закрыто»
+                    сохраняется.
+                  </Text>
+                  <Pressable
+                    onPress={() => taskComposerRef.current?.focus()}
+                    style={StyleSheet.flatten([
+                      {
+                        marginTop: spacing.lg,
+                        paddingVertical: 14,
+                        borderRadius: radius.lg,
+                        backgroundColor: 'rgba(124,58,237,0.92)',
+                        alignItems: 'center',
+                      },
+                      webPtr,
+                    ])}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC' }}>Добавить первую задачу</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setDraftAsFocus(true);
+                      taskComposerRef.current?.focus();
+                    }}
+                    style={StyleSheet.flatten([{ marginTop: spacing.md, paddingVertical: 10, alignItems: 'center' }, webPtr])}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: ACCENT }}>
+                      Подготовить фокус дня (следующая задача будет главной)
+                    </Text>
+                  </Pressable>
+                </View>
               ) : (
                 <View style={{ marginTop: spacing.md }}>
                   {sortedTasks.map((t) => (
@@ -1174,6 +845,311 @@ export function TasksPlannerScreen() {
                   ))}
                 </View>
               )}
+
+              <View
+                style={{
+                  marginTop: spacing.xl,
+                  paddingTop: spacing.lg,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    setWeekFocusOpen((o) => !o);
+                  }}
+                  style={StyleSheet.flatten([
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: spacing.sm,
+                    },
+                    webPtr,
+                  ])}
+                >
+                  <View style={{ flex: 1, paddingRight: spacing.md }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.6 }}>
+                      Фокус недели
+                    </Text>
+                    <Text style={{ marginTop: 4, fontSize: 15, fontWeight: '800', color: colors.text }}>
+                      {formatWeekRangeRu(weekFocusMonday)}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted }}>
+                      {(weekFocusQ.data ?? []).length} шт.
+                    </Text>
+                    <Ionicons name={weekFocusOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+                  </View>
+                </Pressable>
+
+                {weekFocusOpen ? (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: spacing.sm,
+                        flexWrap: 'wrap',
+                        gap: 8,
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setWeekFocusMonday((m) => addDays(m, -7));
+                        }}
+                        hitSlop={12}
+                        style={webPtr}
+                      >
+                        <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
+                      </Pressable>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, flex: 1, textAlign: 'center' }}>
+                        Календарная неделя
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setWeekFocusMonday((m) => addDays(m, 7));
+                        }}
+                        hitSlop={12}
+                        style={webPtr}
+                      >
+                        <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md }}>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setWeekFocusMonday(startOfWeekMondayKey(todayKey));
+                        }}
+                        style={StyleSheet.flatten([
+                          {
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: radius.md,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.05)',
+                          },
+                          webPtr,
+                        ])}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>Текущая неделя</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          setWeekFocusMonday(startOfWeekMondayKey(selectedDay));
+                        }}
+                        style={StyleSheet.flatten([
+                          {
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: radius.md,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.05)',
+                          },
+                          webPtr,
+                        ])}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>
+                          Неделя выбранного дня
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {weekFocusQ.isLoading ? (
+                      <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                        <ActivityIndicator color={WEEK_FOCUS} />
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          borderRadius: radius.lg,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: isLight ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.03)',
+                          paddingVertical: spacing.sm,
+                          paddingHorizontal: spacing.md,
+                          gap: 4,
+                        }}
+                      >
+                        {(weekFocusQ.data ?? []).length === 0 ? (
+                          <Text
+                            style={{
+                              paddingVertical: 10,
+                              fontSize: 13,
+                              fontWeight: '500',
+                              color: colors.textMuted,
+                              lineHeight: 18,
+                            }}
+                          >
+                            Пока пусто. Добавь фокус без даты ниже или отметь задачу в списке кнопкой с пламенем.
+                          </Text>
+                        ) : (
+                          (weekFocusQ.data ?? []).map((item: PlannerWeekFocusListItem) => {
+                            const key = item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`;
+                            const done = item.kind === 'task' ? item.task.is_done : item.row.is_done;
+                            const title = item.kind === 'task' ? item.task.title : item.row.title;
+                            const badgeLabel =
+                              item.kind === 'task'
+                                ? `${weekdayShortRu(item.task.day_date)} ${item.task.day_date.slice(5)}`
+                                : 'Без дня';
+                            return (
+                              <Pressable
+                                key={key}
+                                onPress={() => {
+                                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                                  if (item.kind === 'task') openTaskEditor(item.task);
+                                  else openStandaloneEditor(item.row);
+                                }}
+                                style={StyleSheet.flatten([
+                                  {
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    paddingVertical: 10,
+                                    paddingHorizontal: 2,
+                                    borderRadius: radius.md,
+                                  },
+                                  webPtr,
+                                ])}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: '700',
+                                    color: WEEK_FOCUS,
+                                    fontVariant: ['tabular-nums'],
+                                    minWidth: 52,
+                                  }}
+                                >
+                                  {badgeLabel}
+                                </Text>
+                                <Text
+                                  style={{
+                                    flex: 1,
+                                    fontSize: 15,
+                                    fontWeight: '700',
+                                    color: colors.text,
+                                    textDecorationLine: done ? 'line-through' : 'none',
+                                    opacity: done ? 0.55 : 1,
+                                  }}
+                                  numberOfLines={2}
+                                >
+                                  {title}
+                                </Text>
+                                <Ionicons name="flame" size={18} color={WEEK_FOCUS} style={{ opacity: 0.5 }} />
+                              </Pressable>
+                            );
+                          })
+                        )}
+                      </View>
+                    )}
+
+                    <Text
+                      style={{
+                        marginTop: spacing.md,
+                        fontSize: 11,
+                        fontWeight: '700',
+                        color: colors.textMuted,
+                        marginBottom: 6,
+                      }}
+                    >
+                      Новый фокус без дня
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderRadius: radius.lg,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: isLight ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.03)',
+                        paddingLeft: spacing.md,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <TextInput
+                        value={weekFocusDraftTitle}
+                        onChangeText={setWeekFocusDraftTitle}
+                        placeholder="Смысл недели, без привязки к дате"
+                        placeholderTextColor={colors.textMuted}
+                        style={[
+                          typography.body,
+                          { flex: 1, color: colors.text, paddingVertical: 10, minHeight: 44 },
+                        ]}
+                        onSubmitEditing={() => {
+                          if (weekFocusDraftTitle.trim()) addWeekFocusStandaloneMut.mutate();
+                        }}
+                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 6 }}>
+                        {PLANNER_PRIORITY_OPTIONS.map((p) => {
+                          const on = weekFocusDraftPriority === p.id;
+                          const strip = priorityStripStyle(p.id, isLight);
+                          return (
+                            <Pressable
+                              key={p.id}
+                              onPress={() => {
+                                if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                                setWeekFocusDraftPriority(p.id);
+                              }}
+                              style={StyleSheet.flatten([
+                                {
+                                  marginHorizontal: 3,
+                                  width: 10,
+                                  height: 28,
+                                  borderRadius: 5,
+                                  backgroundColor: strip.backgroundColor,
+                                  opacity: on ? 1 : 0.35,
+                                  borderWidth: on ? 2 : 0,
+                                  borderColor: '#FAFAFC',
+                                },
+                                webPtr,
+                              ])}
+                              accessibilityLabel={p.label}
+                            />
+                          );
+                        })}
+                        <Pressable
+                          onPress={() => {
+                            if (!weekFocusDraftTitle.trim()) {
+                              alertInfo('Фокус недели', 'Введи текст');
+                              return;
+                            }
+                            addWeekFocusStandaloneMut.mutate();
+                          }}
+                          disabled={addWeekFocusStandaloneMut.isPending}
+                          style={StyleSheet.flatten([
+                            {
+                              marginLeft: 8,
+                              paddingHorizontal: 14,
+                              paddingVertical: 10,
+                              borderRadius: radius.md,
+                              backgroundColor: 'rgba(245,158,11,0.35)',
+                              borderWidth: 1,
+                              borderColor: 'rgba(245,158,11,0.5)',
+                            },
+                            webPtr,
+                          ])}
+                        >
+                          {addWeekFocusStandaloneMut.isPending ? (
+                            <ActivityIndicator color="#FAFAFC" size="small" />
+                          ) : (
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#FAFAFC' }}>Добавить</Text>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
             </>
           )}
         </ScrollView>

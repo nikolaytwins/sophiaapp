@@ -446,14 +446,51 @@ export function NikolayDayMoneyHeroCards({
   chinaGoal,
   cushionGoal,
   overline = '',
+  /** Десктоп (lg+): две карточки в один ряд, gap как у сетки дня. */
+  desktopTwoColumn = false,
 }: {
   sprintId: string | null;
   chinaGoal: SprintGoal | null;
   cushionGoal: SprintGoal | null;
   /** Например дедлайн капсом над названием. */
   overline?: string;
+  desktopTwoColumn?: boolean;
 }) {
   const { spacing } = useAppTheme();
+  const desktopGap = 24;
+  if (desktopTwoColumn) {
+    return (
+      <View
+        style={{
+          marginBottom: spacing.md,
+          flexDirection: 'row',
+          gap: desktopGap,
+          alignItems: 'stretch',
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <GenZMoneyGoalPlaque
+            variant="china"
+            overline={overline}
+            defaultTitle="Поездка в Китай"
+            goal={chinaGoal}
+            sprintId={sprintId}
+            fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала прогресса."
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <GenZMoneyGoalPlaque
+            variant="cushion"
+            overline={overline}
+            defaultTitle="Финансовая подушка"
+            goal={cushionGoal}
+            sprintId={sprintId}
+            fallbackHint="Добавь прогресс-цель с «подуш» в названии в спринте — увидишь накопление здесь."
+          />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={{ marginBottom: spacing.md, gap: spacing.lg }}>
       <GenZMoneyGoalPlaque

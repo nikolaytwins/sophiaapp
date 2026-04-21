@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -60,6 +61,11 @@ const ACCENT_MUTED = 'rgba(168,85,247,0.45)';
 const ACCENT_FILL = 'rgba(168,85,247,0.10)';
 const WEEKLY = '#C4B5FD';
 const WEEKLY_FILL = 'rgba(196,181,253,0.10)';
+
+/** Только веб-десктоп: плотная сетка карточек аналитики (аналог `lg:` / чуть шире — 3 колонки). */
+const HABITS_ANALYTICS_LG_MIN = 1024;
+const HABITS_ANALYTICS_3COL_MIN = 1200;
+const HABITS_ANALYTICS_GRID_GAP = 24;
 function headlineDate(): string {
   const d = new Date();
   return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -188,6 +194,8 @@ function HabitCard({
   habit,
   readOnly,
   variant = 'default',
+  /** В сетке на десктопе: без нижнего отступа карточки, календарь на ширину плитки. */
+  analyticsGridTile = false,
   onCheck,
   onUndo,
   onDelete,
@@ -200,6 +208,7 @@ function HabitCard({
   readOnly?: boolean;
   /** Экран «Аналитика»: без аккордеона и стриков. */
   variant?: 'default' | 'analytics';
+  analyticsGridTile?: boolean;
   onCheck?: (dateKey?: string) => void;
   onUndo?: (dateKey?: string) => void;
   onDelete?: () => void;
@@ -477,7 +486,7 @@ function HabitCard({
       <SurfaceCard
         glow={needsAttention}
         style={{
-          marginBottom: spacing.md,
+          marginBottom: analyticsUi && analyticsGridTile ? 0 : spacing.md,
           borderLeftWidth: needsAttention ? 2 : 0,
           borderLeftColor: needsAttention ? accent : 'transparent',
         }}
@@ -581,7 +590,9 @@ function HabitCard({
                   marginTop: spacing.md,
                   width: '100%',
                   ...(Platform.OS === 'web'
-                    ? { maxWidth: 400, alignSelf: 'flex-start' as const }
+                    ? analyticsGridTile
+                      ? { maxWidth: '100%' as const, alignSelf: 'stretch' as const }
+                      : { maxWidth: 400, alignSelf: 'flex-start' as const }
                     : { alignSelf: 'stretch' }),
                 }}
               >
@@ -632,7 +643,7 @@ function HabitCard({
                     viewDateKey={actionDayKey}
                     todayKey={todayKey}
                     onDelta={(d) => onAdjustCounter?.(habit.id, actionDayKey, d)}
-                    ringSize={124}
+                    ringSize={analyticsGridTile ? 96 : 124}
                     progressColor={accent}
                   />
                 ) : isNegativeDaily ? (
@@ -794,7 +805,9 @@ function HabitCard({
                   borderTopColor: 'rgba(255,255,255,0.08)',
                   width: '100%',
                   ...(Platform.OS === 'web'
-                    ? { maxWidth: 400, alignSelf: 'flex-start' as const }
+                    ? analyticsGridTile
+                      ? { maxWidth: '100%' as const, alignSelf: 'stretch' as const }
+                      : { maxWidth: 400, alignSelf: 'flex-start' as const }
                     : { alignSelf: 'stretch' }),
                 }}
               >
@@ -879,10 +892,66 @@ function HabitCard({
   );
 }
 
+function AnalyticsHabitsGrid({
+  habits,
+  todayKey,
+  gridColumns,
+}: {
+  habits: Habit[];
+  todayKey: string;
+  gridColumns: 1 | 2 | 3;
+}) {
+  if (habits.length === 0) return null;
+  const useGrid = gridColumns > 1;
+  return (
+    <View
+      style={
+        useGrid
+          ? {
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: HABITS_ANALYTICS_GRID_GAP,
+            }
+          : undefined
+      }
+    >
+      {habits.map((h) => (
+        <View
+          key={h.id}
+          style={
+            useGrid
+              ? {
+                  width: gridColumns === 3 ? '31%' : '47%',
+                  flexGrow: 1,
+                  minWidth: gridColumns === 3 ? 200 : 240,
+                }
+              : { width: '100%' }
+          }
+        >
+          <HabitCard
+            variant="analytics"
+            readOnly
+            habit={h}
+            todayKey={todayKey}
+            analyticsGridTile={useGrid}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function HabitsScreen() {
   const { colors, typography, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const habits = useHabitsQuery();
+
+  const analyticsGridColumns = useMemo((): 1 | 2 | 3 => {
+    if (Platform.OS !== 'web' || windowWidth < HABITS_ANALYTICS_LG_MIN) return 1;
+    if (windowWidth >= HABITS_ANALYTICS_3COL_MIN) return 3;
+    return 2;
+  }, [windowWidth]);
 
   const data = habits.data ?? [];
   const coreDaily = data.filter((h) => h.cadence === 'daily' && h.section !== 'media');
@@ -1209,16 +1278,12 @@ export function HabitsScreen() {
                       </View>
                     </View>
                   </LinearGradient>
-                  {mediaHabits.map((h) => (
-                    <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
-                  ))}
+                  <AnalyticsHabitsGrid habits={mediaHabits} todayKey={todayKey} gridColumns={analyticsGridColumns} />
                 </>
               ) : null}
 
               {coreDaily.length > 0 ? (
-                coreDaily.map((h) => (
-                  <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
-                ))
+                <AnalyticsHabitsGrid habits={coreDaily} todayKey={todayKey} gridColumns={analyticsGridColumns} />
               ) : showDailyEmptyHint ? (
                 <Text
                   style={[
@@ -1231,9 +1296,7 @@ export function HabitsScreen() {
               ) : null}
 
               {coreWeekly.length > 0 ? (
-                coreWeekly.map((h) => (
-                  <HabitCard key={h.id} variant="analytics" readOnly habit={h} todayKey={todayKey} />
-                ))
+                <AnalyticsHabitsGrid habits={coreWeekly} todayKey={todayKey} gridColumns={analyticsGridColumns} />
               ) : showWeeklyEmptyHint ? (
                 <Text
                   style={[
