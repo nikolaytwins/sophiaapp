@@ -12,6 +12,7 @@ import { StrategyInnerTabs } from '@/features/strategy/StrategyInnerTabs';
 import { StrategyStrategyTabPanel } from '@/features/strategy/StrategyStrategyTabPanel';
 import { getSupabase } from '@/lib/supabase';
 import { ensureStrategyCheckpointsHydrated, useStrategyCheckpointsStore } from '@/stores/strategyCheckpoints.store';
+import { ensureStrategyMonthlyPlansHydrated } from '@/stores/strategyMonthlyPlans.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
@@ -28,6 +29,7 @@ export function StrategyScreen() {
 
   useEffect(() => {
     void ensureStrategyCheckpointsHydrated();
+    void ensureStrategyMonthlyPlansHydrated();
   }, []);
 
   useEffect(() => {

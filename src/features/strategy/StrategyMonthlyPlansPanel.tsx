@@ -1,7 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 
 import type {
   StrategyMonthlyPlanCardAccent,
@@ -10,6 +19,10 @@ import type {
 } from '@/features/strategy/strategy.config';
 import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import { strategyPageConfig } from '@/features/strategy/strategy.config';
+import {
+  buildEffectiveMonthlyPlans,
+  useStrategyMonthlyPlansStore,
+} from '@/stores/strategyMonthlyPlans.store';
 import { useAppTheme } from '@/theme';
 
 /** Теги: мягкий фон + читаемый текст, без «грязных» рамок. */
@@ -101,10 +114,48 @@ type Props = {
   plans?: StrategyMonthlyPlanDef[];
 };
 
+function MonthTitleBadgeStars({ count }: { count: number }) {
+  if (count >= 3) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Ionicons name="star" size={10} color="#ffffff" />
+        <Ionicons name="star" size={10} color="#ffffff" />
+        <Ionicons name="star" size={10} color="#ffffff" />
+      </View>
+    );
+  }
+  if (count === 2) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Ionicons name="star" size={10} color="#ffffff" />
+        <Ionicons name="star" size={10} color="#ffffff" />
+      </View>
+    );
+  }
+  return <Ionicons name="star" size={12} color="#ffffff" />;
+}
+
 export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPlans }: Props) {
   const { typography, spacing, radius, colors, brand, isLight, shadows } = useAppTheme();
-  const list = plans;
+  const baseline = plans;
+  const overlay = useStrategyMonthlyPlansStore(
+    useShallow((s) => ({
+      cardPatches: s.cardPatches,
+      deletedCardIds: s.deletedCardIds,
+      extraCardsByPlanId: s.extraCardsByPlanId,
+    }))
+  );
+  const patchCard = useStrategyMonthlyPlansStore((s) => s.patchCard);
+  const deleteCardFromStore = useStrategyMonthlyPlansStore((s) => s.deleteCard);
+  const addCardToPlan = useStrategyMonthlyPlansStore((s) => s.addCardToPlan);
+
+  const list = useMemo(
+    () => buildEffectiveMonthlyPlans(baseline, overlay),
+    [baseline, overlay]
+  );
+
   const [activeId, setActiveId] = useState(() => list[0]?.id ?? '');
+  const [editMode, setEditMode] = useState(false);
 
   const active = useMemo(() => list.find((p) => p.id === activeId) ?? list[0], [activeId, list]);
 
@@ -113,6 +164,25 @@ export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPl
       setActiveId(list[0]!.id);
     }
   }, [list, activeId]);
+
+  const confirmDelete = useCallback(
+    (planId: string, cardId: string, title: string) => {
+      const label = title.trim() || 'эту плашку';
+      const go = () => {
+        deleteCardFromStore(planId, cardId);
+        if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      };
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        if (window.confirm(`Удалить «${label}»?`)) go();
+        return;
+      }
+      Alert.alert('Удалить плашку?', `«${label}»`, [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить', style: 'destructive', onPress: go },
+      ]);
+    },
+    [deleteCardFromStore]
+  );
 
   if (!list.length || !active) {
     return null;
@@ -197,14 +267,7 @@ export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPl
                   backgroundColor: 'rgba(124,58,237,0.88)',
                 }}
               >
-                {(active.monthTitleBadge.starCount ?? 1) === 2 ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Ionicons name="star" size={10} color="#ffffff" />
-                    <Ionicons name="star" size={10} color="#ffffff" />
-                  </View>
-                ) : (
-                  <Ionicons name="star" size={12} color="#ffffff" />
-                )}
+                <MonthTitleBadgeStars count={active.monthTitleBadge.starCount ?? 1} />
                 <Text style={{ fontSize: 12, fontWeight: '800', color: '#ffffff' }}>{active.monthTitleBadge.label}</Text>
               </View>
             ) : null}
@@ -227,12 +290,51 @@ export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPl
           </Text>
         </View>
 
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') void Haptics.selectionAsync();
+            setEditMode((v) => !v);
+          }}
+          style={{
+            alignSelf: 'flex-start',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: editMode ? brand.primary : colors.border,
+            backgroundColor: editMode ? brand.primaryMuted : isLight ? 'rgba(15,23,42,0.03)' : 'rgba(255,255,255,0.04)',
+          }}
+        >
+          <Ionicons name={editMode ? 'checkmark-circle' : 'create-outline'} size={18} color={editMode ? brand.primary : colors.textMuted} />
+          <Text style={{ fontSize: 13, fontWeight: '700', color: editMode ? brand.primary : colors.text }}>
+            {editMode ? 'Закончить правку' : 'Править плашки'}
+          </Text>
+        </Pressable>
+        {editMode ? (
+          <Text style={[typography.caption, { color: colors.textMuted, fontSize: 12, lineHeight: 17 }]}>
+            Изменения сохраняются на этом устройстве. Можно удалить плашку или добавить новую в этом месяце.
+          </Text>
+        ) : null}
+
         <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.85, borderRadius: 1 }} />
 
         <View style={{ gap: spacing.lg }}>
           {active.cards.map((card) => {
             const theme = isLight ? CARD_THEME[card.accent].light : CARD_THEME[card.accent].dark;
             const tag = isLight ? TAG_STYLES[card.tag.variant].light : TAG_STYLES[card.tag.variant].dark;
+            const inputChrome = {
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.sm,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              color: colors.text,
+              backgroundColor: isLight ? '#ffffff' : 'rgba(255,255,255,0.06)',
+            } as const;
+
             return (
               <View
                 key={card.id}
@@ -247,53 +349,153 @@ export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPl
               >
                 <View style={{ width: 3, backgroundColor: theme.rail }} />
                 <View style={{ flex: 1, padding: spacing.lg, gap: spacing.md }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: radius.md,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      <Text style={{ fontSize: 22, lineHeight: 26 }}>{card.emoji}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, flex: 1 }}>
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: radius.md,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        {editMode ? (
+                          <TextInput
+                            value={card.emoji}
+                            onChangeText={(t) => patchCard(card.id, { emoji: t })}
+                            maxLength={8}
+                            style={[
+                              {
+                                width: 40,
+                                textAlign: 'center',
+                                fontSize: 20,
+                                padding: 0,
+                              },
+                              inputChrome,
+                            ]}
+                          />
+                        ) : (
+                          <Text style={{ fontSize: 22, lineHeight: 26 }}>{card.emoji}</Text>
+                        )}
+                      </View>
+                      {editMode ? (
+                        <TextInput
+                          value={card.title}
+                          onChangeText={(t) => patchCard(card.id, { title: t })}
+                          multiline
+                          style={[
+                            typography.title2,
+                            {
+                              flex: 1,
+                              fontWeight: '700',
+                              fontSize: 17,
+                              lineHeight: 24,
+                              letterSpacing: -0.35,
+                              minHeight: 48,
+                            },
+                            inputChrome,
+                          ]}
+                        />
+                      ) : (
+                        <Text
+                          style={[
+                            typography.title2,
+                            {
+                              flex: 1,
+                              fontWeight: '700',
+                              fontSize: 17,
+                              lineHeight: 24,
+                              letterSpacing: -0.35,
+                              color: colors.text,
+                            },
+                          ]}
+                        >
+                          {card.title}
+                        </Text>
+                      )}
                     </View>
-                    <Text
+                    {editMode ? (
+                      <Pressable
+                        onPress={() => confirmDelete(active.id, card.id, card.title)}
+                        hitSlop={10}
+                        accessibilityLabel="Удалить плашку"
+                        style={{ padding: 6 }}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#b91c1c" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  {editMode ? (
+                    <TextInput
+                      value={card.description}
+                      onChangeText={(t) => patchCard(card.id, { description: t })}
+                      multiline
                       style={[
-                        typography.title2,
-                        {
-                          flex: 1,
-                          fontWeight: '700',
-                          fontSize: 17,
-                          lineHeight: 24,
-                          letterSpacing: -0.35,
-                          color: colors.text,
-                        },
+                        typography.body,
+                        { color: colors.text, lineHeight: 23, minHeight: 80, textAlignVertical: 'top' },
+                        inputChrome,
                       ]}
-                    >
-                      {card.title}
+                    />
+                  ) : (
+                    <Text style={[typography.body, { color: colors.text, lineHeight: 23, opacity: 0.92 }]}>
+                      {card.description}
                     </Text>
-                  </View>
-                  <Text style={[typography.body, { color: colors.text, lineHeight: 23, opacity: 0.92 }]}>
-                    {card.description}
-                  </Text>
+                  )}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
-                    <View
-                      style={{
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: 6,
-                        borderRadius: radius.full,
-                        backgroundColor: tag.bg,
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: tag.fg, letterSpacing: 0.15 }}>
-                        {card.tag.label}
-                      </Text>
-                    </View>
+                    {editMode ? (
+                      <TextInput
+                        value={card.tag.label}
+                        onChangeText={(t) => patchCard(card.id, { tag: { label: t } })}
+                        placeholder="Срок / подпись тега"
+                        placeholderTextColor={colors.textMuted}
+                        style={[
+                          {
+                            fontSize: 12,
+                            fontWeight: '700',
+                            letterSpacing: 0.15,
+                            minWidth: 120,
+                          },
+                          inputChrome,
+                        ]}
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: 6,
+                          borderRadius: radius.full,
+                          backgroundColor: tag.bg,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: tag.fg, letterSpacing: 0.15 }}>
+                          {card.tag.label}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  {card.footerItalic ? (
+                  {editMode ? (
+                    <TextInput
+                      value={card.footerItalic ?? ''}
+                      onChangeText={(t) => patchCard(card.id, { footerItalic: t })}
+                      multiline
+                      placeholder="Курсивная подпись (астро), необязательно"
+                      placeholderTextColor={colors.textMuted}
+                      style={[
+                        typography.caption,
+                        {
+                          fontStyle: 'italic',
+                          color: colors.textMuted,
+                          fontSize: 12,
+                          lineHeight: 18,
+                          minHeight: 40,
+                          textAlignVertical: 'top',
+                        },
+                        inputChrome,
+                      ]}
+                    />
+                  ) : card.footerItalic?.trim() ? (
                     <Text
                       style={[
                         typography.caption,
@@ -314,6 +516,30 @@ export function StrategyMonthlyPlansPanel({ plans = strategyPageConfig.monthlyPl
             );
           })}
         </View>
+
+        {editMode ? (
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              addCardToPlan(active.id);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingVertical: 14,
+              borderRadius: STRATEGY.cardRadiusMd,
+              borderWidth: 1,
+              borderStyle: 'dashed',
+              borderColor: brand.primary,
+              backgroundColor: brand.primaryMuted,
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={22} color={brand.primary} />
+            <Text style={{ fontSize: 15, fontWeight: '800', color: brand.primary }}>Добавить плашку</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

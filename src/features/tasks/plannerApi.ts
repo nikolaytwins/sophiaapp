@@ -1,6 +1,11 @@
 import { addDays, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import type { BacklogPriority } from '@/features/tasks/backlog.types';
-import type { PlannerTaskRow, PlannerUserStatsRow } from '@/features/tasks/planner.types';
+import type {
+  PlannerTaskRow,
+  PlannerUserStatsRow,
+  PlannerWeekFocusListItem,
+  PlannerWeekFocusStandaloneRow,
+} from '@/features/tasks/planner.types';
 import { getSupabase } from '@/lib/supabase';
 
 async function requireUserId(): Promise<string> {
@@ -39,6 +44,18 @@ export async function purgeOldPlannerTasks(): Promise<void> {
   if (e1) throw e1;
   const { error: e2 } = await sb.from('planner_day_focus').delete().eq('user_id', userId).lt('day_date', cutoff);
   if (e2) throw e2;
+  const weekCutoff = dateKeyMinusDays(
+    (() => {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    })(),
+    90
+  );
+  const { error: e3 } = await sb.from('planner_week_focus').delete().eq('user_id', userId).lt('week_monday', weekCutoff);
+  if (e3) throw e3;
 }
 
 /** Снимает фокус со всех задач дня, кроме `exceptTaskId` (если передан). */
@@ -101,6 +118,125 @@ export async function listPlannerWeekFocusTasks(anchorDateKey: string): Promise<
     .order('sort_order', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => normalizePlannerTaskRow(r as PlannerTaskRow));
+}
+
+function normalizePlannerWeekFocusStandaloneRow(row: PlannerWeekFocusStandaloneRow): PlannerWeekFocusStandaloneRow {
+  return {
+    ...row,
+    is_done: Boolean(row.is_done),
+  };
+}
+
+export async function listPlannerWeekFocusStandalone(weekMondayKey: string): Promise<PlannerWeekFocusStandaloneRow[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const userId = await requireUserId();
+  const mon = startOfWeekMondayKey(weekMondayKey);
+  const { data, error } = await sb
+    .from('planner_week_focus')
+    .select('id,week_monday,title,priority,is_done,sort_order,created_at,updated_at')
+    .eq('user_id', userId)
+    .eq('week_monday', mon)
+    .order('is_done', { ascending: true })
+    .order('sort_order', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => normalizePlannerWeekFocusStandaloneRow(r as PlannerWeekFocusStandaloneRow));
+}
+
+function weekFocusItemDone(item: PlannerWeekFocusListItem): boolean {
+  return item.kind === 'task' ? item.task.is_done : item.row.is_done;
+}
+
+function sortMergedWeekFocusItems(items: PlannerWeekFocusListItem[]): PlannerWeekFocusListItem[] {
+  return [...items].sort((a, b) => {
+    const da = weekFocusItemDone(a);
+    const db = weekFocusItemDone(b);
+    if (da !== db) return da ? 1 : -1;
+    if (a.kind === 'standalone' && b.kind === 'standalone') {
+      return b.row.sort_order - a.row.sort_order;
+    }
+    if (a.kind === 'task' && b.kind === 'task') {
+      if (a.task.day_date !== b.task.day_date) return a.task.day_date.localeCompare(b.task.day_date);
+      return b.task.sort_order - a.task.sort_order;
+    }
+    if (a.kind === 'standalone' && b.kind === 'task') return -1;
+    if (a.kind === 'task' && b.kind === 'standalone') return 1;
+    return 0;
+  });
+}
+
+/** Задачи с флагом «фокус недели» + отдельные фокусы недели (без дня). */
+export async function listMergedWeekFocus(anchorDateKey: string): Promise<PlannerWeekFocusListItem[]> {
+  const mon = startOfWeekMondayKey(anchorDateKey);
+  const [standalone, tasks] = await Promise.all([
+    listPlannerWeekFocusStandalone(mon),
+    listPlannerWeekFocusTasks(anchorDateKey),
+  ]);
+  const items: PlannerWeekFocusListItem[] = [
+    ...standalone.map((row) => ({ kind: 'standalone' as const, row })),
+    ...tasks.map((task) => ({ kind: 'task' as const, task })),
+  ];
+  return sortMergedWeekFocusItems(items);
+}
+
+export async function createPlannerWeekFocus(input: {
+  week_monday: string;
+  title: string;
+  priority: BacklogPriority;
+}): Promise<PlannerWeekFocusStandaloneRow> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const userId = await requireUserId();
+  const weekMonday = startOfWeekMondayKey(input.week_monday);
+  const title = input.title.trim();
+  if (!title) throw new Error('Введи текст фокуса');
+  const { data, error } = await sb
+    .from('planner_week_focus')
+    .insert({
+      user_id: userId,
+      week_monday: weekMonday,
+      title,
+      priority: input.priority,
+      sort_order: Date.now() % 1_000_000_000,
+      updated_at: new Date().toISOString(),
+    })
+    .select('id,week_monday,title,priority,is_done,sort_order,created_at,updated_at')
+    .single();
+  if (error) throw error;
+  return normalizePlannerWeekFocusStandaloneRow(data as PlannerWeekFocusStandaloneRow);
+}
+
+export async function updatePlannerWeekFocus(
+  id: string,
+  patch: {
+    title?: string;
+    priority?: BacklogPriority;
+    is_done?: boolean;
+  }
+): Promise<PlannerWeekFocusStandaloneRow> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  await requireUserId();
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.title !== undefined) row.title = patch.title.trim();
+  if (patch.priority !== undefined) row.priority = patch.priority;
+  if (patch.is_done !== undefined) row.is_done = patch.is_done;
+  const { data, error } = await sb
+    .from('planner_week_focus')
+    .update(row)
+    .eq('id', id)
+    .select('id,week_monday,title,priority,is_done,sort_order,created_at,updated_at')
+    .single();
+  if (error) throw error;
+  return normalizePlannerWeekFocusStandaloneRow(data as PlannerWeekFocusStandaloneRow);
+}
+
+export async function deletePlannerWeekFocus(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  await requireUserId();
+  const { error } = await sb.from('planner_week_focus').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function createPlannerTask(input: {

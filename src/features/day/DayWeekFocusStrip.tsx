@@ -7,8 +7,8 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useSupabaseConfigured } from '@/config/env';
 import { WEEKDAY_SHORT_RU } from '@/features/day/dayHabitUi';
 import { startOfWeekMondayKey } from '@/features/habits/habitLogic';
-import { listPlannerWeekFocusTasks } from '@/features/tasks/plannerApi';
-import type { PlannerTaskRow } from '@/features/tasks/planner.types';
+import { listMergedWeekFocus } from '@/features/tasks/plannerApi';
+import type { PlannerWeekFocusListItem } from '@/features/tasks/planner.types';
 import { PLANNER_WEEK_FOCUS_QUERY_KEY } from '@/features/tasks/queryKeys';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { useAppTheme } from '@/theme';
@@ -38,7 +38,7 @@ export function DayWeekFocusStrip({ viewDateKey, todayKey, userId }: Props) {
 
   const q = useQuery({
     queryKey: [...PLANNER_WEEK_FOCUS_QUERY_KEY, weekMonday],
-    queryFn: () => listPlannerWeekFocusTasks(viewDateKey),
+    queryFn: () => listMergedWeekFocus(viewDateKey),
     enabled,
   });
 
@@ -85,8 +85,13 @@ export function DayWeekFocusStrip({ viewDateKey, todayKey, userId }: Props) {
             </View>
           ) : (
             <View style={{ paddingVertical: spacing.xs }}>
-              {items.map((t, i) => (
-                <WeekFocusRow key={t.id} task={t} isLast={i === items.length - 1} todayKey={todayKey} />
+              {items.map((item, i) => (
+                <WeekFocusRow
+                  key={item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`}
+                  item={item}
+                  isLast={i === items.length - 1}
+                  todayKey={todayKey}
+                />
               ))}
             </View>
           )}
@@ -113,11 +118,23 @@ export function DayWeekFocusStrip({ viewDateKey, todayKey, userId }: Props) {
   );
 }
 
-function WeekFocusRow({ task, isLast, todayKey }: { task: PlannerTaskRow; isLast: boolean; todayKey: string }) {
+function WeekFocusRow({
+  item,
+  isLast,
+  todayKey,
+}: {
+  item: PlannerWeekFocusListItem;
+  isLast: boolean;
+  todayKey: string;
+}) {
   const { colors, spacing } = useAppTheme();
-  const done = task.is_done;
-  const dayShort = shortWeekdayRu(task.day_date);
-  const isToday = task.day_date === todayKey;
+  const done = item.kind === 'task' ? item.task.is_done : item.row.is_done;
+  const title = item.kind === 'task' ? item.task.title : item.row.title;
+  const isTask = item.kind === 'task';
+  const dateChip = isTask
+    ? `${shortWeekdayRu(item.task.day_date)} ${item.task.day_date.slice(5)}`
+    : 'Неделя';
+  const isToday = isTask && item.task.day_date === todayKey;
   return (
     <View
       style={{
@@ -141,7 +158,7 @@ function WeekFocusRow({ task, isLast, todayKey }: { task: PlannerTaskRow; isLast
         }}
       >
         <Text style={{ fontSize: 11, fontWeight: '900', color: FLAME, fontVariant: ['tabular-nums'] }}>
-          {dayShort} {task.day_date.slice(5)}
+          {dateChip}
         </Text>
         {isToday ? (
           <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(245,158,11,0.85)', marginTop: 2 }}>сегодня</Text>
@@ -159,7 +176,7 @@ function WeekFocusRow({ task, isLast, todayKey }: { task: PlannerTaskRow; isLast
           }}
           numberOfLines={3}
         >
-          {task.title}
+          {title}
         </Text>
       </View>
       <Ionicons name="flame" size={20} color={FLAME} style={{ marginTop: 2 }} />

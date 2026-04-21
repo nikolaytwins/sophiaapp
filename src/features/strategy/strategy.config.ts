@@ -3,6 +3,8 @@
  * У каждого чекпоинта стабильный `id` (для сохранения галочек в AsyncStorage).
  */
 
+import { EXTRA_STRATEGY_MONTHLY_PLANS } from '@/features/strategy/data/monthlyPlansExtra';
+
 export type StrategyPhaseBadgeVariant = 'now' | 'build' | 'growth' | 'launch' | 'scale' | 'muted';
 
 export type StrategyCheckpointDef = {
@@ -20,53 +22,12 @@ export type StrategyMonthBlockDef = {
   checkpoints: StrategyCheckpointDef[];
 };
 
-/** Плашки «фокус месяца» (вкладки по месяцам вверху вкладки «Стратегия»). */
-export type StrategyMonthlyPlanTagVariant =
-  | 'sky'
-  | 'violet'
-  | 'orange'
-  | 'pink'
-  | 'slate'
-  | 'amber'
-  | 'emerald'
-  | 'rose'
-  | 'teal';
-
-export type StrategyMonthlyPlanCardAccent =
-  | 'slate'
-  | 'violet'
-  | 'blue'
-  | 'orange'
-  | 'pink'
-  | 'amber'
-  | 'emerald'
-  | 'teal';
-
-export type StrategyMonthlyPlanCardDef = {
-  id: string;
-  emoji: string;
-  title: string;
-  description: string;
-  tag: { label: string; variant: StrategyMonthlyPlanTagVariant };
-  /** Курсивная строка снизу (астро и т.п.) */
-  footerItalic?: string;
-  accent: StrategyMonthlyPlanCardAccent;
-};
-
-export type StrategyMonthlyPlanDef = {
-  id: string;
-  /** Подпись на горизонтальном табе */
-  tabLabel: string;
-  /** Слева в шапке блока (название месяца или полная строка вроде «Октябрь 2026 🎂»). */
-  monthTitle: string;
-  /** Год второй строкой мельче рядом с месяцем (как «Сентябрь» + «2026»). */
-  monthYear?: string;
-  /** Плашка рядом с заголовком (звёздочки + текст). `starCount`: 1 по умолчанию, 2 — как «Раху пик». */
-  monthTitleBadge?: { label: string; starCount?: 1 | 2 };
-  /** Справа в шапке — слоган месяца */
-  monthTagline: string;
-  cards: StrategyMonthlyPlanCardDef[];
-};
+export type {
+  StrategyMonthlyPlanTagVariant,
+  StrategyMonthlyPlanCardAccent,
+  StrategyMonthlyPlanCardDef,
+  StrategyMonthlyPlanDef,
+} from '@/features/strategy/strategyMonthlyPlanTypes';
 
 export type StrategyPhaseDef = {
   id: string;
@@ -261,7 +222,7 @@ export type StrategyPageConfig = {
     headerBadge: string;
   };
   /** Фокус по месяцам: табы + карточки (тексты правятся здесь). */
-  monthlyPlans: StrategyMonthlyPlanDef[];
+  monthlyPlans: import('@/features/strategy/strategyMonthlyPlanTypes').StrategyMonthlyPlanDef[];
   strategySectionTitle: string;
   phases: StrategyPhaseDef[];
   /** Таймлайн сервисов (редактируется здесь же). */
@@ -282,7 +243,7 @@ export const strategyData: StrategyPageConfig = {
   meta: {
     title: 'Стратегия · TwinTech',
     subtitle: 'Дорожная карта и чекпоинты',
-    lastContentUpdate: 'Последнее обновление контента: 18 апреля 2026',
+    lastContentUpdate: 'Последнее обновление контента: 21 апреля 2026',
     headerBadge: 'Апрель 2026',
   },
   monthlyPlans: [
@@ -676,6 +637,7 @@ export const strategyData: StrategyPageConfig = {
         },
       ],
     },
+    ...EXTRA_STRATEGY_MONTHLY_PLANS,
   ],
   strategySectionTitle: 'Стратегия',
   phases: [

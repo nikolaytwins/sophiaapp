@@ -12,6 +12,7 @@ import {
   updatePlannerTask,
 } from '@/features/tasks/plannerApi';
 import type { PlannerTaskRow } from '@/features/tasks/planner.types';
+import { invalidatePlannerWeekQueries } from '@/features/tasks/plannerWeekInvalidation';
 import { PLANNER_STATS_QUERY_KEY, PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
 import { sortPlannerTasksForDisplay } from '@/features/tasks/plannerSort';
 import { alertInfo } from '@/shared/lib/confirmAction';
@@ -79,6 +80,7 @@ export function DayPlannerTasksBlock({ viewDateKey, todayKey, userId }: Props) {
         if (!old) return [row];
         return sortPlannerTasksForDisplay(old.map((t) => (t.id === row.id ? row : t)));
       });
+      if (row.is_week_focus) invalidatePlannerWeekQueries(qc, dayKey);
       void qc.invalidateQueries({ queryKey: [...PLANNER_STATS_QUERY_KEY] });
       if (Platform.OS !== 'web') void Haptics.selectionAsync();
     },
