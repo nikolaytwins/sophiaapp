@@ -213,6 +213,16 @@ export type AboutMeNotesDef = {
   patterns: NotesPatternsSectionDef;
 };
 
+/** Напутствия и жёсткие рамки над дорожной картой (вкладка «Стратегия»). */
+export type StrategyReminderSectionDef = {
+  title: string;
+  bullets: string[];
+};
+
+export type StrategyRemindersDef = {
+  sections: StrategyReminderSectionDef[];
+};
+
 export type StrategyPageConfig = {
   meta: {
     title: string;
@@ -223,6 +233,8 @@ export type StrategyPageConfig = {
   };
   /** Фокус по месяцам: табы + карточки (тексты правятся здесь). */
   monthlyPlans: import('@/features/strategy/strategyMonthlyPlanTypes').StrategyMonthlyPlanDef[];
+  /** Напутствия на год и долгие горизонты — блок над фокусом по месяцам. */
+  strategyReminders: StrategyRemindersDef;
   strategySectionTitle: string;
   phases: StrategyPhaseDef[];
   /** Таймлайн сервисов (редактируется здесь же). */
@@ -243,8 +255,20 @@ export const strategyData: StrategyPageConfig = {
   meta: {
     title: 'Стратегия · TwinTech',
     subtitle: 'Дорожная карта и чекпоинты',
-    lastContentUpdate: 'Последнее обновление контента: 22 апреля 2026',
+    lastContentUpdate: 'Последнее обновление контента: 23 апреля 2026',
     headerBadge: 'Апрель 2026',
+  },
+  strategyReminders: {
+    sections: [
+      {
+        title: 'Важное напутствие на 2026 год',
+        bullets: ['Не переезжать в Москву', 'Не думать об офисе пока что (цель на 2027 год)'],
+      },
+      {
+        title: 'Важно в целом',
+        bullets: ['Думать о детях в декабре 2031 года, не раньше'],
+      },
+    ],
   },
   monthlyPlans: [
     {

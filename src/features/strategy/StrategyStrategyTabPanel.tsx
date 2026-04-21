@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import { strategyPageConfig } from '@/features/strategy/strategy.config';
 import { StrategyMonthlyPlansPanel } from '@/features/strategy/StrategyMonthlyPlansPanel';
+import { StrategyStrategyReminders } from '@/features/strategy/StrategyStrategyReminders';
 import { StrategyPhaseAccordion } from '@/features/strategy/StrategyPhaseAccordion';
 import { StrategyPersonalBrand } from '@/features/strategy/StrategyPersonalBrand';
 import { StrategyProjectsStatus } from '@/features/strategy/StrategyProjectsStatus';
@@ -19,6 +20,7 @@ export function StrategyStrategyTabPanel({ checked, onToggleCheckpoint }: Props)
 
   return (
     <View style={{ gap: STRATEGY.sectionGap }}>
+      <StrategyStrategyReminders />
       <StrategyMonthlyPlansPanel plans={strategyPageConfig.monthlyPlans} />
 
       <View style={{ gap: spacing.xs }}>
