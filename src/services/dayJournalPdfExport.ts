@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import {
   buildJournalDayPlainText,
+  buildJournalPeriodPlainText,
   getFieldsBySection,
   journalEntryHasContent,
   journalExportDateRange,
@@ -18,6 +19,7 @@ import type {
 } from '@/features/day/dayJournal.types';
 import { localDateKey } from '@/features/habits/habitLogic';
 import { getMoodMeta } from '@/features/journal/journalMood';
+import { tryDownloadJournalTxtOnWeb } from '@/services/dayJournalTextExport';
 import { getDayJournalDocument } from '@/stores/dayJournal.store';
 
 function escapeHtml(s: string): string {
@@ -169,7 +171,10 @@ function printJournalHtmlInWebPopup(html: string): boolean {
   return true;
 }
 
-export type DayJournalPdfExportResult = 'web-popup-blocked-copied-day' | undefined;
+export type DayJournalPdfExportResult =
+  | 'web-popup-blocked-copied-day'
+  | 'web-popup-blocked-downloaded-txt'
+  | undefined;
 
 /**
  * PDF на iOS/Android (через системный шаринг) или диалог печати / «Сохранить как PDF» в отдельном окне на вебе.
@@ -191,12 +196,14 @@ export async function exportDayJournalPdf(
   if (Platform.OS === 'web') {
     const opened = printJournalHtmlInWebPopup(html);
     if (!opened) {
-      if (fromKey === toKey) {
-        const plain = buildJournalDayPlainText(getDayJournalDocument(), fromKey);
-        await Clipboard.setStringAsync(plain);
-        return 'web-popup-blocked-copied-day';
+      const docFull = getDayJournalDocument();
+      const plain = buildJournalPeriodPlainText(docFull, fromKey, toKey);
+      const fname = `sophia-journal_${fromKey}_${toKey}.txt`;
+      if (tryDownloadJournalTxtOnWeb(fname, plain)) {
+        return 'web-popup-blocked-downloaded-txt';
       }
-      throw new Error('Браузер заблокировал окно печати. Разреши всплывающие окна или нажми «Скопировать день (текст)».');
+      await Clipboard.setStringAsync(plain);
+      return fromKey === toKey ? 'web-popup-blocked-copied-day' : 'web-popup-blocked-downloaded-txt';
     }
     return undefined;
   }

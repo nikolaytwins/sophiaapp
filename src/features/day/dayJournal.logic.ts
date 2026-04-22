@@ -1,4 +1,4 @@
-import { addDays, startOfCalendarMonthKey } from '@/features/habits/habitLogic';
+import { addDays, endOfCalendarMonthKey, startOfCalendarMonthKey } from '@/features/habits/habitLogic';
 import { getMoodMeta } from '@/features/journal/journalMood';
 import {
   DEFAULT_JOURNAL_FIELDS,
@@ -13,6 +13,18 @@ import {
 } from '@/features/day/dayJournal.types';
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isValidDateKey(s: string): boolean {
+  const t = String(s).trim();
+  if (!DATE_KEY_RE.test(t)) return false;
+  const [y, mo, d] = t.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+function minDateKey(a: string, b: string): string {
+  return a <= b ? a : b;
+}
 const FIELD_TYPE_SET: JournalFieldType[] = ['text', 'number', 'toggle'];
 const FIELD_SECTION_SET: JournalFieldSection[] = ['journal', 'health'];
 const VALID_MOODS = new Set<JournalMoodId>(['death', 'sad', 'neutral', 'smile', 'stars']);
@@ -415,6 +427,40 @@ export function buildJournalDayPlainText(doc: JournalDocument, dateKey: string):
   return lines.join('\n');
 }
 
+/**
+ * Текст дневника за диапазон дат (только дни с содержимым: настроение, энергия, поля).
+ */
+export function buildJournalPeriodPlainText(doc: JournalDocument, fromKey: string, toKey: string): string {
+  const sortedFrom = fromKey <= toKey ? fromKey : toKey;
+  const sortedTo = fromKey <= toKey ? toKey : fromKey;
+  const dayKeys = Object.keys(doc.entries)
+    .filter((k) => k >= sortedFrom && k <= sortedTo)
+    .sort((a, b) => a.localeCompare(b));
+  const withContent = dayKeys.filter((k) => journalEntryHasContent(doc.entries[k], doc.fields));
+
+  const exportedAt = new Date().toLocaleString('ru-RU');
+  const rangeLine = sortedFrom === sortedTo ? sortedFrom : `${sortedFrom} — ${sortedTo}`;
+  const parts: string[] = [
+    'Sophia OS — дневник',
+    `Период: ${rangeLine}`,
+    `Выгружено: ${exportedAt}`,
+    '',
+    '—'.repeat(36),
+    '',
+  ];
+
+  if (withContent.length === 0) {
+    parts.push('За выбранный период нет записей (настроение, энергия, текст, числа, переключатели).');
+    return parts.join('\n');
+  }
+
+  for (const k of withContent) {
+    parts.push(buildJournalDayPlainText(doc, k), '', '');
+  }
+  while (parts.length && parts[parts.length - 1] === '') parts.pop();
+  return parts.join('\n');
+}
+
 function formatJournalFieldLine(field: JournalFieldDefinition, value: JournalFieldValue | undefined): string {
   const label = field.label;
   const v = value ?? null;
@@ -435,16 +481,30 @@ export function journalExportDateRange(
   todayKey: string,
   opts?: { anchorDayKey?: string }
 ): { fromKey: string; toKey: string; label: string } {
-  const toKey = todayKey;
+  const rawAnchor = opts?.anchorDayKey?.trim();
+  const anchor =
+    rawAnchor && isValidDateKey(rawAnchor) ? minDateKey(rawAnchor, todayKey) : todayKey;
+
   if (period === 'today') {
-    const d = opts?.anchorDayKey ?? todayKey;
+    const d = anchor;
     const label = d === todayKey ? 'Сегодня' : journalDayTitleRu(d);
     return { fromKey: d, toKey: d, label };
   }
   if (period === 'month') {
-    return { fromKey: startOfCalendarMonthKey(todayKey), toKey, label: 'Текущий месяц' };
+    const monthStart = startOfCalendarMonthKey(anchor);
+    const monthEnd = endOfCalendarMonthKey(anchor);
+    const toKey = minDateKey(monthEnd, todayKey);
+    const fromKey = minDateKey(monthStart, toKey);
+    if (fromKey > toKey) {
+      return { fromKey: todayKey, toKey: todayKey, label: 'Месяц (нет данных до сегодня)' };
+    }
+    const [y, m] = anchor.split('-').map(Number);
+    const monthTitle = new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    const label = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1);
+    return { fromKey, toKey, label };
   }
-  return { fromKey: addDays(todayKey, -89), toKey, label: '90 дней' };
+  const end = anchor;
+  return { fromKey: addDays(end, -89), toKey: end, label: '90 дней' };
 }
 
 export function sliceJournalDocumentByDateRange(

@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 
 import { mergeNikolayJournalFields } from '@/features/accounts/nikolayJournalFields';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
@@ -13,15 +13,18 @@ import { JournalFieldCard } from '@/features/day/DayJournalFieldCards';
 import {
   buildJournalDayPlainText,
   getFieldsBySection,
+  isValidDateKey,
   journalEntryHasContent,
   journalEntryHasFieldContent,
 } from '@/features/day/dayJournal.logic';
 import type { JournalExportPeriod, JournalFieldDefinition, JournalMoodId } from '@/features/day/dayJournal.types';
+import { startOfCalendarMonthKey } from '@/features/habits/habitLogic';
 import { findJournalHabit } from '@/features/journal/journalHabit';
 import { JournalMoodStrip } from '@/features/journal/JournalMoodStrip';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { exportDayJournalPdf } from '@/services/dayJournalPdfExport';
+import { exportJournalPeriodAsTxt } from '@/services/dayJournalTextExport';
 import { pushDayJournalToCloud } from '@/services/dayJournalSupabaseSync';
 import { repos } from '@/services/repositories';
 import { buildDayJournalNarrativeExportDoc, useDayJournalStore } from '@/stores/dayJournal.store';
@@ -75,6 +78,15 @@ export function DayJournalAccordion({
   const [saveHint, setSaveHint] = useState<string | null>(null);
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [txtBusy, setTxtBusy] = useState(false);
+  const [txtFrom, setTxtFrom] = useState(() => startOfCalendarMonthKey(viewDateKey));
+  const [txtTo, setTxtTo] = useState(() => (viewDateKey <= todayKey ? viewDateKey : todayKey));
+
+  useEffect(() => {
+    const cap = viewDateKey <= todayKey ? viewDateKey : todayKey;
+    setTxtFrom(startOfCalendarMonthKey(cap));
+    setTxtTo(cap);
+  }, [viewDateKey, todayKey]);
 
   useEffect(() => {
     if (dayKeyRef.current !== editingDay) {
@@ -128,9 +140,13 @@ export function DayJournalAccordion({
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPdfBusy(true);
     try {
-      const pdfResult = await exportDayJournalPdf(period, period === 'today' ? { anchorDayKey: editingDay } : undefined);
+      const pdfResult = await exportDayJournalPdf(period, { anchorDayKey: editingDay });
       if (pdfResult === 'web-popup-blocked-copied-day') {
         setExportHint('Окно печати заблокировано — текст этого дня скопирован в буфер. Вставь в документ и при необходимости сохрани как PDF.');
+      } else if (pdfResult === 'web-popup-blocked-downloaded-txt') {
+        setExportHint(
+          'Окно печати заблокировано. Текст за период: проверь загрузки (.txt) или вставь из буфера — там тот же текст.'
+        );
       } else {
         setExportHint(
           Platform.OS === 'web'
@@ -146,6 +162,38 @@ export function DayJournalAccordion({
       setTimeout(() => setExportHint(null), 5200);
     } finally {
       setPdfBusy(false);
+    }
+  };
+
+  const exportCustomPeriodTxt = async () => {
+    if (txtBusy) return;
+    const fromRaw = txtFrom.trim();
+    const toRaw = txtTo.trim();
+    if (!isValidDateKey(fromRaw) || !isValidDateKey(toRaw)) {
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setExportHint('Даты в формате ГГГГ-ММ-ДД, например 2026-04-01');
+      setTimeout(() => setExportHint(null), 4000);
+      return;
+    }
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTxtBusy(true);
+    try {
+      const r = await exportJournalPeriodAsTxt(doc, fromRaw, toRaw);
+      if (r === 'web-downloaded') {
+        setExportHint('Файл .txt скачан (папка «Загрузки»).');
+      } else if (r === 'native-shared') {
+        setExportHint('Откроется окно «Поделиться» — сохрани как файл или отправь.');
+      } else {
+        setExportHint('Текст за период скопирован в буфер (скачивание или шаринг недоступны).');
+      }
+      setTimeout(() => setExportHint(null), 4200);
+    } catch (error) {
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message = error instanceof Error ? error.message : 'Ошибка';
+      setExportHint(`TXT: ${message}`);
+      setTimeout(() => setExportHint(null), 5200);
+    } finally {
+      setTxtBusy(false);
     }
   };
 
@@ -367,10 +415,94 @@ export function DayJournalAccordion({
               marginBottom: 8,
             }}
           >
+            Текст за период (.txt)
+          </Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 8, lineHeight: 17 }}>
+            Укажи даты включительно (формат ГГГГ-ММ-ДД). В файл попадут только дни, где есть настроение, энергия или
+            заполненные поля.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+            <View style={{ flex: 1, minWidth: 120 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>С даты</Text>
+              <TextInput
+                value={txtFrom}
+                onChangeText={setTxtFrom}
+                placeholder="2026-04-01"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                style={{
+                  borderWidth: 1,
+                  borderColor: brand.surfaceBorder,
+                  borderRadius: radius.md,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  color: colors.text,
+                  fontSize: 15,
+                  fontWeight: '600',
+                  fontVariant: ['tabular-nums'],
+                }}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 120 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>По дату</Text>
+              <TextInput
+                value={txtTo}
+                onChangeText={setTxtTo}
+                placeholder="2026-04-22"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                style={{
+                  borderWidth: 1,
+                  borderColor: brand.surfaceBorder,
+                  borderRadius: radius.md,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  color: colors.text,
+                  fontSize: 15,
+                  fontWeight: '600',
+                  fontVariant: ['tabular-nums'],
+                }}
+              />
+            </View>
+          </View>
+          <Pressable
+            disabled={txtBusy}
+            onPress={() => void exportCustomPeriodTxt()}
+            style={{
+              alignSelf: 'flex-start',
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: 'rgba(52,211,153,0.45)',
+              backgroundColor: txtBusy ? 'rgba(255,255,255,0.02)' : 'rgba(52,211,153,0.12)',
+              opacity: txtBusy ? 0.55 : 1,
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontWeight: '800', color: colors.text, fontSize: 13 }}>Скачать / поделиться .txt</Text>
+          </Pressable>
+
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '900',
+              letterSpacing: 1.2,
+              color: 'rgba(196,181,253,0.85)',
+              textTransform: 'uppercase',
+              marginTop: 4,
+              marginBottom: 8,
+            }}
+          >
             PDF за период
           </Text>
           <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 8, lineHeight: 17 }}>
-            «Этот день» — выбранная в дневнике дата. Если PDF не открывается, используй «Скопировать день (текст)».
+            «Этот день» — выбранная в дневнике дата. «Месяц» и «90 дней» — от этой даты (не дальше сегодня). Если браузер
+            блокирует печать, подставится тот же текст в .txt.
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pressable
