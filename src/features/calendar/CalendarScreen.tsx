@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -70,6 +71,7 @@ import {
 } from '@/features/tasks/queryKeys';
 import { invalidatePlannerCalendarQueries, invalidatePlannerWeekQueries } from '@/features/tasks/plannerWeekInvalidation';
 import { getSupabase } from '@/lib/supabase';
+import { useSupabaseAuthSession } from '@/hooks/useSupabaseAuthSession';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
@@ -168,10 +170,12 @@ function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): Planne
 
 export function CalendarScreen() {
   const { colors, spacing, typography, brand, isLight } = useAppTheme();
+  const { isAuthed, displayName } = useSupabaseAuthSession();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { width: windowWidth } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && windowWidth >= LG_MIN;
+  const profileTitle = isAuthed ? displayName || 'Профиль' : 'Гость';
   const [navRailCollapsed, setNavRailCollapsed] = useState(() => !isDesktop);
   useEffect(() => {
     setNavRailCollapsed(!isDesktop);
@@ -1098,8 +1102,24 @@ export function CalendarScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-        <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
-        <HeaderProfileAvatar />
+        {Platform.OS === 'web' ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Image source={require('../../../assets/images/icon.png')} style={{ width: 28, height: 28, borderRadius: 7 }} contentFit="cover" />
+            <Text style={[typography.screenTitle, { color: '#FFFFFF', fontSize: isDesktop ? 26 : 22, fontWeight: '900', letterSpacing: -0.3 }]}>
+              Sophia
+            </Text>
+          </View>
+        ) : (
+          <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {Platform.OS === 'web' ? (
+            <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.88)' }} numberOfLines={1}>
+              {profileTitle}
+            </Text>
+          ) : null}
+          <HeaderProfileAvatar />
+        </View>
       </View>
 
       {isDesktop ? (

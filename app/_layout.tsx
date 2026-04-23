@@ -51,6 +51,7 @@ export default function RootLayout() {
           <Stack.Screen name="cloud" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="tasks-backlog" />
+          <Stack.Screen name="calendar-2" />
           <Stack.Screen name="auth/callback" />
           <Stack.Screen
             name="habit-new"
