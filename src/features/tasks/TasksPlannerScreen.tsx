@@ -30,6 +30,7 @@ import {
   listMergedWeekFocus,
   listPlannerTasks,
   purgeOldPlannerTasks,
+  sortMergedWeekFocusItems,
   updatePlannerTask,
   updatePlannerWeekFocus,
 } from '@/features/tasks/plannerApi';
@@ -306,12 +307,17 @@ export function TasksPlannerScreen() {
       return createPlannerWeekFocus({
         week_monday: weekFocusMonday,
         title,
-        priority: 'medium',
       });
     },
-    onSuccess: () => {
+    onSuccess: (row) => {
+      const focusKey = [...PLANNER_WEEK_FOCUS_QUERY_KEY, weekFocusMonday] as const;
+      qc.setQueryData<PlannerWeekFocusListItem[]>(focusKey, (old) => {
+        const base = old ?? [];
+        if (base.some((it) => it.kind === 'standalone' && it.row.id === row.id)) return base;
+        return sortMergedWeekFocusItems([...base, { kind: 'standalone' as const, row }]);
+      });
       setWeekFocusDraftTitle('');
-      invalidatePlannerWeekQueries(qc, weekFocusMonday);
+      void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_FOCUS_QUERY_KEY, weekFocusMonday] });
       if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
     onError: (e: Error) => alertInfo('Фокус недели', e.message),
@@ -322,13 +328,11 @@ export function TasksPlannerScreen() {
       id: string;
       weekMon: string;
       title: string;
-      priority: BacklogPriority;
       isDone: boolean;
       wasDone: boolean;
     }) => {
       const row = await updatePlannerWeekFocus(p.id, {
         title: p.title,
-        priority: p.priority,
         is_done: p.isDone,
       });
       if (!p.wasDone && p.isDone) await adjustPlannerCompletedCount(1);
@@ -1551,7 +1555,6 @@ export function TasksPlannerScreen() {
                     id: editingStandalone.id,
                     weekMon: editingStandalone.week_monday,
                     title: t,
-                    priority: (editingStandalone.priority as BacklogPriority) ?? 'medium',
                     isDone: editStandaloneDone,
                     wasDone: Boolean(editingStandalone.is_done),
                   });

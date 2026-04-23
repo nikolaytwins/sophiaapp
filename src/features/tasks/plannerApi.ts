@@ -164,7 +164,8 @@ function weekFocusItemDone(item: PlannerWeekFocusListItem): boolean {
   return item.kind === 'task' ? item.task.is_done : item.row.is_done;
 }
 
-function sortMergedWeekFocusItems(items: PlannerWeekFocusListItem[]): PlannerWeekFocusListItem[] {
+/** Экспорт для оптимистического обновления списка фокуса недели в UI. */
+export function sortMergedWeekFocusItems(items: PlannerWeekFocusListItem[]): PlannerWeekFocusListItem[] {
   return [...items].sort((a, b) => {
     const da = weekFocusItemDone(a);
     const db = weekFocusItemDone(b);
@@ -196,11 +197,7 @@ export async function listMergedWeekFocus(anchorDateKey: string): Promise<Planne
   return sortMergedWeekFocusItems(items);
 }
 
-export async function createPlannerWeekFocus(input: {
-  week_monday: string;
-  title: string;
-  priority: BacklogPriority;
-}): Promise<PlannerWeekFocusStandaloneRow> {
+export async function createPlannerWeekFocus(input: { week_monday: string; title: string }): Promise<PlannerWeekFocusStandaloneRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
   const userId = await requireUserId();
@@ -213,7 +210,8 @@ export async function createPlannerWeekFocus(input: {
       user_id: userId,
       week_monday: weekMonday,
       title,
-      priority: input.priority,
+      /** В БД колонка остаётся; у фокуса недели нет UI-приоритета — всегда нейтральное значение. */
+      priority: 'medium',
       sort_order: Date.now() % 1_000_000_000,
       updated_at: new Date().toISOString(),
     })
@@ -227,7 +225,6 @@ export async function updatePlannerWeekFocus(
   id: string,
   patch: {
     title?: string;
-    priority?: BacklogPriority;
     is_done?: boolean;
   }
 ): Promise<PlannerWeekFocusStandaloneRow> {
@@ -236,7 +233,6 @@ export async function updatePlannerWeekFocus(
   await requireUserId();
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) row.title = patch.title.trim();
-  if (patch.priority !== undefined) row.priority = patch.priority;
   if (patch.is_done !== undefined) row.is_done = patch.is_done;
   const { data, error } = await sb
     .from('planner_week_focus')

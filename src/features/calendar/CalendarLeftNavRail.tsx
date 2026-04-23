@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, type Href, useRouter } from 'expo-router';
-import { Fragment, useMemo } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -44,17 +44,23 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
     >
       <View style={{ height: 132, position: 'relative' }}>
         <LinearGradient colors={['#141018', '#0a090f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={['rgba(76,29,149,0.5)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+        <LinearGradient colors={['rgba(76,29,149,0.45)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
         <Image
           source={HABIT_HERO_SOPHIA_IMAGE}
-          style={{ position: 'absolute', right: -6, top: 0, width: 120, height: 132 }}
+          style={StyleSheet.absoluteFillObject}
           contentFit="cover"
-          contentPosition={{ top: '12%', right: '0%' }}
+          contentPosition={{ top: '8%', left: '50%' }}
         />
         <LinearGradient
-          colors={['rgba(8,8,14,0.92)', 'rgba(8,8,14,0.2)', 'transparent']}
+          colors={['transparent', 'rgba(6,4,16,0.55)', 'rgba(6,4,16,0.92)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={['rgba(8,8,14,0.75)', 'transparent']}
           start={{ x: 0, y: 0.5 }}
-          end={{ x: 0.55, y: 0.5 }}
+          end={{ x: 0.45, y: 0.5 }}
           style={StyleSheet.absoluteFillObject}
         />
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, padding: 12, justifyContent: 'flex-end' }}>
@@ -141,6 +147,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
   const { colors, brand, typography } = useAppTheme();
   const router = useRouter();
   const w = collapsed ? RAIL_W_COLLAPSED : RAIL_W_EXPANDED;
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
 
   const shell = useMemo(() => {
     if (!isLight) return calendarSynaptixCardStyle();
@@ -192,7 +199,16 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
           {TAB_BAR_ROUTE_ORDER.map((routeName) => {
             const href = TAB_HREF[routeName] ?? (`/${routeName}` as Href);
             const focused = routeName === 'calendar';
-            const tint = focused ? (isLight ? colors.accent : '#A855F7') : colors.textMuted;
+            const hovered = hoveredRoute === routeName;
+            const tint = isLight
+              ? focused
+                ? colors.accent
+                : colors.textMuted
+              : focused
+                ? '#FFFFFF'
+                : hovered
+                  ? 'rgba(255,255,255,0.85)'
+                  : 'rgba(255,255,255,0.4)';
             const iconName = (TAB_ICONS[routeName] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
             const label = TAB_LABELS[routeName] ?? routeName;
 
@@ -206,6 +222,8 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                         router.push(href);
                       }
                 }
+                onHoverIn={() => Platform.OS === 'web' && setHoveredRoute(routeName)}
+                onHoverOut={() => Platform.OS === 'web' && setHoveredRoute((cur) => (cur === routeName ? null : cur))}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -214,12 +232,27 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                   paddingVertical: 10,
                   paddingHorizontal: collapsed ? 4 : 8,
                   borderRadius: 12,
-                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'rgba(123, 92, 255, 0.16)') : 'transparent',
+                  overflow: 'hidden',
+                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'transparent') : 'transparent',
                   borderWidth: focused && !isLight ? 1 : 0,
-                  borderColor: 'rgba(157, 107, 255, 0.45)',
-                  ...(Platform.OS === 'web' && focused && !isLight ? (calendarNeonOutlineWeb() as object) : {}),
+                  borderColor: 'rgba(157, 107, 255, 0.5)',
+                  ...(Platform.OS === 'web' && focused && !isLight
+                    ? ({
+                        ...calendarNeonOutlineWeb(),
+                        boxShadow:
+                          '0 0 32px rgba(157,107,255,0.48), 0 0 56px rgba(123,92,255,0.32), 0 10px 24px rgba(0,0,0,0.45)',
+                      } as object)
+                    : {}),
                 }}
               >
+                {focused && !isLight ? (
+                  <LinearGradient
+                    colors={['#7B5CFF', '#9D6BFF', '#6D28D9']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[StyleSheet.absoluteFillObject, { borderRadius: 12 }]}
+                  />
+                ) : null}
                 <Ionicons name={iconName} size={22} color={tint} />
                 {!collapsed ? (
                   <Text style={[typography.body, { fontSize: 13, fontWeight: '700', color: tint, flex: 1 }]} numberOfLines={1}>

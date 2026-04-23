@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import type { PlannerCalendarEventRow } from '@/features/calendar/calendar.types';
 import { eventGemForId, eventGemWebShadow, eventPastelForId } from '@/features/calendar/calendarEventChips';
 import { shortWeekdayRu } from '@/features/calendar/calendarFormat';
+import { webEventTitleProps } from '@/features/calendar/calendarWebTooltip';
 import { isoToHm } from '@/features/calendar/calendarLocalTime';
 import {
   WEEK_GRID_HOUR_END,
@@ -155,6 +156,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                       <Pressable
                         key={ev.id}
                         onPress={() => onOpenEvent(ev)}
+                        {...(webEventTitleProps(ev.title) as object)}
                         style={{
                           marginBottom: 6,
                           borderRadius: 12,
@@ -178,6 +180,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                     <Pressable
                       key={ev.id}
                       onPress={() => onOpenEvent(ev)}
+                      {...(webEventTitleProps(ev.title) as object)}
                       style={{
                         marginBottom: 6,
                         borderRadius: 12,
@@ -227,6 +230,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                       <Pressable
                         key={ev.id}
                         onPress={() => onOpenEvent(ev)}
+                        {...(webEventTitleProps(ev.title) as object)}
                         style={{
                           position: 'absolute',
                           left: 4,
@@ -282,6 +286,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                     <Pressable
                       key={ev.id}
                       onPress={() => onOpenEvent(ev)}
+                      {...(webEventTitleProps(ev.title) as object)}
                       style={{
                         position: 'absolute',
                         left: 4,
