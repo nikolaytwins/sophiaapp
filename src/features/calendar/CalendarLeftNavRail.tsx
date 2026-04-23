@@ -1,0 +1,243 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Link, type Href, useRouter } from 'expo-router';
+import { Fragment, useMemo } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { calendarSynaptixCardStyle } from '@/features/calendar/calendarPremiumShell';
+import { HABIT_HERO_SOPHIA_IMAGE } from '@/features/habits/HabitHero';
+import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
+import { useAppTheme } from '@/theme';
+
+const RAIL_W_EXPANDED = 218;
+const RAIL_W_COLLAPSED = 60;
+
+type Props = {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  isLight: boolean;
+};
+
+function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: boolean }) {
+  const { colors, typography } = useAppTheme();
+  const router = useRouter();
+  const href = '/day' as Href;
+
+  const expandedCard = (
+    <View
+      style={{
+        marginTop: 4,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: isLight ? colors.border : 'rgba(167,139,250,0.32)',
+        ...(Platform.OS === 'web'
+          ? ({ boxShadow: '0 12px 36px rgba(0,0,0,0.45), 0 0 48px rgba(120,60,200,0.18)' } as object)
+          : { elevation: 10 }),
+      }}
+    >
+      <View style={{ height: 132, position: 'relative' }}>
+        <LinearGradient colors={['#141018', '#0a090f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+        <LinearGradient colors={['rgba(76,29,149,0.5)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+        <Image
+          source={HABIT_HERO_SOPHIA_IMAGE}
+          style={{ position: 'absolute', right: -6, top: 0, width: 120, height: 132 }}
+          contentFit="cover"
+          contentPosition={{ top: '12%', right: '0%' }}
+        />
+        <LinearGradient
+          colors={['rgba(8,8,14,0.92)', 'rgba(8,8,14,0.2)', 'transparent']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 0.55, y: 0.5 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, padding: 12, justifyContent: 'flex-end' }}>
+          <Text style={{ fontSize: 9, fontWeight: '800', letterSpacing: 1.6, color: 'rgba(196,181,253,0.75)' }}>СОФИЯ</Text>
+          <Text style={[typography.title2, { color: '#F4F4F8', fontWeight: '800', fontSize: 17, marginTop: 4, letterSpacing: -0.3 }]}>
+            День вместе
+          </Text>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginTop: 4 }}>Как на главном экране</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  if (collapsed) {
+    const avatar = (
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: isLight ? colors.border : 'rgba(167,139,250,0.45)',
+          ...(Platform.OS === 'web'
+            ? ({ boxShadow: '0 0 24px rgba(139,92,246,0.25)' } as object)
+            : { shadowColor: '#7C3AED', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
+        }}
+      >
+        <Image source={HABIT_HERO_SOPHIA_IMAGE} style={StyleSheet.absoluteFillObject} contentFit="cover" contentPosition="top" />
+      </View>
+    );
+    if (Platform.OS === 'web') {
+      return (
+        <Link href={href} replace asChild>
+          <Pressable accessibilityRole="link" accessibilityLabel="Открыть день с Софией" style={{ alignItems: 'center', paddingVertical: 8 }}>
+            {avatar}
+          </Pressable>
+        </Link>
+      );
+    }
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Открыть день с Софией"
+        onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push(href);
+        }}
+        style={{ alignItems: 'center', paddingVertical: 8 }}
+      >
+        {avatar}
+      </Pressable>
+    );
+  }
+
+  if (Platform.OS === 'web') {
+    return (
+      <Link href={href} replace asChild>
+        <Pressable accessibilityRole="link" accessibilityLabel="Открыть экран дня с Софией">
+          {expandedCard}
+        </Pressable>
+      </Link>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Открыть экран дня с Софией"
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push(href);
+      }}
+    >
+      {expandedCard}
+    </Pressable>
+  );
+}
+
+export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: Props) {
+  const insets = useSafeAreaInsets();
+  const { colors, brand, typography } = useAppTheme();
+  const router = useRouter();
+  const w = collapsed ? RAIL_W_COLLAPSED : RAIL_W_EXPANDED;
+
+  const shell = useMemo(() => {
+    if (!isLight) return calendarSynaptixCardStyle();
+    return {
+      backgroundColor: colors.surface2,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+    };
+  }, [colors.border, colors.surface2, isLight]);
+
+  return (
+    <View
+      style={[
+        {
+          width: w,
+          alignSelf: 'stretch',
+          marginRight: 10,
+          marginTop: insets.top > 0 ? 8 : 4,
+          marginBottom: Math.max(insets.bottom, 8),
+          marginLeft: Math.max(insets.left, 8),
+          paddingTop: 8,
+          paddingBottom: 10,
+          paddingHorizontal: collapsed ? 6 : 8,
+          justifyContent: 'space-between',
+        },
+        shell as object,
+      ]}
+    >
+      <View>
+        <Pressable
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onToggleCollapsed();
+          }}
+          hitSlop={10}
+          style={{
+            alignSelf: collapsed ? 'center' : 'flex-end',
+            paddingVertical: 8,
+            paddingHorizontal: 4,
+            marginBottom: 4,
+          }}
+          accessibilityLabel={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+        >
+          <Ionicons name={collapsed ? 'chevron-forward' : 'chevron-back'} size={22} color={colors.textMuted} />
+        </Pressable>
+
+        <View style={{ gap: 2 }}>
+          {TAB_BAR_ROUTE_ORDER.map((routeName) => {
+            const href = TAB_HREF[routeName] ?? (`/${routeName}` as Href);
+            const focused = routeName === 'calendar';
+            const tint = focused ? (isLight ? colors.accent : '#A855F7') : colors.textMuted;
+            const iconName = (TAB_ICONS[routeName] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
+            const label = TAB_LABELS[routeName] ?? routeName;
+
+            const inner = (
+              <Pressable
+                onPress={
+                  Platform.OS === 'web'
+                    ? undefined
+                    : () => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push(href);
+                      }
+                }
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  gap: collapsed ? 0 : 10,
+                  paddingVertical: 10,
+                  paddingHorizontal: collapsed ? 4 : 8,
+                  borderRadius: 12,
+                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'rgba(168,85,247,0.14)') : 'transparent',
+                  borderWidth: focused && !isLight ? 1 : 0,
+                  borderColor: 'rgba(167,139,250,0.35)',
+                }}
+              >
+                <Ionicons name={iconName} size={22} color={tint} />
+                {!collapsed ? (
+                  <Text style={[typography.body, { fontSize: 13, fontWeight: '700', color: tint, flex: 1 }]} numberOfLines={1}>
+                    {label}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+
+            if (Platform.OS === 'web') {
+              return (
+                <Link key={routeName} href={href} replace asChild>
+                  {inner}
+                </Link>
+              );
+            }
+            return <Fragment key={routeName}>{inner}</Fragment>;
+          })}
+        </View>
+      </View>
+
+      <View style={{ paddingTop: 8 }}>
+        <RailDayHero collapsed={collapsed} isLight={isLight} />
+      </View>
+    </View>
+  );
+}

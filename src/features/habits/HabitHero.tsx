@@ -5,7 +5,10 @@ import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-nat
 
 import { useAppTheme } from '@/theme';
 
-const DEFAULT_HERO_IMAGE = require('../../assets/images/habit-hero-sophia.png');
+/** То же изображение, что на экране «День» (герой / чат с Софией). */
+export const HABIT_HERO_SOPHIA_IMAGE = require('../../assets/images/habit-hero-sophia.png');
+
+const DEFAULT_HERO_IMAGE = HABIT_HERO_SOPHIA_IMAGE;
 
 export type HabitHeroProps = {
   /** Выполнено: обязательные привычки за день + закрытые задачи дня. */

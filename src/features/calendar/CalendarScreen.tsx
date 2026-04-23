@@ -33,32 +33,30 @@ import {
   updatePlannerCalendarEvent,
   updatePlannerWeekNoteItem,
 } from '@/features/calendar/calendarApi';
+import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
+import { CalendarLeftNavRail } from '@/features/calendar/CalendarLeftNavRail';
 import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
-import { calendarChipColorForId } from '@/features/calendar/calendarEventChips';
+import { calendarChipColorForId, eventGemForId } from '@/features/calendar/calendarEventChips';
+import { calendarSynaptixCardStyle, calendarSynaptixGlowWeb } from '@/features/calendar/calendarPremiumShell';
 import { localDateAndHmToIso, isoToHm } from '@/features/calendar/calendarLocalTime';
 import { monthCalendarRows, monthGridRange, shiftCalendarMonth } from '@/features/calendar/calendarMonthLogic';
 import { CalendarWeekHourlyBoard } from '@/features/calendar/CalendarWeekHourlyBoard';
 import { WEEKDAY_SHORT_RU } from '@/features/day/dayHabitUi';
 import { addDays, localDateKey, startOfWeekMondayKey } from '@/features/habits/habitLogic';
-import { listMergedWeekFocus, listPlannerTasksInDateRange } from '@/features/tasks/plannerApi';
-import type { PlannerTaskRow, PlannerWeekFocusListItem } from '@/features/tasks/planner.types';
-import {
-  PLANNER_CALENDAR_EVENTS_QUERY_KEY,
-  PLANNER_TASKS_RANGE_QUERY_KEY,
-  PLANNER_WEEK_FOCUS_QUERY_KEY,
-  PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY,
-} from '@/features/tasks/queryKeys';
-import { invalidatePlannerCalendarQueries } from '@/features/tasks/plannerWeekInvalidation';
+import type { BacklogPriority } from '@/features/tasks/backlog.types';
+import { createPlannerWeekFocus, listMergedWeekFocus } from '@/features/tasks/plannerApi';
+import type { PlannerWeekFocusListItem } from '@/features/tasks/planner.types';
+import { PLANNER_CALENDAR_EVENTS_QUERY_KEY, PLANNER_WEEK_FOCUS_QUERY_KEY, PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY } from '@/features/tasks/queryKeys';
+import { invalidatePlannerCalendarQueries, invalidatePlannerWeekQueries } from '@/features/tasks/plannerWeekInvalidation';
 import { getSupabase } from '@/lib/supabase';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
 const LG_MIN = 1100;
-const CONTENT_MAX = 1480;
+const CONTENT_MAX = 1760;
 const SIDEBAR_W = 328;
 const DESKTOP_PAD = 24;
-const DOT_TASK = '#A855F7';
 const DOT_EVENT = '#38BDF8';
 
 export type CalendarMainView = 'month' | 'week' | 'day';
@@ -75,10 +73,27 @@ function minimalField(colors: { text: string }, isLight: boolean) {
   };
 }
 
-function GradientPrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+function GradientPrimaryButton({
+  label,
+  onPress,
+  disabled,
+  isLight,
+  compact,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  isLight: boolean;
+  /** Без верхнего отступа (кнопка в ряду модалки). */
+  compact?: boolean;
+}) {
   const { brand } = useAppTheme();
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={{ marginTop: 12, opacity: disabled ? 0.55 : 1 }}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={{ marginTop: compact ? 0 : 12, opacity: disabled ? 0.55 : 1, ...(!isLight ? calendarSynaptixGlowWeb('139, 92, 246') : {}) }}
+    >
       <LinearGradient
         colors={[brand.primary, '#4F46E5']}
         start={{ x: 0, y: 0 }}
@@ -95,16 +110,16 @@ function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): Planne
   return events.filter((e) => e.event_date === dateKey);
 }
 
-function tasksOnDay(tasks: PlannerTaskRow[], dateKey: string): PlannerTaskRow[] {
-  return tasks.filter((t) => t.day_date === dateKey);
-}
-
 export function CalendarScreen() {
   const { colors, spacing, typography, brand, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { width: windowWidth } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && windowWidth >= LG_MIN;
+  const [navRailCollapsed, setNavRailCollapsed] = useState(() => !isDesktop);
+  useEffect(() => {
+    setNavRailCollapsed(!isDesktop);
+  }, [isDesktop]);
 
   const fillAccent = brand.primary;
   const onAccent = '#FAFAFC';
@@ -139,6 +154,11 @@ export function CalendarScreen() {
   const [evEditEnd, setEvEditEnd] = useState('10:00');
   const [evEditNote, setEvEditNote] = useState('');
   const [evAllDay, setEvAllDay] = useState(false);
+  const [addEventOpen, setAddEventOpen] = useState(false);
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [addFocusOpen, setAddFocusOpen] = useState(false);
+  const [focusDraftTitle, setFocusDraftTitle] = useState('');
+  const [focusDraftPriority, setFocusDraftPriority] = useState<BacklogPriority>('medium');
   const supabaseOn = useSupabaseConfigured;
 
   const weekMonday = startOfWeekMondayKey(weekAnchorKey);
@@ -157,23 +177,24 @@ export function CalendarScreen() {
     void sb.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null));
   }, []);
 
+  useEffect(() => {
+    if (!addEventOpen) return;
+    setNewWeekEventTitle('');
+    setNewWeekEventDate('');
+    setNewWeekEventStart('09:00');
+    setNewWeekEventEnd('10:00');
+  }, [addEventOpen]);
+
+  useEffect(() => {
+    if (!addNoteOpen) return;
+    setNewNoteDraft('');
+  }, [addNoteOpen]);
+
   const enabled = Boolean(supabaseOn && userId);
 
   const eventsGridQ = useQuery({
     queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY, gridStart, gridEnd],
     queryFn: () => listPlannerCalendarEventsForGrid(gridStart, gridEnd),
-    enabled,
-  });
-
-  const tasksRangeQ = useQuery({
-    queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, gridStart, gridEnd],
-    queryFn: () => listPlannerTasksInDateRange(gridStart, gridEnd),
-    enabled,
-  });
-
-  const weekTasksQ = useQuery({
-    queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, weekMonday, 'week', weekSun],
-    queryFn: () => listPlannerTasksInDateRange(weekMonday, weekSun),
     enabled,
   });
 
@@ -195,14 +216,6 @@ export function CalendarScreen() {
     enabled,
   });
 
-  const tasksByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const t of tasksRangeQ.data ?? []) {
-      map.set(t.day_date, (map.get(t.day_date) ?? 0) + 1);
-    }
-    return map;
-  }, [tasksRangeQ.data]);
-
   const datedEventsByDay = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of eventsGridQ.data ?? []) {
@@ -216,8 +229,6 @@ export function CalendarScreen() {
     onSuccess: () => {
       invalidatePlannerCalendarQueries(qc, weekAnchorKey);
       void qc.invalidateQueries({ queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY, gridStart, gridEnd] });
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, gridStart, gridEnd] });
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, weekMonday, 'week', weekSun] });
     },
   });
 
@@ -226,7 +237,6 @@ export function CalendarScreen() {
     onSuccess: () => {
       invalidatePlannerCalendarQueries(qc, weekAnchorKey);
       void qc.invalidateQueries({ queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY, gridStart, gridEnd] });
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, weekMonday, 'week', weekSun] });
     },
   });
 
@@ -234,6 +244,22 @@ export function CalendarScreen() {
     mutationFn: (body: string) => createPlannerWeekNoteItem(weekAnchorKey, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY, weekMonday] });
+    },
+  });
+
+  const createFocusMut = useMutation({
+    mutationFn: (input: { title: string; priority: BacklogPriority }) =>
+      createPlannerWeekFocus({
+        week_monday: weekMonday,
+        title: input.title.trim(),
+        priority: input.priority,
+      }),
+    onSuccess: () => {
+      invalidatePlannerWeekQueries(qc, weekAnchorKey);
+      setAddFocusOpen(false);
+      setFocusDraftTitle('');
+      setFocusDraftPriority('medium');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
   });
 
@@ -258,7 +284,6 @@ export function CalendarScreen() {
     onSuccess: () => {
       invalidatePlannerCalendarQueries(qc, weekAnchorKey);
       void qc.invalidateQueries({ queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY, gridStart, gridEnd] });
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY, weekMonday, 'week', weekSun] });
       setEditingEvent(null);
     },
   });
@@ -318,6 +343,9 @@ export function CalendarScreen() {
         onSuccess: () => {
           setNewWeekEventTitle('');
           setNewWeekEventDate('');
+          setNewWeekEventStart('09:00');
+          setNewWeekEventEnd('10:00');
+          setAddEventOpen(false);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       }
@@ -330,15 +358,11 @@ export function CalendarScreen() {
     createNoteMut.mutate(t, {
       onSuccess: () => {
         setNewNoteDraft('');
+        setAddNoteOpen(false);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       },
     });
   };
-
-  const dayModalTasks = useMemo(() => {
-    if (!dayModalKey) return [];
-    return (tasksRangeQ.data ?? []).filter((t) => t.day_date === dayModalKey);
-  }, [dayModalKey, tasksRangeQ.data]);
 
   const dayModalEvents = useMemo(() => {
     if (!dayModalKey) return [];
@@ -410,7 +434,7 @@ export function CalendarScreen() {
   };
 
   const viewToggle = (
-    <View style={{ flexDirection: 'row', backgroundColor: isLight ? colors.surface2 : 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 4 }}>
+    <View style={{ flexDirection: 'row', backgroundColor: isLight ? colors.surface2 : 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 4, borderWidth: isLight ? 0 : 1, borderColor: 'rgba(255,255,255,0.06)' }}>
       {(
         [
           { id: 'month' as const, label: 'Месяц' },
@@ -419,6 +443,22 @@ export function CalendarScreen() {
         ] as const
       ).map((opt) => {
         const on = mainView === opt.id;
+        if (on && !isLight) {
+          return (
+            <Pressable
+              key={opt.id}
+              onPress={() => {
+                setMainView(opt.id);
+                if (opt.id === 'day') setDayViewDateKey(weekAnchorKey);
+              }}
+              style={{ borderRadius: 11, overflow: 'hidden', ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb('139, 92, 246') : {}) }}
+            >
+              <LinearGradient colors={[fillAccent, '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent }}>{opt.label}</Text>
+              </LinearGradient>
+            </Pressable>
+          );
+        }
         return (
           <Pressable
             key={opt.id}
@@ -485,7 +525,7 @@ export function CalendarScreen() {
         ))}
       </View>
       {rows.map((weekRow, wi) => (
-        <View key={`mw-${wi}`} style={{ flexDirection: 'row', marginBottom: 2 }}>
+        <View key={`mw-${wi}`} style={{ flexDirection: 'row', marginBottom: 6 }}>
           {weekRow.map((dateKey) => {
             const inMonth = Number(dateKey.slice(5, 7)) === viewYm.m;
             const isToday = dateKey === todayKey;
@@ -496,10 +536,12 @@ export function CalendarScreen() {
                 onPress={() => onMiniDayPress(dateKey)}
                 style={{
                   flex: 1,
-                  marginHorizontal: 1,
-                  paddingVertical: 5,
-                  borderRadius: 8,
+                  marginHorizontal: 2,
+                  minHeight: 36,
+                  paddingVertical: 8,
+                  borderRadius: 10,
                   alignItems: 'center',
+                  justifyContent: 'center',
                   backgroundColor: isToday ? brand.primaryMuted : selWeek ? 'rgba(168,85,247,0.12)' : 'transparent',
                   borderWidth: isToday ? 1 : 0,
                   borderColor: fillAccent,
@@ -507,7 +549,7 @@ export function CalendarScreen() {
               >
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: '800',
                     color: inMonth ? colors.text : colors.textMuted,
                     opacity: inMonth ? 1 : 0.4,
@@ -527,46 +569,19 @@ export function CalendarScreen() {
     <View style={{ marginTop: spacing.lg }}>
       <Text style={sectionLabel(colors)}>События недели</Text>
       <View style={[cardShell(mainShellBorder, isLight)]}>
+        {weekEventsQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
         {(weekEventsQ.data ?? []).length === 0 && !weekEventsQ.isLoading ? (
           <Text style={[typography.caption, { color: colors.textMuted }]}>Нет событий</Text>
         ) : null}
         {(weekEventsQ.data ?? []).map((ev) => (
-          <SidebarEventRow key={ev.id} ev={ev} onEdit={() => openEventEditor(ev)} onDelete={() => confirmDeleteEvent(ev, deleteEventMut.mutate)} />
+          <SidebarEventRow key={ev.id} ev={ev} isLight={isLight} onEdit={() => openEventEditor(ev)} onDelete={() => confirmDeleteEvent(ev, deleteEventMut.mutate)} />
         ))}
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 10 }]}>Новое</Text>
-        <TextInput
-          value={newWeekEventTitle}
-          onChangeText={setNewWeekEventTitle}
-          placeholder="Название"
-          placeholderTextColor={colors.textMuted}
-          style={[typography.body, minimalField(colors, isLight), { marginTop: 8 }]}
+        <GradientPrimaryButton
+          label="Добавить событие"
+          isLight={isLight}
+          onPress={() => setAddEventOpen(true)}
+          disabled={createEventMut.isPending}
         />
-        <TextInput
-          value={newWeekEventDate}
-          onChangeText={setNewWeekEventDate}
-          placeholder="Дата YYYY-MM-DD (пусто = неделя)"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          style={[typography.body, minimalField(colors, isLight), { marginTop: 10 }]}
-        />
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 10 }]}>Время (если есть дата), HH:mm</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-          <TextInput
-            value={newWeekEventStart}
-            onChangeText={setNewWeekEventStart}
-            placeholder="09:00"
-            placeholderTextColor={colors.textMuted}
-            style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
-          />
-          <TextInput
-            value={newWeekEventEnd}
-            onChangeText={setNewWeekEventEnd}
-            placeholder="10:00"
-            placeholderTextColor={colors.textMuted}
-            style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
-          />
-        </View>
-        <GradientPrimaryButton label="Добавить событие" onPress={addWeekEvent} disabled={createEventMut.isPending} />
       </View>
     </View>
   );
@@ -578,15 +593,25 @@ export function CalendarScreen() {
         {weekFocusQ.isLoading ? (
           <ActivityIndicator color={fillAccent} />
         ) : (weekFocusQ.data ?? []).length === 0 ? (
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Задай в «Задачах» фокус недели</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Пока нет фокусов на эту неделю</Text>
         ) : (
           (weekFocusQ.data ?? []).map((item, i) => (
             <FocusLine key={item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`} item={item} isLast={i === (weekFocusQ.data ?? []).length - 1} colors={colors} />
           ))
         )}
+        <Pressable
+          onPress={() => {
+            setFocusDraftTitle('');
+            setFocusDraftPriority('medium');
+            setAddFocusOpen(true);
+          }}
+          style={[outlineCta(isLight, colors), { marginTop: 12 }]}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '800', color: fillAccent, textAlign: 'center' }}>Добавить фокус</Text>
+        </Pressable>
         <Link href={'/tasks' as Href} asChild>
-          <Pressable style={{ marginTop: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', color: fillAccent }}>Задачи →</Text>
+          <Pressable style={{ marginTop: 10 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted }}>Все в «Задачах» →</Text>
           </Pressable>
         </Link>
       </View>
@@ -621,16 +646,8 @@ export function CalendarScreen() {
         </View>
       ))}
       <View style={[cardShell(mainShellBorder, isLight)]}>
-        <TextInput
-          value={newNoteDraft}
-          onChangeText={setNewNoteDraft}
-          placeholder="Текст плашки…"
-          placeholderTextColor={colors.textMuted}
-          multiline
-          style={[typography.body, minimalField(colors, isLight), { minHeight: 88, textAlignVertical: 'top', marginTop: 4 }]}
-        />
-        <Pressable onPress={addNotePlate} disabled={createNoteMut.isPending} style={[primaryBtn(fillAccent), { marginTop: 10 }]}>
-          <Text style={primaryBtnText(onAccent)}>Сохранить плашку</Text>
+        <Pressable onPress={() => setAddNoteOpen(true)} style={[outlineCta(isLight, colors), { marginTop: 0 }]}>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: fillAccent, textAlign: 'center' }}>Добавить заметку</Text>
         </Pressable>
       </View>
     </View>
@@ -657,7 +674,7 @@ export function CalendarScreen() {
           </View>
         ))}
       </View>
-      {eventsGridQ.isLoading || tasksRangeQ.isLoading ? (
+      {eventsGridQ.isLoading ? (
         <ActivityIndicator color={fillAccent} style={{ marginVertical: 40 }} />
       ) : (
         rows.map((weekRow, wi) => (
@@ -666,7 +683,6 @@ export function CalendarScreen() {
               const inMonth = Number(dateKey.slice(5, 7)) === viewYm.m;
               const isToday = dateKey === todayKey;
               const evs = eventsOnDay(eventsGridQ.data ?? [], dateKey).slice(0, 2);
-              const nTask = tasksByDay.get(dateKey) ?? 0;
               const nEv = datedEventsByDay.get(dateKey) ?? 0;
               return (
                 <Pressable
@@ -709,10 +725,11 @@ export function CalendarScreen() {
                       </Text>
                     </Pressable>
                   ))}
-                  <View style={{ flexDirection: 'row', gap: 3, marginTop: 6 }}>
-                    {nTask > 0 ? <View style={[styles.dot, { backgroundColor: DOT_TASK }]} /> : null}
-                    {nEv > 0 ? <View style={[styles.dot, { backgroundColor: DOT_EVENT }]} /> : null}
-                  </View>
+                  {nEv > 0 ? (
+                    <View style={{ flexDirection: 'row', gap: 3, marginTop: 6 }}>
+                      <View style={[styles.dot, { backgroundColor: DOT_EVENT }]} />
+                    </View>
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -726,8 +743,8 @@ export function CalendarScreen() {
     <CalendarWeekHourlyBoard
       dayKeys={dayKeysWeek}
       weekEvents={weekEventsQ.data ?? []}
-      weekTasks={weekTasksQ.data ?? []}
       todayKey={todayKey}
+      fullWidthGrid={isDesktop}
       onOpenDay={(dk) => {
         setDayViewDateKey(dk);
         setDayModalKey(dk);
@@ -787,24 +804,10 @@ export function CalendarScreen() {
           </Pressable>
         ))
       )}
-      <Text style={[typography.caption, { marginTop: spacing.lg, fontWeight: '800' }]}>ЗАДАЧИ</Text>
-      {tasksOnDay(weekTasksQ.data ?? [], dayViewDateKey).length === 0 ? (
-        <Text style={[typography.body, { color: colors.textMuted, marginTop: 6 }]}>Нет задач</Text>
-      ) : (
-        tasksOnDay(weekTasksQ.data ?? [], dayViewDateKey).map((t) => (
-          <Text
-            key={t.id}
-            style={[typography.body, { marginTop: 10, textDecorationLine: t.is_done ? 'line-through' : 'none', opacity: t.is_done ? 0.55 : 1 }]}
-          >
-            • {t.title}
-          </Text>
-        ))
-      )}
-      <Pressable onPress={() => setDayModalKey(dayViewDateKey)} style={[primaryBtn(fillAccent), { marginTop: spacing.lg }]}>
-        <Text style={primaryBtnText(onAccent)}>Подробнее по дню</Text>
-      </Pressable>
     </ScrollView>
   );
+
+  const synaptixShell = isDesktop && !isLight;
 
   const leftColumn = (
     <View
@@ -812,10 +815,11 @@ export function CalendarScreen() {
         width: isDesktop ? SIDEBAR_W : undefined,
         padding: isDesktop ? spacing.lg : 0,
         paddingRight: isDesktop ? spacing.xl : 0,
-        borderRightWidth: isDesktop ? 1 : 0,
+        borderRightWidth: synaptixShell ? 0 : isDesktop ? 1 : 0,
         borderRightColor: mainShellBorder,
-        backgroundColor: isDesktop ? sidebarBg : 'transparent',
+        backgroundColor: synaptixShell ? undefined : isDesktop ? sidebarBg : 'transparent',
         borderRadius: isDesktop ? 20 : 0,
+        ...(synaptixShell ? (calendarSynaptixCardStyle() as object) : {}),
       }}
     >
       {miniMonth}
@@ -831,16 +835,18 @@ export function CalendarScreen() {
       style={{
         flex: 1,
         minWidth: 0,
-        backgroundColor: mainShellBg,
+        backgroundColor: synaptixShell ? undefined : mainShellBg,
         borderRadius: isDesktop ? 22 : 0,
-        borderWidth: isDesktop ? 1 : 0,
+        borderWidth: synaptixShell ? 0 : isDesktop ? 1 : 0,
         borderColor: mainShellBorder,
         padding: isDesktop ? spacing.xl : spacing.lg,
-        ...(Platform.OS === 'web'
-          ? ({
-              boxShadow: isLight ? '0 12px 40px rgba(15,17,24,0.08)' : '0 16px 48px rgba(0,0,0,0.45)',
-            } as object)
-          : {}),
+        ...(synaptixShell
+          ? (calendarSynaptixCardStyle() as object)
+          : Platform.OS === 'web'
+            ? ({
+                boxShadow: isLight ? '0 12px 40px rgba(15,17,24,0.08)' : '0 16px 48px rgba(0,0,0,0.45)',
+              } as object)
+            : {}),
       }}
     >
       {mainHeader}
@@ -851,14 +857,49 @@ export function CalendarScreen() {
     </View>
   );
 
+  const mainScroll = (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: 'transparent' }}
+      contentContainerStyle={{
+        paddingTop: insets.top + spacing.md,
+        paddingHorizontal: isDesktop ? DESKTOP_PAD : spacing.lg,
+        paddingBottom: insets.bottom + 28,
+        maxWidth: CONTENT_MAX,
+        width: '100%',
+        alignSelf: 'center',
+      }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+        <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
+        <HeaderProfileAvatar />
+      </View>
+
+      {isDesktop ? (
+        <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: spacing.lg }}>
+          {leftColumn}
+          {rightColumn}
+        </View>
+      ) : (
+        <View>
+          {rightColumn}
+          <View style={{ marginTop: spacing.xl }}>{leftColumn}</View>
+        </View>
+      )}
+    </ScrollView>
+  );
+
   if (!supabaseOn) {
     return (
       <ScreenCanvas>
-        <View style={{ flex: 1, padding: spacing.xl, justifyContent: 'center' }}>
-          <Text style={[typography.title2, { color: colors.text }]}>Календарь</Text>
-          <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}>
-            Подключи Supabase, чтобы хранить события и заметки в облаке.
-          </Text>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} />
+          <View style={{ flex: 1, minWidth: 0, padding: spacing.xl, justifyContent: 'center' }}>
+            <Text style={[typography.title2, { color: colors.text }]}>Календарь</Text>
+            <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}>
+              Подключи Supabase, чтобы хранить события и заметки в облаке.
+            </Text>
+          </View>
         </View>
       </ScreenCanvas>
     );
@@ -866,35 +907,159 @@ export function CalendarScreen() {
 
   return (
     <ScreenCanvas>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: insets.top + spacing.md,
-          paddingHorizontal: isDesktop ? DESKTOP_PAD : spacing.lg,
-          paddingBottom: insets.bottom + 100,
-          maxWidth: CONTENT_MAX,
-          width: '100%',
-          alignSelf: 'center',
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-          <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
-          <HeaderProfileAvatar />
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} />
+        <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+          {!isLight ? <CalendarAtmosphere /> : null}
+          {mainScroll}
         </View>
+      </View>
 
-        {isDesktop ? (
-          <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: spacing.lg }}>
-            {leftColumn}
-            {rightColumn}
-          </View>
-        ) : (
-          <View>
-            {rightColumn}
-            <View style={{ marginTop: spacing.xl }}>{leftColumn}</View>
-          </View>
-        )}
-      </ScrollView>
+      <Modal visible={addEventOpen} animationType="fade" transparent onRequestClose={() => setAddEventOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAddEventOpen(false)}>
+          <Pressable
+            style={[styles.modalCard, modalCardShell(isLight), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
+            onPress={() => {}}
+          >
+            <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Новое событие</Text>
+            <TextInput
+              value={newWeekEventTitle}
+              onChangeText={setNewWeekEventTitle}
+              placeholder="Название"
+              placeholderTextColor={colors.textMuted}
+              style={[typography.body, minimalField(colors, isLight), { marginTop: 14 }]}
+            />
+            <TextInput
+              value={newWeekEventDate}
+              onChangeText={setNewWeekEventDate}
+              placeholder="Дата YYYY-MM-DD (пусто = без даты)"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              style={[typography.body, minimalField(colors, isLight), { marginTop: 10 }]}
+            />
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 10 }]}>Время (если указана дата), HH:mm</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <TextInput
+                value={newWeekEventStart}
+                onChangeText={setNewWeekEventStart}
+                placeholder="09:00"
+                placeholderTextColor={colors.textMuted}
+                style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
+              />
+              <TextInput
+                value={newWeekEventEnd}
+                onChangeText={setNewWeekEventEnd}
+                placeholder="10:00"
+                placeholderTextColor={colors.textMuted}
+                style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
+              />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
+              <Pressable onPress={() => setAddEventOpen(false)} style={[ghostBtn('transparent', colors, brand), { flex: 1, alignItems: 'center' }]}>
+                <Text style={{ fontWeight: '800', color: colors.text }}>Отмена</Text>
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <GradientPrimaryButton label="Сохранить" isLight={isLight} compact onPress={addWeekEvent} disabled={createEventMut.isPending} />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={addNoteOpen} animationType="fade" transparent onRequestClose={() => setAddNoteOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAddNoteOpen(false)}>
+          <Pressable
+            style={[styles.modalCard, modalCardShell(isLight), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
+            onPress={() => {}}
+          >
+            <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Новая заметка</Text>
+            <TextInput
+              value={newNoteDraft}
+              onChangeText={setNewNoteDraft}
+              placeholder="Текст плашки…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              style={[typography.body, minimalField(colors, isLight), { marginTop: 14, minHeight: 120, textAlignVertical: 'top' }]}
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
+              <Pressable onPress={() => setAddNoteOpen(false)} style={[ghostBtn('transparent', colors, brand), { flex: 1, alignItems: 'center' }]}>
+                <Text style={{ fontWeight: '800', color: colors.text }}>Отмена</Text>
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <GradientPrimaryButton label="Сохранить" isLight={isLight} compact onPress={addNotePlate} disabled={createNoteMut.isPending} />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={addFocusOpen} animationType="fade" transparent onRequestClose={() => setAddFocusOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAddFocusOpen(false)}>
+          <Pressable
+            style={[styles.modalCard, modalCardShell(isLight), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
+            onPress={() => {}}
+          >
+            <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Фокус недели</Text>
+            <TextInput
+              value={focusDraftTitle}
+              onChangeText={setFocusDraftTitle}
+              placeholder="Что важно на этой неделе?"
+              placeholderTextColor={colors.textMuted}
+              style={[typography.body, minimalField(colors, isLight), { marginTop: 14 }]}
+            />
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 12 }]}>Приоритет</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              {(['high', 'medium', 'low'] as const).map((p) => {
+                const on = focusDraftPriority === p;
+                return (
+                  <Pressable
+                    key={p}
+                    onPress={() => setFocusDraftPriority(p)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: on ? fillAccent : colors.border,
+                      backgroundColor: on ? brand.primaryMuted : 'transparent',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: on ? colors.text : colors.textMuted }}>
+                      {p === 'high' ? 'Высокий' : p === 'medium' ? 'Средний' : 'Низкий'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
+              <Pressable onPress={() => setAddFocusOpen(false)} style={[ghostBtn('transparent', colors, brand), { flex: 1, alignItems: 'center' }]}>
+                <Text style={{ fontWeight: '800', color: colors.text }}>Отмена</Text>
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <GradientPrimaryButton
+                  label="Добавить"
+                  isLight={isLight}
+                  compact
+                  onPress={() => {
+                    if (!focusDraftTitle.trim()) {
+                      Alert.alert('Введи текст фокуса');
+                      return;
+                    }
+                    createFocusMut.mutate(
+                      { title: focusDraftTitle, priority: focusDraftPriority },
+                      {
+                        onError: (e) => Alert.alert('Ошибка', (e as Error).message ?? 'Не удалось сохранить'),
+                      }
+                    );
+                  }}
+                  disabled={createFocusMut.isPending}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={dayModalKey != null} animationType="slide" transparent onRequestClose={() => setDayModalKey(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setDayModalKey(null)}>
@@ -909,16 +1074,6 @@ export function CalendarScreen() {
                     <Ionicons name="close" size={28} color={colors.textMuted} />
                   </Pressable>
                 </View>
-                <Text style={[typography.caption, { marginTop: spacing.lg, fontWeight: '800' }]}>ЗАДАЧИ</Text>
-                {dayModalTasks.length === 0 ? (
-                  <Text style={[typography.body, { color: colors.textMuted, marginTop: 6 }]}>Нет задач</Text>
-                ) : (
-                  dayModalTasks.map((t) => (
-                    <Text key={t.id} style={[typography.body, { color: colors.text, marginTop: 8, textDecorationLine: t.is_done ? 'line-through' : 'none' }]}>
-                      • {t.title}
-                    </Text>
-                  ))
-                )}
                 <Text style={[typography.caption, { marginTop: spacing.lg, fontWeight: '800' }]}>СОБЫТИЯ</Text>
                 {dayModalEvents.length === 0 ? (
                   <Text style={[typography.body, { color: colors.textMuted, marginTop: 6 }]}>Нет событий</Text>
@@ -1094,16 +1249,28 @@ function sectionLabel(colors: { textMuted: string }) {
 }
 
 function cardShell(border: string, isLight: boolean) {
+  if (!isLight) {
+    return { ...calendarSynaptixCardStyle(), padding: 16 } as const;
+  }
   return {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: border,
     padding: 16,
-    backgroundColor: isLight ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.035)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
   };
 }
 
 function notePlate(border: string, isLight: boolean) {
+  if (!isLight) {
+    return {
+      ...calendarSynaptixCardStyle(),
+      flexDirection: 'row' as const,
+      alignItems: 'flex-start' as const,
+      gap: 10,
+      padding: 14,
+    } as const;
+  }
   return {
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
@@ -1112,7 +1279,25 @@ function notePlate(border: string, isLight: boolean) {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: border,
-    backgroundColor: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.045)',
+    backgroundColor: '#F8FAFC',
+  };
+}
+
+function modalCardShell(isLight: boolean) {
+  if (!isLight) {
+    return { ...calendarSynaptixCardStyle(), maxWidth: 420, width: '100%' as const } as const;
+  }
+  return { maxWidth: 420, width: '100%' as const };
+}
+
+function outlineCta(isLight: boolean, colors: { border: string }) {
+  return {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: isLight ? colors.border : 'rgba(255,255,255,0.1)',
+    backgroundColor: isLight ? 'transparent' : 'rgba(255,255,255,0.03)',
   };
 }
 
@@ -1142,16 +1327,47 @@ function primaryBtnText(on: string) {
 
 function SidebarEventRow({
   ev,
+  isLight,
   onEdit,
   onDelete,
 }: {
   ev: PlannerCalendarEventRow;
+  isLight: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const { colors, typography } = useAppTheme();
   const chip = ev.event_date ? (ev.starts_at && ev.ends_at ? `${ev.event_date} · ${isoToHm(ev.starts_at)}` : ev.event_date) : 'Без даты';
   const c = calendarChipColorForId(ev.id);
+  if (!isLight) {
+    const g = eventGemForId(ev.id);
+    return (
+      <View
+        style={{
+          marginBottom: 10,
+          borderRadius: 14,
+          overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: g.border,
+          ...(Platform.OS === 'web' ? ({ boxShadow: `0 8px 22px rgba(0,0,0,0.45), 0 0 40px rgba(${g.glowRgb}, 0.15)` } as object) : { elevation: 6 }),
+        }}
+      >
+        <LinearGradient colors={[...g.gradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <Pressable onPress={onEdit} style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[typography.caption, { color: g.sub, fontWeight: '800' }]}>{chip}</Text>
+              <Text style={{ color: g.text, fontWeight: '700', marginTop: 4, fontSize: 14 }} numberOfLines={4}>
+                {ev.title}
+              </Text>
+            </Pressable>
+            <Pressable onPress={onDelete} hitSlop={8}>
+              <Ionicons name="trash-outline" size={18} color={g.sub} />
+            </Pressable>
+          </View>
+        </LinearGradient>
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(128,128,128,0.12)' }}>
       <View style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, backgroundColor: c, marginTop: 2 }} />

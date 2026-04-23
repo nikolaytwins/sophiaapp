@@ -7,47 +7,8 @@ import { Fragment, useMemo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
-
-const TAB_HREF: Record<string, Href> = {
-  day: '/day',
-  calendar: '/calendar' as Href,
-  sprint: '/sprint' as Href,
-  strategy: '/strategy' as Href,
-  goals: '/goals' as Href,
-  tasks: '/tasks' as Href,
-  inbox: '/inbox' as Href,
-  finance: '/finance' as Href,
-  habits: '/habits',
-};
-
-const LABELS: Record<string, string> = {
-  day: 'День',
-  calendar: 'Календарь',
-  sprint: 'Спринт',
-  strategy: 'Стратегия',
-  goals: 'Цели',
-  tasks: 'Задачи',
-  inbox: 'Входящие',
-  finance: 'Финансы',
-  habits: 'Аналитика',
-};
-
-const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  day: 'sunny-outline',
-  calendar: 'calendar-outline',
-  sprint: 'flag-outline',
-  strategy: 'navigate-circle-outline',
-  goals: 'trophy-outline',
-  tasks: 'list-outline',
-  inbox: 'file-tray-stacked-outline',
-  finance: 'wallet-outline',
-  /** Вкладка «Аналитика»: графики и календари. */
-  habits: 'stats-chart-outline',
-};
-
-/** Порядок и состав нижнего меню (`inbox` скрыт — только `router.push`). `sprint` временно скрыт. */
-const TAB_BAR_ROUTE_ORDER = ['day', 'calendar', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -111,6 +72,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     [colors, isLight, shadows, typography]
   );
 
+  const currentName = state.routes[state.index]?.name;
+  if (currentName === 'calendar') {
+    return null;
+  }
+
   const visibleRoutes = TAB_BAR_ROUTE_ORDER.map((name) => state.routes.find((r) => r.name === name)).filter(
     (r): r is (typeof state.routes)[number] => r != null
   );
@@ -121,7 +87,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         const indexInState = state.routes.findIndex((r) => r.key === route.key);
         const focused = state.index === indexInState;
         const { options } = descriptors[route.key];
-        const label = (options.title as string) ?? LABELS[route.name] ?? route.name;
+        const label = (options.title as string) ?? TAB_LABELS[route.name] ?? route.name;
 
         const href = TAB_HREF[route.name] ?? (`/${route.name}` as Href);
 
@@ -143,7 +109,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         };
 
         const tint = focused ? (isLight ? colors.accent : '#A855F7') : colors.textMuted;
-        const iconName = ICONS[route.name] ?? 'ellipse-outline';
+        const iconName = (TAB_ICONS[route.name] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
 
         const normalBtn = (
           <Pressable
