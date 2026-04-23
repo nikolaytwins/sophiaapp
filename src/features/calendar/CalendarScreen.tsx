@@ -40,7 +40,6 @@ import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calen
 import { calendarChipColorForId } from '@/features/calendar/calendarEventChips';
 import {
   CAL_PRIMARY_GRADIENT,
-  calendarNeonOutlineWeb,
   calendarSynaptixCardStyle,
   calendarSynaptixGlowWeb,
   calendarSynaptixGlowWebHover,
@@ -194,8 +193,8 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
   const labelAccent = isV2 ? '#C49BFF' : '#C4B5FD';
   const ctaGradient = isV2 ? (['#A06AF0', '#5A27B0'] as const) : CAL_PRIMARY_GRADIENT;
   const onAccent = '#FAFAFC';
-  const sidebarBg = isLight ? colors.surface2 : isV2 ? '#1A1535' : 'rgba(6,6,10,0.96)';
-  const mainShellBg = isLight ? '#FFFFFF' : isV2 ? '#1A1535' : 'rgba(20,20,26,0.94)';
+  const sidebarBg = isLight ? colors.surface2 : isV2 ? '#1A1535' : 'rgba(4,4,10,0.98)';
+  const mainShellBg = isLight ? '#FFFFFF' : isV2 ? '#1A1535' : '#0C0A12';
   const mainShellBorder = isLight ? colors.border : isV2 ? 'transparent' : brand.surfaceBorderStrong;
 
   const todayKey = useMemo(() => localDateKey(), []);
@@ -575,23 +574,17 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
     <View
       style={{
         flexDirection: 'row',
-        backgroundColor: isLight ? colors.surface2 : isV2 ? '#1A1535' : 'rgba(8, 4, 24, 0.55)',
+        backgroundColor: isLight ? colors.surface2 : isV2 ? '#1A1535' : '#14111F',
         borderRadius: 16,
         padding: 4,
-        borderWidth: isLight || isV2 ? 0 : 1,
-        borderColor: isLight || isV2 ? 'transparent' : 'rgba(157, 107, 255, 0.35)',
-        ...(Platform.OS === 'web' && !isLight
+        borderWidth: 0,
+        borderColor: 'transparent',
+        ...(Platform.OS === 'web' && !isLight && !isV2
           ? ({
-              ...(isV2
-                ? {}
-                : {
-                    backdropFilter: 'blur(18px)',
-                    WebkitBackdropFilter: 'blur(18px)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5)',
-                  }),
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
             } as object)
           : {}),
-        ...(!isLight && !isV2 ? (calendarNeonOutlineWeb() as object) : {}),
       }}
     >
       {(
@@ -1060,8 +1053,6 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
     </ScrollView>
   );
 
-  const synaptixShell = isDesktop && !isLight && !isV2;
-
   const leftColumn = (
     <View
       style={{
@@ -1070,9 +1061,9 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
         paddingRight: isDesktop ? spacing.xl : 0,
         borderRightWidth: 0,
         borderRightColor: mainShellBorder,
-        backgroundColor: synaptixShell ? undefined : isDesktop ? sidebarBg : 'transparent',
+        backgroundColor: isDesktop ? sidebarBg : 'transparent',
         borderRadius: isDesktop ? 20 : 0,
-        ...(synaptixShell ? (leftInfoPanelShell(false) as object) : isV2 ? (leftInfoPanelShell(true) as object) : {}),
+        ...(isV2 ? (leftInfoPanelShell(true) as object) : {}),
       }}
     >
       {miniMonth}
@@ -1089,18 +1080,16 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
       style={{
         flex: 1,
         minWidth: 0,
-        backgroundColor: synaptixShell ? undefined : mainShellBg,
+        backgroundColor: mainShellBg,
         borderRadius: isDesktop ? 22 : 0,
-        borderWidth: synaptixShell ? 0 : isDesktop ? 1 : 0,
+        borderWidth: isDesktop && isLight ? 1 : 0,
         borderColor: mainShellBorder,
         padding: isDesktop ? spacing.xl : spacing.lg,
-        ...(synaptixShell
-          ? (calendarSynaptixCardStyle() as object)
-          : Platform.OS === 'web'
-            ? ({
-                boxShadow: isLight ? '0 12px 40px rgba(15,17,24,0.08)' : '0 16px 48px rgba(0,0,0,0.45)',
-              } as object)
-            : {}),
+        ...(Platform.OS === 'web'
+          ? ({
+              boxShadow: isLight ? '0 12px 40px rgba(15,17,24,0.08)' : '0 16px 48px rgba(0,0,0,0.45)',
+            } as object)
+          : {}),
       }}
     >
       {mainHeader}

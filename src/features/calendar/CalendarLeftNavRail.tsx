@@ -160,7 +160,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
   const shell = useMemo(() => {
     if (!isLight) {
       return {
-        backgroundColor: isV2 ? '#1A1535' : '#120F2B',
+        backgroundColor: isV2 ? '#1A1535' : '#050308',
         borderRadius: 0,
         borderWidth: 0,
       };

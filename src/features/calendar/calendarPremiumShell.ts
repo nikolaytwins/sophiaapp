@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 /** База фона (почти чёрный + холод). */
-export const CAL_PAGE_BASE = '#030208';
+export const CAL_PAGE_BASE = '#010104';
 
 /** Основной неон (бренд AI). */
 export const CAL_NEON_VIOLET = '#7B5CFF';
