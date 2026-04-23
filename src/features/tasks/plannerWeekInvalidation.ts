@@ -6,6 +6,7 @@ import {
   PLANNER_TASKS_QUERY_KEY,
   PLANNER_TASKS_RANGE_QUERY_KEY,
   PLANNER_WEEK_FOCUS_QUERY_KEY,
+  PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY,
   PLANNER_WEEK_NOTES_QUERY_KEY,
 } from '@/features/tasks/queryKeys';
 
@@ -19,6 +20,8 @@ export function invalidatePlannerWeekQueries(qc: QueryClient, anchorDateKey: str
   void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_RANGE_QUERY_KEY] });
   void qc.invalidateQueries({ queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY] });
   void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTES_QUERY_KEY, mon] });
+  void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY, mon] });
+  void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY] });
 }
 
 /** Только события календаря и заметки недели (без задач). */
@@ -26,4 +29,6 @@ export function invalidatePlannerCalendarQueries(qc: QueryClient, anchorDateKey:
   const mon = startOfWeekMondayKey(anchorDateKey);
   void qc.invalidateQueries({ queryKey: [...PLANNER_CALENDAR_EVENTS_QUERY_KEY] });
   void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTES_QUERY_KEY, mon] });
+  void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY, mon] });
+  void qc.invalidateQueries({ queryKey: [...PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY] });
 }
