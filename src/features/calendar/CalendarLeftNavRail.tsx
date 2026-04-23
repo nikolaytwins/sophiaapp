@@ -7,7 +7,7 @@ import { Fragment, useMemo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { calendarSynaptixCardStyle } from '@/features/calendar/calendarPremiumShell';
+import { calendarNeonOutlineWeb, calendarSynaptixCardStyle } from '@/features/calendar/calendarPremiumShell';
 import { HABIT_HERO_SOPHIA_IMAGE } from '@/features/habits/HabitHero';
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
@@ -35,7 +35,10 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
         borderWidth: 1,
         borderColor: isLight ? colors.border : 'rgba(167,139,250,0.32)',
         ...(Platform.OS === 'web'
-          ? ({ boxShadow: '0 12px 36px rgba(0,0,0,0.45), 0 0 48px rgba(120,60,200,0.18)' } as object)
+          ? ({
+              boxShadow:
+                '0 16px 48px rgba(0,0,0,0.62), 0 0 64px rgba(123,92,255,0.28), 0 0 100px rgba(244,114,182,0.1), inset 0 1px 0 rgba(255,255,255,0.06)',
+            } as object)
           : { elevation: 10 }),
       }}
     >
@@ -76,7 +79,9 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
           borderWidth: 1,
           borderColor: isLight ? colors.border : 'rgba(167,139,250,0.45)',
           ...(Platform.OS === 'web'
-            ? ({ boxShadow: '0 0 24px rgba(139,92,246,0.25)' } as object)
+            ? ({
+              boxShadow: '0 0 32px rgba(123,92,255,0.45), 0 0 56px rgba(244,114,182,0.12), 0 10px 28px rgba(0,0,0,0.55)',
+            } as object)
             : { shadowColor: '#7C3AED', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
         }}
       >
@@ -209,9 +214,10 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                   paddingVertical: 10,
                   paddingHorizontal: collapsed ? 4 : 8,
                   borderRadius: 12,
-                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'rgba(168,85,247,0.14)') : 'transparent',
+                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'rgba(123, 92, 255, 0.16)') : 'transparent',
                   borderWidth: focused && !isLight ? 1 : 0,
-                  borderColor: 'rgba(167,139,250,0.35)',
+                  borderColor: 'rgba(157, 107, 255, 0.45)',
+                  ...(Platform.OS === 'web' && focused && !isLight ? (calendarNeonOutlineWeb() as object) : {}),
                 }}
               >
                 <Ionicons name={iconName} size={22} color={tint} />

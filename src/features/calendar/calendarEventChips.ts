@@ -38,32 +38,32 @@ export type EventGemStyle = {
 
 const EVENT_GEMS: readonly EventGemStyle[] = [
   {
-    gradient: ['#121a24', '#243447'] as const,
-    text: 'rgba(226,232,240,0.96)',
-    sub: 'rgba(148,163,184,0.88)',
-    border: 'rgba(255,255,255,0.07)',
-    glowRgb: '56, 165, 201',
+    gradient: ['#0c1422', '#1e3a5c'] as const,
+    text: 'rgba(240,249,255,0.97)',
+    sub: 'rgba(125,211,252,0.9)',
+    border: 'rgba(56,189,248,0.35)',
+    glowRgb: '56, 189, 248',
   },
   {
-    gradient: ['#24180c', '#3d2814'] as const,
-    text: 'rgba(254,243,199,0.95)',
-    sub: 'rgba(252,211,77,0.78)',
-    border: 'rgba(255,255,255,0.06)',
-    glowRgb: '217, 119, 6',
+    gradient: ['#1a0a14', '#3d1530'] as const,
+    text: 'rgba(254,240,255,0.96)',
+    sub: 'rgba(244,114,182,0.88)',
+    border: 'rgba(244,114,182,0.38)',
+    glowRgb: '244, 114, 182',
   },
   {
-    gradient: ['#0c1a12', '#153428'] as const,
-    text: 'rgba(209,250,229,0.95)',
-    sub: 'rgba(52,211,153,0.78)',
-    border: 'rgba(255,255,255,0.06)',
-    glowRgb: '16, 185, 129',
+    gradient: ['#0a1810', '#134e32'] as const,
+    text: 'rgba(209,250,229,0.96)',
+    sub: 'rgba(52,211,153,0.85)',
+    border: 'rgba(52,211,153,0.32)',
+    glowRgb: '52, 211, 153',
   },
   {
-    gradient: ['#160d22', '#2a1a3d'] as const,
-    text: 'rgba(237,233,254,0.96)',
-    sub: 'rgba(196,181,253,0.82)',
-    border: 'rgba(255,255,255,0.07)',
-    glowRgb: '139, 92, 246',
+    gradient: ['#100818', '#2d1f4a'] as const,
+    text: 'rgba(237,233,254,0.97)',
+    sub: 'rgba(196,181,253,0.88)',
+    border: 'rgba(157,107,255,0.45)',
+    glowRgb: '157, 107, 255',
   },
 ] as const;
 
@@ -73,7 +73,7 @@ export function eventGemForId(id: string): EventGemStyle {
   return EVENT_GEMS[h % EVENT_GEMS.length]!;
 }
 
-/** Внешняя тень + мягкое цветное свечение (web). */
+/** Внешняя тень + неоновое свечение (web), усиленное ~2×. */
 export function eventGemWebShadow(gem: EventGemStyle): string {
-  return `0 10px 28px rgba(0,0,0,0.55), 0 0 56px rgba(${gem.glowRgb}, 0.2)`;
+  return `0 18px 48px rgba(0,0,0,0.78), 0 0 72px rgba(${gem.glowRgb}, 0.42), 0 0 120px rgba(${gem.glowRgb}, 0.18), 0 0 100px rgba(244,114,182,0.1)`;
 }

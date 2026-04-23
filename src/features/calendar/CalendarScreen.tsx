@@ -36,8 +36,14 @@ import {
 import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
 import { CalendarLeftNavRail } from '@/features/calendar/CalendarLeftNavRail';
 import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
-import { calendarChipColorForId, eventGemForId } from '@/features/calendar/calendarEventChips';
-import { calendarSynaptixCardStyle, calendarSynaptixGlowWeb } from '@/features/calendar/calendarPremiumShell';
+import { calendarChipColorForId, eventGemForId, eventGemWebShadow } from '@/features/calendar/calendarEventChips';
+import {
+  CAL_PRIMARY_GRADIENT,
+  calendarNeonOutlineWeb,
+  calendarSynaptixCardStyle,
+  calendarSynaptixGlowWeb,
+  calendarSynaptixGlowWebHover,
+} from '@/features/calendar/calendarPremiumShell';
 import { localDateAndHmToIso, isoToHm } from '@/features/calendar/calendarLocalTime';
 import { monthCalendarRows, monthGridRange, shiftCalendarMonth } from '@/features/calendar/calendarMonthLogic';
 import { CalendarWeekHourlyBoard } from '@/features/calendar/CalendarWeekHourlyBoard';
@@ -62,14 +68,34 @@ const DOT_EVENT = '#38BDF8';
 export type CalendarMainView = 'month' | 'week' | 'day';
 
 function minimalField(colors: { text: string }, isLight: boolean) {
-  return {
+  const base = {
     borderWidth: 1,
-    borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.14)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
     color: colors.text,
-    backgroundColor: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.04)',
+  };
+  if (isLight) {
+    return {
+      ...base,
+      borderColor: 'rgba(15,17,24,0.12)',
+      backgroundColor: 'rgba(255,255,255,0.85)',
+    };
+  }
+  if (Platform.OS === 'web') {
+    return {
+      ...base,
+      borderColor: 'rgba(157, 107, 255, 0.38)',
+      backgroundColor: 'rgba(12, 4, 32, 0.55)',
+      backdropFilter: 'blur(16px) saturate(1.4)',
+      WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 28px rgba(0,0,0,0.45)',
+    } as const;
+  }
+  return {
+    ...base,
+    borderColor: 'rgba(157, 107, 255, 0.35)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   };
 }
 
@@ -88,19 +114,34 @@ function GradientPrimaryButton({
   compact?: boolean;
 }) {
   const { brand } = useAppTheme();
+  const [webHover, setWebHover] = useState(false);
+  const webFuturist = Platform.OS === 'web' && !isLight;
+  const gradColors = (isLight ? [brand.primary, '#4F46E5'] : [...CAL_PRIMARY_GRADIENT]) as readonly [string, string, ...string[]];
+  const glow =
+    isLight || !webFuturist
+      ? {}
+      : webHover
+        ? calendarSynaptixGlowWebHover('157, 107, 255')
+        : calendarSynaptixGlowWeb('157, 107, 255');
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={{ marginTop: compact ? 0 : 12, opacity: disabled ? 0.55 : 1, ...(!isLight ? calendarSynaptixGlowWeb('139, 92, 246') : {}) }}
+      onHoverIn={() => webFuturist && setWebHover(true)}
+      onHoverOut={() => webFuturist && setWebHover(false)}
+      style={{
+        marginTop: compact ? 0 : 12,
+        opacity: disabled ? 0.55 : 1,
+        borderRadius: 16,
+        overflow: 'hidden',
+        ...(glow as object),
+        ...(!isLight && Platform.OS !== 'web'
+          ? { shadowColor: '#9D6BFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 12 }
+          : {}),
+      }}
     >
-      <LinearGradient
-        colors={[brand.primary, '#4F46E5']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 14, paddingVertical: 14, alignItems: 'center', width: '100%' }}
-      >
-        <Text style={{ color: '#F8FAFC', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 }}>{label}</Text>
+      <LinearGradient colors={gradColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingVertical: 14, alignItems: 'center', width: '100%' }}>
+        <Text style={{ color: '#FAFAFF', fontWeight: '800', fontSize: 15, letterSpacing: 0.35 }}>{label}</Text>
       </LinearGradient>
     </Pressable>
   );
@@ -434,7 +475,24 @@ export function CalendarScreen() {
   };
 
   const viewToggle = (
-    <View style={{ flexDirection: 'row', backgroundColor: isLight ? colors.surface2 : 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 4, borderWidth: isLight ? 0 : 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        backgroundColor: isLight ? colors.surface2 : 'rgba(8, 4, 24, 0.55)',
+        borderRadius: 16,
+        padding: 4,
+        borderWidth: isLight ? 0 : 1,
+        borderColor: isLight ? 'transparent' : 'rgba(157, 107, 255, 0.35)',
+        ...(Platform.OS === 'web' && !isLight
+          ? ({
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5)',
+            } as object)
+          : {}),
+        ...(!isLight ? (calendarNeonOutlineWeb() as object) : {}),
+      }}
+    >
       {(
         [
           { id: 'month' as const, label: 'Месяц' },
@@ -451,10 +509,10 @@ export function CalendarScreen() {
                 setMainView(opt.id);
                 if (opt.id === 'day') setDayViewDateKey(weekAnchorKey);
               }}
-              style={{ borderRadius: 11, overflow: 'hidden', ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb('139, 92, 246') : {}) }}
+              style={{ borderRadius: 12, overflow: 'hidden', ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb('157, 107, 255') : {}) }}
             >
-              <LinearGradient colors={[fillAccent, '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent }}>{opt.label}</Text>
+              <LinearGradient colors={[...CAL_PRIMARY_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 9 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent, letterSpacing: 0.4 }}>{opt.label}</Text>
               </LinearGradient>
             </Pressable>
           );
@@ -468,8 +526,8 @@ export function CalendarScreen() {
             }}
             style={{
               paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 11,
+              paddingVertical: 9,
+              borderRadius: 12,
               backgroundColor: on ? fillAccent : 'transparent',
             }}
           >
@@ -482,24 +540,27 @@ export function CalendarScreen() {
 
   const weekNavBar = (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: spacing.sm }}>
-      <Pressable onPress={() => shiftWeek(-1)} style={ghostBtn(sidebarBg, colors, brand)}>
-        <Ionicons name="chevron-back" size={20} color={colors.text} />
+      <Pressable onPress={() => shiftWeek(-1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand)}>
+        <Ionicons name="chevron-back" size={20} color={isLight ? colors.text : '#E8E4FF'} />
       </Pressable>
       <Text
         style={{
-          color: colors.text,
+          color: isLight ? colors.text : '#F5F3FF',
           flex: 1,
           textAlign: 'center',
           fontWeight: '800',
-          fontSize: isDesktop ? 16 : 14,
-          letterSpacing: isDesktop ? -0.2 : 0,
+          fontSize: isDesktop ? 17 : 15,
+          letterSpacing: isDesktop ? -0.35 : -0.1,
+          ...(Platform.OS === 'web' && !isLight
+            ? ({ textShadow: '0 0 28px rgba(157,107,255,0.45), 0 0 2px rgba(0,0,0,0.8)' } as object)
+            : {}),
         }}
         numberOfLines={1}
       >
         {weekRangeLabelRu(weekAnchorKey)}
       </Text>
-      <Pressable onPress={() => shiftWeek(1)} style={ghostBtn(sidebarBg, colors, brand)}>
-        <Ionicons name="chevron-forward" size={20} color={colors.text} />
+      <Pressable onPress={() => shiftWeek(1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand)}>
+        <Ionicons name="chevron-forward" size={20} color={isLight ? colors.text : '#E8E4FF'} />
       </Pressable>
     </View>
   );
@@ -510,10 +571,10 @@ export function CalendarScreen() {
         <Text style={[typography.title2, { color: colors.text, fontWeight: '900', fontSize: 15 }]}>{monthTitleRu(viewYm.y, viewYm.m)}</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           <Pressable onPress={() => setViewYm((p) => shiftCalendarMonth(p.y, p.m, -1))} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={fillAccent} />
+            <Ionicons name="chevron-back" size={20} color={isLight ? fillAccent : '#C4B5FD'} />
           </Pressable>
           <Pressable onPress={() => setViewYm((p) => shiftCalendarMonth(p.y, p.m, 1))} hitSlop={8}>
-            <Ionicons name="chevron-forward" size={20} color={fillAccent} />
+            <Ionicons name="chevron-forward" size={20} color={isLight ? fillAccent : '#C4B5FD'} />
           </Pressable>
         </View>
       </View>
@@ -567,7 +628,7 @@ export function CalendarScreen() {
 
   const sidebarEventsBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors)}>События недели</Text>
+      <Text style={sectionLabel(colors, isLight)}>События недели</Text>
       <View style={[cardShell(mainShellBorder, isLight)]}>
         {weekEventsQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
         {(weekEventsQ.data ?? []).length === 0 && !weekEventsQ.isLoading ? (
@@ -588,7 +649,7 @@ export function CalendarScreen() {
 
   const sidebarFocusBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors)}>Фокусы недели</Text>
+      <Text style={sectionLabel(colors, isLight)}>Фокусы недели</Text>
       <View style={[cardShell(mainShellBorder, isLight)]}>
         {weekFocusQ.isLoading ? (
           <ActivityIndicator color={fillAccent} />
@@ -596,7 +657,13 @@ export function CalendarScreen() {
           <Text style={[typography.caption, { color: colors.textMuted }]}>Пока нет фокусов на эту неделю</Text>
         ) : (
           (weekFocusQ.data ?? []).map((item, i) => (
-            <FocusLine key={item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`} item={item} isLast={i === (weekFocusQ.data ?? []).length - 1} colors={colors} />
+            <FocusLine
+              key={item.kind === 'task' ? `t-${item.task.id}` : `s-${item.row.id}`}
+              item={item}
+              isLast={i === (weekFocusQ.data ?? []).length - 1}
+              colors={colors}
+              isLight={isLight}
+            />
           ))
         )}
         <Pressable
@@ -620,7 +687,7 @@ export function CalendarScreen() {
 
   const sidebarNotesBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors)}>Заметки</Text>
+      <Text style={sectionLabel(colors, isLight)}>Заметки</Text>
       {(weekNoteItemsQ.data ?? []).map((n) => (
         <View key={n.id} style={[notePlate(mainShellBorder, isLight), { marginBottom: 10 }]}>
           <Pressable
@@ -655,11 +722,26 @@ export function CalendarScreen() {
 
   const mainHeader = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: spacing.md }}>
-      <Text style={[typography.sectionTitle, { color: colors.text, fontSize: isDesktop ? 26 : 21, fontWeight: '800', letterSpacing: -0.4 }]}>Расписание</Text>
+      <Text
+        style={[
+          typography.sectionTitle,
+          {
+            color: isLight ? colors.text : '#FAF8FF',
+            fontSize: isDesktop ? 28 : 22,
+            fontWeight: '900',
+            letterSpacing: -0.55,
+            ...(Platform.OS === 'web' && !isLight
+              ? ({ textShadow: '0 0 40px rgba(123,92,255,0.5), 0 2px 12px rgba(0,0,0,0.85)' } as object)
+              : {}),
+          },
+        ]}
+      >
+        Расписание
+      </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {viewToggle}
-        <Pressable onPress={goToday} style={ghostBtn(mainShellBg, colors, brand)}>
-          <Text style={{ fontSize: 13, fontWeight: '800', color: fillAccent }}>Сегодня</Text>
+        <Pressable onPress={goToday} style={ghostBtnCalendar(isLight, mainShellBg, colors, brand)}>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: isLight ? fillAccent : '#C4B5FD' }}>Сегодня</Text>
         </Pressable>
       </View>
     </View>
@@ -670,7 +752,16 @@ export function CalendarScreen() {
       <View style={{ flexDirection: 'row', marginBottom: 8 }}>
         {WEEKDAY_SHORT_RU.map((label) => (
           <View key={label} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted }}>{label}</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '800',
+                color: isLight ? colors.textMuted : 'rgba(196,181,253,0.72)',
+                ...(Platform.OS === 'web' && !isLight ? ({ textShadow: '0 0 14px rgba(157,107,255,0.35)' } as object) : {}),
+              }}
+            >
+              {label}
+            </Text>
           </View>
         ))}
       </View>
@@ -698,12 +789,37 @@ export function CalendarScreen() {
                     minHeight: isDesktop ? 104 : 76,
                     borderRadius: 16,
                     padding: 8,
-                    backgroundColor: isToday ? brand.primaryMuted : isLight ? '#F3F4F8' : 'rgba(255,255,255,0.05)',
+                    backgroundColor: isLight
+                      ? isToday
+                        ? brand.primaryMuted
+                        : '#F3F4F8'
+                      : isToday
+                        ? 'rgba(123, 92, 255, 0.12)'
+                        : 'rgba(12, 6, 32, 0.42)',
                     borderWidth: 1,
-                    borderColor: isToday ? fillAccent : mainShellBorder,
+                    borderColor: isToday ? (isLight ? fillAccent : 'rgba(157, 107, 255, 0.65)') : isLight ? mainShellBorder : 'rgba(157, 107, 255, 0.18)',
+                    ...(Platform.OS === 'web' && !isLight
+                      ? ({
+                          backdropFilter: 'blur(12px) saturate(1.2)',
+                          WebkitBackdropFilter: 'blur(12px) saturate(1.2)',
+                          boxShadow: isToday
+                            ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 1px rgba(157,107,255,0.35), 0 12px 40px rgba(0,0,0,0.55), 0 0 48px rgba(123,92,255,0.35)'
+                            : 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 28px rgba(0,0,0,0.45)',
+                        } as object)
+                      : {}),
                   }}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: inMonth ? colors.text : colors.textMuted, opacity: inMonth ? 1 : 0.45 }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: '900',
+                      color: inMonth ? (isLight ? colors.text : '#F5F3FF') : colors.textMuted,
+                      opacity: inMonth ? 1 : 0.45,
+                      ...(Platform.OS === 'web' && !isLight && inMonth && isToday
+                        ? ({ textShadow: '0 0 24px rgba(157,107,255,0.55)' } as object)
+                        : {}),
+                    }}
+                  >
                     {Number(dateKey.slice(8, 10))}
                   </Text>
                   {evs.map((ev) => (
@@ -720,7 +836,7 @@ export function CalendarScreen() {
                         borderLeftColor: calendarChipColorForId(ev.id),
                       }}
                     >
-                      <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: colors.text }}>
+                      <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: isLight ? colors.text : '#EDE9FE' }}>
                         {ev.title}
                       </Text>
                     </Pressable>
@@ -1237,14 +1353,15 @@ function confirmDeleteEvent(ev: PlannerCalendarEventRow, del: (id: string) => vo
   ]);
 }
 
-function sectionLabel(colors: { textMuted: string }) {
+function sectionLabel(colors: { textMuted: string }, isLight: boolean) {
   return {
     fontSize: 10,
     fontWeight: '900' as const,
-    letterSpacing: 1.3,
-    color: colors.textMuted,
+    letterSpacing: 1.55,
+    color: isLight ? colors.textMuted : 'rgba(210, 200, 255, 0.78)',
     marginBottom: 8,
     textTransform: 'uppercase' as const,
+    ...(Platform.OS === 'web' && !isLight ? ({ textShadow: '0 0 22px rgba(157,107,255,0.45)' } as object) : {}),
   };
 }
 
@@ -1312,6 +1429,38 @@ function ghostBtn(bg: string, colors: { border: string; text: string }, brand: {
   };
 }
 
+/** Ghost-кнопки календаря в тёмном режиме: стекло + неоновая кромка (без смены hit-area). */
+function ghostBtnCalendar(
+  isLight: boolean,
+  bg: string,
+  colors: { border: string; text: string },
+  brand: { surfaceBorderStrong: string },
+) {
+  if (isLight) return ghostBtn(bg, colors, brand);
+  return {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(157, 107, 255, 0.42)',
+    backgroundColor: 'rgba(6, 4, 22, 0.52)',
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(16px) saturate(1.35)',
+          WebkitBackdropFilter: 'blur(16px) saturate(1.35)',
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.08), 0 14px 44px rgba(0,0,0,0.62), 0 0 40px rgba(123,92,255,0.28), 0 0 80px rgba(244,114,182,0.08)',
+        } as object)
+      : {
+          shadowColor: '#7B5CFF',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.32,
+          shadowRadius: 16,
+          elevation: 10,
+        }),
+  };
+}
+
 function primaryBtn(fill: string) {
   return {
     alignItems: 'center' as const,
@@ -1349,7 +1498,7 @@ function SidebarEventRow({
           overflow: 'hidden',
           borderWidth: 1,
           borderColor: g.border,
-          ...(Platform.OS === 'web' ? ({ boxShadow: `0 8px 22px rgba(0,0,0,0.45), 0 0 40px rgba(${g.glowRgb}, 0.15)` } as object) : { elevation: 6 }),
+          ...(Platform.OS === 'web' ? ({ boxShadow: eventGemWebShadow(g) } as object) : { elevation: 6 }),
         }}
       >
         <LinearGradient colors={[...g.gradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 12 }}>
@@ -1388,19 +1537,34 @@ function FocusLine({
   item,
   isLast,
   colors,
+  isLight,
 }: {
   item: PlannerWeekFocusListItem;
   isLast: boolean;
   colors: { text: string; textMuted: string };
+  isLight: boolean;
 }) {
   const done = item.kind === 'task' ? item.task.is_done : item.row.is_done;
   const title = item.kind === 'task' ? item.task.title : item.row.title;
   const isTask = item.kind === 'task';
   const chip = isTask ? `${shortWeekdayRu(item.task.day_date)} ${item.task.day_date.slice(5)}` : 'Неделя';
+  const rule = isLight ? 'rgba(128,128,128,0.12)' : 'rgba(157,107,255,0.14)';
+  const chipColor = isLight ? colors.textMuted : 'rgba(196,181,253,0.72)';
+  const titleColor = isLight ? colors.text : '#F4F2FF';
   return (
-    <View style={{ paddingVertical: 8, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: 'rgba(128,128,128,0.12)' }}>
-      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{chip}</Text>
-      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 2, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 }}>
+    <View style={{ paddingVertical: 8, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: rule }}>
+      <Text style={{ fontSize: 10, fontWeight: '800', color: chipColor }}>{chip}</Text>
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: '700',
+          color: titleColor,
+          marginTop: 2,
+          textDecorationLine: done ? 'line-through' : 'none',
+          opacity: done ? 0.5 : 1,
+          ...(Platform.OS === 'web' && !isLight && !done ? ({ textShadow: '0 0 16px rgba(157,107,255,0.22)' } as object) : {}),
+        }}
+      >
         {title}
       </Text>
     </View>

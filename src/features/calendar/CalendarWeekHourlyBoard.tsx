@@ -65,8 +65,8 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
   const fillAccent = brand.primary;
   const gridH = weekGridTotalHeightPx();
   const hours = Array.from({ length: WEEK_GRID_HOUR_END - WEEK_GRID_HOUR_START + 1 }, (_, i) => WEEK_GRID_HOUR_START + i);
-  const hourLineColor = isLight ? 'rgba(15,17,24,0.07)' : 'rgba(255,255,255,0.08)';
-  const colDivider = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)';
+  const hourLineColor = isLight ? 'rgba(15,17,24,0.07)' : 'rgba(255,255,255,0.055)';
+  const colDivider = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(123, 92, 255, 0.16)';
 
   const gridRow = (
     <View style={{ flexDirection: 'row', width: fullWidthGrid ? ('100%' as const) : undefined, minWidth: fullWidthGrid ? undefined : 780, alignSelf: 'stretch' }}>
@@ -106,17 +106,43 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                 borderLeftColor: colDivider,
                 borderRadius: 14,
                 borderWidth: isToday ? 1 : 0,
-                borderColor: isToday ? fillAccent : 'transparent',
-                backgroundColor: 'transparent',
+                borderColor: isToday ? (isLight ? fillAccent : 'rgba(157, 107, 255, 0.55)') : 'transparent',
+                backgroundColor: isToday && !isLight ? 'rgba(123, 92, 255, 0.06)' : 'transparent',
                 overflow: 'visible',
+                ...(Platform.OS === 'web' && isToday && !isLight
+                  ? ({
+                      boxShadow:
+                        '0 0 0 1px rgba(157, 107, 255, 0.55), 0 0 40px rgba(123, 92, 255, 0.42), 0 24px 56px rgba(0,0,0,0.58), inset 0 0 56px rgba(123,92,255,0.09)',
+                    } as object)
+                  : {}),
               }}
             >
               <Pressable
                 onPress={() => onOpenDay(dk)}
                 style={{ minHeight: COL_HEADER_H, paddingHorizontal: 6, paddingVertical: 12, justifyContent: 'center' }}
               >
-                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, opacity: 0.85 }}>{shortWeekdayRu(dk)}</Text>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, marginTop: 4, letterSpacing: -0.3 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: '700',
+                    color: isLight ? colors.textMuted : 'rgba(196,181,253,0.72)',
+                    opacity: isLight ? 0.85 : 1,
+                  }}
+                >
+                  {shortWeekdayRu(dk)}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 20,
+                    fontWeight: '800',
+                    color: isLight ? colors.text : '#F5F3FF',
+                    marginTop: 4,
+                    letterSpacing: -0.35,
+                    ...(Platform.OS === 'web' && !isLight && isToday
+                      ? ({ textShadow: '0 0 28px rgba(157,107,255,0.45)' } as object)
+                      : {}),
+                  }}
+                >
                   {Number(dk.slice(8, 10))}
                 </Text>
               </Pressable>
