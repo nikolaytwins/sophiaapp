@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -55,12 +56,40 @@ import { useAppTheme } from '@/theme';
 
 const LG_MIN = 1100;
 const CONTENT_MAX = 1480;
-const SIDEBAR_W = 312;
+const SIDEBAR_W = 328;
 const DESKTOP_PAD = 24;
 const DOT_TASK = '#A855F7';
 const DOT_EVENT = '#38BDF8';
 
 export type CalendarMainView = 'month' | 'week' | 'day';
+
+function minimalField(colors: { text: string }, isLight: boolean) {
+  return {
+    borderWidth: 1,
+    borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.14)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: colors.text,
+    backgroundColor: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.04)',
+  };
+}
+
+function GradientPrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const { brand } = useAppTheme();
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={{ marginTop: 12, opacity: disabled ? 0.55 : 1 }}>
+      <LinearGradient
+        colors={[brand.primary, '#4F46E5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 14, paddingVertical: 14, alignItems: 'center', width: '100%' }}
+      >
+        <Text style={{ color: '#F8FAFC', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 }}>{label}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
 function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): PlannerCalendarEventRow[] {
   return events.filter((e) => e.event_date === dateKey);
@@ -416,7 +445,17 @@ export function CalendarScreen() {
       <Pressable onPress={() => shiftWeek(-1)} style={ghostBtn(sidebarBg, colors, brand)}>
         <Ionicons name="chevron-back" size={20} color={colors.text} />
       </Pressable>
-      <Text style={[typography.caption, { color: colors.textMuted, flex: 1, textAlign: 'center', fontWeight: '700' }]} numberOfLines={1}>
+      <Text
+        style={{
+          color: colors.text,
+          flex: 1,
+          textAlign: 'center',
+          fontWeight: '800',
+          fontSize: isDesktop ? 16 : 14,
+          letterSpacing: isDesktop ? -0.2 : 0,
+        }}
+        numberOfLines={1}
+      >
         {weekRangeLabelRu(weekAnchorKey)}
       </Text>
       <Pressable onPress={() => shiftWeek(1)} style={ghostBtn(sidebarBg, colors, brand)}>
@@ -500,7 +539,7 @@ export function CalendarScreen() {
           onChangeText={setNewWeekEventTitle}
           placeholder="Название"
           placeholderTextColor={colors.textMuted}
-          style={[typography.body, { color: colors.text, marginTop: 6, paddingVertical: 6 }]}
+          style={[typography.body, minimalField(colors, isLight), { marginTop: 8 }]}
         />
         <TextInput
           value={newWeekEventDate}
@@ -508,32 +547,26 @@ export function CalendarScreen() {
           placeholder="Дата YYYY-MM-DD (пусто = неделя)"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
-          style={[typography.body, { color: colors.text, paddingVertical: 6 }]}
+          style={[typography.body, minimalField(colors, isLight), { marginTop: 10 }]}
         />
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 8 }]}>Время (если есть дата), HH:mm</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 10 }]}>Время (если есть дата), HH:mm</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
           <TextInput
             value={newWeekEventStart}
             onChangeText={setNewWeekEventStart}
             placeholder="09:00"
             placeholderTextColor={colors.textMuted}
-            style={[typography.body, { color: colors.text, flex: 1, paddingVertical: 6 }]}
+            style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
           />
           <TextInput
             value={newWeekEventEnd}
             onChangeText={setNewWeekEventEnd}
             placeholder="10:00"
             placeholderTextColor={colors.textMuted}
-            style={[typography.body, { color: colors.text, flex: 1, paddingVertical: 6 }]}
+            style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
           />
         </View>
-        <Pressable
-          onPress={addWeekEvent}
-          disabled={createEventMut.isPending}
-          style={[primaryBtn(fillAccent), { marginTop: 10 }]}
-        >
-          <Text style={primaryBtnText(onAccent)}>Добавить событие</Text>
-        </Pressable>
+        <GradientPrimaryButton label="Добавить событие" onPress={addWeekEvent} disabled={createEventMut.isPending} />
       </View>
     </View>
   );
@@ -564,7 +597,7 @@ export function CalendarScreen() {
     <View style={{ marginTop: spacing.lg }}>
       <Text style={sectionLabel(colors)}>Заметки</Text>
       {(weekNoteItemsQ.data ?? []).map((n) => (
-        <View key={n.id} style={[notePlate(mainShellBorder, brand), { marginBottom: 8 }]}>
+        <View key={n.id} style={[notePlate(mainShellBorder, isLight), { marginBottom: 10 }]}>
           <Pressable
             onPress={() => {
               setEditingNote(n);
@@ -594,7 +627,7 @@ export function CalendarScreen() {
           placeholder="Текст плашки…"
           placeholderTextColor={colors.textMuted}
           multiline
-          style={[typography.body, { color: colors.text, minHeight: 72, textAlignVertical: 'top' }]}
+          style={[typography.body, minimalField(colors, isLight), { minHeight: 88, textAlignVertical: 'top', marginTop: 4 }]}
         />
         <Pressable onPress={addNotePlate} disabled={createNoteMut.isPending} style={[primaryBtn(fillAccent), { marginTop: 10 }]}>
           <Text style={primaryBtnText(onAccent)}>Сохранить плашку</Text>
@@ -605,7 +638,7 @@ export function CalendarScreen() {
 
   const mainHeader = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: spacing.md }}>
-      <Text style={[typography.sectionTitle, { color: colors.text, fontSize: isDesktop ? 22 : 20 }]}>Расписание</Text>
+      <Text style={[typography.sectionTitle, { color: colors.text, fontSize: isDesktop ? 26 : 21, fontWeight: '800', letterSpacing: -0.4 }]}>Расписание</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {viewToggle}
         <Pressable onPress={goToday} style={ghostBtn(mainShellBg, colors, brand)}>
@@ -777,8 +810,8 @@ export function CalendarScreen() {
     <View
       style={{
         width: isDesktop ? SIDEBAR_W : undefined,
-        padding: isDesktop ? spacing.md : 0,
-        paddingRight: isDesktop ? spacing.lg : 0,
+        padding: isDesktop ? spacing.lg : 0,
+        paddingRight: isDesktop ? spacing.xl : 0,
         borderRightWidth: isDesktop ? 1 : 0,
         borderRightColor: mainShellBorder,
         backgroundColor: isDesktop ? sidebarBg : 'transparent',
@@ -802,7 +835,7 @@ export function CalendarScreen() {
         borderRadius: isDesktop ? 22 : 0,
         borderWidth: isDesktop ? 1 : 0,
         borderColor: mainShellBorder,
-        padding: spacing.lg,
+        padding: isDesktop ? spacing.xl : spacing.lg,
         ...(Platform.OS === 'web'
           ? ({
               boxShadow: isLight ? '0 12px 40px rgba(15,17,24,0.08)' : '0 16px 48px rgba(0,0,0,0.45)',
@@ -1065,21 +1098,21 @@ function cardShell(border: string, isLight: boolean) {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: border,
-    padding: 12,
-    backgroundColor: isLight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.04)',
+    padding: 16,
+    backgroundColor: isLight ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.035)',
   };
 }
 
-function notePlate(border: string, brand: { primaryMuted: string }) {
+function notePlate(border: string, isLight: boolean) {
   return {
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
-    gap: 8,
-    padding: 12,
+    gap: 10,
+    padding: 14,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: border,
-    backgroundColor: brand.primaryMuted,
+    backgroundColor: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.045)',
   };
 }
 

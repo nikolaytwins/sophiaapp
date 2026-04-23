@@ -3,7 +3,7 @@ import { isoToLocalDateKey } from '@/features/calendar/calendarLocalTime';
 
 export const WEEK_GRID_HOUR_START = 6;
 export const WEEK_GRID_HOUR_END = 22;
-export const WEEK_GRID_SLOT_PX = 44;
+export const WEEK_GRID_SLOT_PX = 52;
 
 export function weekGridTotalHeightPx(): number {
   return (WEEK_GRID_HOUR_END - WEEK_GRID_HOUR_START + 1) * WEEK_GRID_SLOT_PX;
