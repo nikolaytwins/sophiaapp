@@ -7,7 +7,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { calendarNeonOutlineWeb, calendarSynaptixCardStyle } from '@/features/calendar/calendarPremiumShell';
+import { calendarNeonOutlineWeb } from '@/features/calendar/calendarPremiumShell';
 import { HABIT_HERO_SOPHIA_IMAGE } from '@/features/habits/HabitHero';
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
@@ -19,9 +19,10 @@ type Props = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   isLight: boolean;
+  variant?: 'default' | 'v2';
 };
 
-function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: boolean }) {
+function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight: boolean; isV2: boolean }) {
   const { colors, typography } = useAppTheme();
   const router = useRouter();
   const href = '/day' as Href;
@@ -32,19 +33,23 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
         marginTop: 4,
         borderRadius: 16,
         overflow: 'hidden',
-        borderWidth: 1,
+        borderWidth: isV2 ? 0 : 1,
         borderColor: isLight ? colors.border : 'rgba(167,139,250,0.32)',
         ...(Platform.OS === 'web'
           ? ({
-              boxShadow:
-                '0 16px 48px rgba(0,0,0,0.62), 0 0 64px rgba(123,92,255,0.28), 0 0 100px rgba(244,114,182,0.1), inset 0 1px 0 rgba(255,255,255,0.06)',
+              ...(isV2 ? {} : { boxShadow: '0 16px 48px rgba(0,0,0,0.62), 0 0 64px rgba(123,92,255,0.28), 0 0 100px rgba(244,114,182,0.1), inset 0 1px 0 rgba(255,255,255,0.06)' }),
             } as object)
-          : { elevation: 10 }),
+          : { elevation: isV2 ? 0 : 10 }),
       }}
     >
       <View style={{ height: 132, position: 'relative' }}>
-        <LinearGradient colors={['#141018', '#0a090f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={['rgba(76,29,149,0.45)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+        <LinearGradient
+          colors={isV2 ? ['#1A1535', '#171131'] : ['#141018', '#0a090f']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {!isV2 ? <LinearGradient colors={['rgba(76,29,149,0.45)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} /> : null}
         <Image
           source={HABIT_HERO_SOPHIA_IMAGE}
           style={StyleSheet.absoluteFillObject}
@@ -52,19 +57,21 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
           contentPosition={{ top: '8%', left: '50%' }}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(6,4,16,0.55)', 'rgba(6,4,16,0.92)']}
+          colors={isV2 ? ['transparent', 'rgba(11,9,24,0.9)'] : ['transparent', 'rgba(6,4,16,0.55)', 'rgba(6,4,16,0.92)']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        <LinearGradient
-          colors={['rgba(8,8,14,0.75)', 'transparent']}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 0.45, y: 0.5 }}
-          style={StyleSheet.absoluteFillObject}
-        />
+        {!isV2 ? (
+          <LinearGradient
+            colors={['rgba(8,8,14,0.75)', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 0.45, y: 0.5 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : null}
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, padding: 12, justifyContent: 'flex-end' }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', letterSpacing: 1.6, color: 'rgba(196,181,253,0.75)' }}>СОФИЯ</Text>
+          <Text style={{ fontSize: 9, fontWeight: '800', letterSpacing: 1.6, color: isV2 ? '#C49BFF' : 'rgba(196,181,253,0.75)' }}>СОФИЯ</Text>
           <Text style={[typography.title2, { color: '#F4F4F8', fontWeight: '800', fontSize: 17, marginTop: 4, letterSpacing: -0.3 }]}>
             День вместе
           </Text>
@@ -82,13 +89,13 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
           height: 44,
           borderRadius: 22,
           overflow: 'hidden',
-          borderWidth: 1,
+          borderWidth: isV2 ? 0 : 1,
           borderColor: isLight ? colors.border : 'rgba(167,139,250,0.45)',
           ...(Platform.OS === 'web'
             ? ({
-              boxShadow: '0 0 32px rgba(123,92,255,0.45), 0 0 56px rgba(244,114,182,0.12), 0 10px 28px rgba(0,0,0,0.55)',
+              ...(isV2 ? {} : { boxShadow: '0 0 32px rgba(123,92,255,0.45), 0 0 56px rgba(244,114,182,0.12), 0 10px 28px rgba(0,0,0,0.55)' }),
             } as object)
-            : { shadowColor: '#7C3AED', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }),
+            : { shadowColor: '#7C3AED', shadowOpacity: isV2 ? 0 : 0.35, shadowRadius: isV2 ? 0 : 10, shadowOffset: { width: 0, height: 4 }, elevation: isV2 ? 0 : 6 }),
         }}
       >
         <Image source={HABIT_HERO_SOPHIA_IMAGE} style={StyleSheet.absoluteFillObject} contentFit="cover" contentPosition="top" />
@@ -142,22 +149,29 @@ function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: bool
   );
 }
 
-export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: Props) {
+export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, variant = 'default' }: Props) {
   const insets = useSafeAreaInsets();
   const { colors, brand, typography } = useAppTheme();
   const router = useRouter();
+  const isV2 = variant === 'v2' && !isLight;
   const w = collapsed ? RAIL_W_COLLAPSED : RAIL_W_EXPANDED;
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
 
   const shell = useMemo(() => {
-    if (!isLight) return calendarSynaptixCardStyle();
+    if (!isLight) {
+      return {
+        backgroundColor: isV2 ? '#1A1535' : '#120F2B',
+        borderRadius: 0,
+        borderWidth: 0,
+      };
+    }
     return {
       backgroundColor: colors.surface2,
-      borderRadius: 20,
+      borderRadius: 0,
       borderWidth: 1,
       borderColor: colors.border,
     };
-  }, [colors.border, colors.surface2, isLight]);
+  }, [colors.border, colors.surface2, isLight, isV2]);
 
   return (
     <View
@@ -165,14 +179,16 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
         {
           width: w,
           alignSelf: 'stretch',
-          marginRight: 10,
-          marginTop: insets.top > 0 ? 8 : 4,
-          marginBottom: Math.max(insets.bottom, 8),
-          marginLeft: Math.max(insets.left, 8),
-          paddingTop: 8,
-          paddingBottom: 10,
+          marginRight: 0,
+          marginTop: 0,
+          marginBottom: 0,
+          marginLeft: 0,
+          paddingTop: insets.top + 8,
+          paddingBottom: insets.bottom + 10,
           paddingHorizontal: collapsed ? 6 : 8,
           justifyContent: 'space-between',
+          borderRightWidth: 1,
+          borderRightColor: isLight ? colors.border : isV2 ? 'rgba(196,155,255,0.08)' : 'rgba(196,155,255,0.12)',
         },
         shell as object,
       ]}
@@ -205,9 +221,13 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                 ? colors.accent
                 : colors.textMuted
               : focused
-                ? '#FFFFFF'
+                ? isV2
+                  ? '#C49BFF'
+                  : '#FFFFFF'
                 : hovered
-                  ? 'rgba(255,255,255,0.85)'
+                  ? isV2
+                    ? '#E2CCFF'
+                    : 'rgba(255,255,255,0.85)'
                   : 'rgba(255,255,255,0.4)';
             const iconName = (TAB_ICONS[routeName] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
             const label = TAB_LABELS[routeName] ?? routeName;
@@ -233,10 +253,10 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                   paddingHorizontal: collapsed ? 4 : 8,
                   borderRadius: 12,
                   overflow: 'hidden',
-                  backgroundColor: focused ? (isLight ? brand.primaryMuted : 'transparent') : 'transparent',
-                  borderWidth: focused && !isLight ? 1 : 0,
+                  backgroundColor: focused ? (isLight ? brand.primaryMuted : isV2 ? '#241C4A' : 'transparent') : 'transparent',
+                  borderWidth: focused && !isLight && !isV2 ? 1 : 0,
                   borderColor: 'rgba(157, 107, 255, 0.5)',
-                  ...(Platform.OS === 'web' && focused && !isLight
+                  ...(Platform.OS === 'web' && focused && !isLight && !isV2
                     ? ({
                         ...calendarNeonOutlineWeb(),
                         boxShadow:
@@ -245,7 +265,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
                     : {}),
                 }}
               >
-                {focused && !isLight ? (
+                {focused && !isLight && !isV2 ? (
                   <LinearGradient
                     colors={['#7B5CFF', '#9D6BFF', '#6D28D9']}
                     start={{ x: 0, y: 0 }}
@@ -275,7 +295,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight }: P
       </View>
 
       <View style={{ paddingTop: 8 }}>
-        <RailDayHero collapsed={collapsed} isLight={isLight} />
+        <RailDayHero collapsed={collapsed} isLight={isLight} isV2={isV2} />
       </View>
     </View>
   );

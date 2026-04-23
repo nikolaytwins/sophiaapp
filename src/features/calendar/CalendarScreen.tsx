@@ -37,7 +37,7 @@ import {
 import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
 import { CalendarLeftNavRail } from '@/features/calendar/CalendarLeftNavRail';
 import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
-import { calendarChipColorForId, eventGemForId } from '@/features/calendar/calendarEventChips';
+import { calendarChipColorForId } from '@/features/calendar/calendarEventChips';
 import {
   CAL_PRIMARY_GRADIENT,
   calendarNeonOutlineWeb,
@@ -83,6 +83,7 @@ const DESKTOP_PAD = 24;
 const DOT_EVENT = '#38BDF8';
 
 export type CalendarMainView = 'month' | 'week' | 'day';
+export type CalendarVisualVariant = 'default' | 'v2';
 
 function minimalField(colors: { text: string }, isLight: boolean) {
   const base = {
@@ -121,25 +122,32 @@ function GradientPrimaryButton({
   onPress,
   disabled,
   isLight,
+  gradientColors,
+  accentRgb,
+  enableGlow,
   compact,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   isLight: boolean;
+  gradientColors?: readonly [string, string, ...string[]];
+  accentRgb?: string;
+  enableGlow?: boolean;
   /** Без верхнего отступа (кнопка в ряду модалки). */
   compact?: boolean;
 }) {
   const { brand } = useAppTheme();
   const [webHover, setWebHover] = useState(false);
-  const webFuturist = Platform.OS === 'web' && !isLight;
-  const gradColors = (isLight ? [brand.primary, '#4F46E5'] : [...CAL_PRIMARY_GRADIENT]) as readonly [string, string, ...string[]];
+  const webFuturist = Platform.OS === 'web' && !isLight && Boolean(enableGlow);
+  const gradColors = (gradientColors ?? (isLight ? [brand.primary, '#4F46E5'] : [...CAL_PRIMARY_GRADIENT])) as readonly [string, string, ...string[]];
+  const glowAccent = accentRgb ?? '157, 107, 255';
   const glow =
     isLight || !webFuturist
       ? {}
       : webHover
-        ? calendarSynaptixGlowWebHover('157, 107, 255')
-        : calendarSynaptixGlowWeb('157, 107, 255');
+        ? calendarSynaptixGlowWebHover(glowAccent)
+        : calendarSynaptixGlowWeb(glowAccent);
   return (
     <Pressable
       onPress={onPress}
@@ -168,7 +176,7 @@ function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): Planne
   return events.filter((e) => e.event_date === dateKey);
 }
 
-export function CalendarScreen() {
+export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisualVariant } = {}) {
   const { colors, spacing, typography, brand, isLight } = useAppTheme();
   const { isAuthed, displayName } = useSupabaseAuthSession();
   const insets = useSafeAreaInsets();
@@ -181,11 +189,14 @@ export function CalendarScreen() {
     setNavRailCollapsed(!isDesktop);
   }, [isDesktop]);
 
-  const fillAccent = brand.primary;
+  const isV2 = variant === 'v2' && !isLight;
+  const fillAccent = isV2 ? '#8040E8' : brand.primary;
+  const labelAccent = isV2 ? '#C49BFF' : '#C4B5FD';
+  const ctaGradient = isV2 ? (['#A06AF0', '#5A27B0'] as const) : CAL_PRIMARY_GRADIENT;
   const onAccent = '#FAFAFC';
-  const sidebarBg = isLight ? colors.surface2 : 'rgba(6,6,10,0.96)';
-  const mainShellBg = isLight ? '#FFFFFF' : 'rgba(20,20,26,0.94)';
-  const mainShellBorder = isLight ? colors.border : brand.surfaceBorderStrong;
+  const sidebarBg = isLight ? colors.surface2 : isV2 ? '#1A1535' : 'rgba(6,6,10,0.96)';
+  const mainShellBg = isLight ? '#FFFFFF' : isV2 ? '#1A1535' : 'rgba(20,20,26,0.94)';
+  const mainShellBorder = isLight ? colors.border : isV2 ? 'transparent' : brand.surfaceBorderStrong;
 
   const todayKey = useMemo(() => localDateKey(), []);
   const [viewYm, setViewYm] = useState(() => {
@@ -564,19 +575,23 @@ export function CalendarScreen() {
     <View
       style={{
         flexDirection: 'row',
-        backgroundColor: isLight ? colors.surface2 : 'rgba(8, 4, 24, 0.55)',
+        backgroundColor: isLight ? colors.surface2 : isV2 ? '#1A1535' : 'rgba(8, 4, 24, 0.55)',
         borderRadius: 16,
         padding: 4,
-        borderWidth: isLight ? 0 : 1,
-        borderColor: isLight ? 'transparent' : 'rgba(157, 107, 255, 0.35)',
+        borderWidth: isLight || isV2 ? 0 : 1,
+        borderColor: isLight || isV2 ? 'transparent' : 'rgba(157, 107, 255, 0.35)',
         ...(Platform.OS === 'web' && !isLight
           ? ({
-              backdropFilter: 'blur(18px)',
-              WebkitBackdropFilter: 'blur(18px)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5)',
+              ...(isV2
+                ? {}
+                : {
+                    backdropFilter: 'blur(18px)',
+                    WebkitBackdropFilter: 'blur(18px)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5)',
+                  }),
             } as object)
           : {}),
-        ...(!isLight ? (calendarNeonOutlineWeb() as object) : {}),
+        ...(!isLight && !isV2 ? (calendarNeonOutlineWeb() as object) : {}),
       }}
     >
       {(
@@ -595,9 +610,9 @@ export function CalendarScreen() {
                 setMainView(opt.id);
                 if (opt.id === 'day') setDayViewDateKey(weekAnchorKey);
               }}
-              style={{ borderRadius: 12, overflow: 'hidden', ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb('157, 107, 255') : {}) }}
+              style={{ borderRadius: 12, overflow: 'hidden', ...(Platform.OS === 'web' && !isV2 ? calendarSynaptixGlowWeb('157, 107, 255') : {}) }}
             >
-              <LinearGradient colors={[...CAL_PRIMARY_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 9 }}>
+              <LinearGradient colors={[...ctaGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 9 }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent, letterSpacing: 0.4 }}>{opt.label}</Text>
               </LinearGradient>
             </Pressable>
@@ -626,8 +641,8 @@ export function CalendarScreen() {
 
   const weekNavBar = (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: spacing.sm }}>
-      <Pressable onPress={() => shiftWeek(-1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand)}>
-        <Ionicons name="chevron-back" size={20} color={isLight ? colors.text : '#E8E4FF'} />
+      <Pressable onPress={() => shiftWeek(-1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand, isV2)}>
+        <Ionicons name="chevron-back" size={20} color={isLight ? colors.text : labelAccent} />
       </Pressable>
       <Text
         style={{
@@ -638,15 +653,15 @@ export function CalendarScreen() {
           fontSize: isDesktop ? 17 : 15,
           letterSpacing: isDesktop ? -0.35 : -0.1,
           ...(Platform.OS === 'web' && !isLight
-            ? ({ textShadow: '0 0 28px rgba(157,107,255,0.45), 0 0 2px rgba(0,0,0,0.8)' } as object)
+            ? (isV2 ? ({} as object) : ({ textShadow: '0 0 28px rgba(157,107,255,0.45), 0 0 2px rgba(0,0,0,0.8)' } as object))
             : {}),
         }}
         numberOfLines={1}
       >
         {weekRangeLabelRu(weekAnchorKey)}
       </Text>
-      <Pressable onPress={() => shiftWeek(1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand)}>
-        <Ionicons name="chevron-forward" size={20} color={isLight ? colors.text : '#E8E4FF'} />
+      <Pressable onPress={() => shiftWeek(1)} style={ghostBtnCalendar(isLight, sidebarBg, colors, brand, isV2)}>
+        <Ionicons name="chevron-forward" size={20} color={isLight ? colors.text : labelAccent} />
       </Pressable>
     </View>
   );
@@ -657,10 +672,10 @@ export function CalendarScreen() {
         <Text style={[typography.title2, { color: colors.text, fontWeight: '900', fontSize: 15 }]}>{monthTitleRu(viewYm.y, viewYm.m)}</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           <Pressable onPress={() => setViewYm((p) => shiftCalendarMonth(p.y, p.m, -1))} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={isLight ? fillAccent : '#C4B5FD'} />
+            <Ionicons name="chevron-back" size={20} color={isLight ? fillAccent : labelAccent} />
           </Pressable>
           <Pressable onPress={() => setViewYm((p) => shiftCalendarMonth(p.y, p.m, 1))} hitSlop={8}>
-            <Ionicons name="chevron-forward" size={20} color={isLight ? fillAccent : '#C4B5FD'} />
+            <Ionicons name="chevron-forward" size={20} color={isLight ? fillAccent : labelAccent} />
           </Pressable>
         </View>
       </View>
@@ -689,9 +704,9 @@ export function CalendarScreen() {
                   borderRadius: 10,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isToday ? brand.primaryMuted : selWeek ? 'rgba(168,85,247,0.12)' : 'transparent',
-                  borderWidth: isToday ? 1 : 0,
-                  borderColor: fillAccent,
+                  backgroundColor: isToday ? (isV2 ? '#2A2150' : brand.primaryMuted) : selWeek ? (isV2 ? '#241C4A' : 'rgba(168,85,247,0.12)') : 'transparent',
+                  borderWidth: isToday && !isV2 ? 1 : 0,
+                  borderColor: isV2 ? 'transparent' : fillAccent,
                 }}
               >
                 <Text
@@ -714,18 +729,21 @@ export function CalendarScreen() {
 
   const sidebarEventsBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors, isLight)}>События недели</Text>
-      <View style={[cardShell(mainShellBorder, isLight)]}>
+      <Text style={sectionLabel(colors, isLight, isV2)}>События недели</Text>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
         {weekEventsQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
         {(weekEventsQ.data ?? []).length === 0 && !weekEventsQ.isLoading ? (
           <Text style={[typography.caption, { color: colors.textMuted }]}>Нет событий</Text>
         ) : null}
         {(weekEventsQ.data ?? []).map((ev) => (
-          <SidebarEventRow key={ev.id} ev={ev} isLight={isLight} onEdit={() => openEventEditor(ev)} onDelete={() => confirmDeleteEvent(ev, deleteEventMut.mutate)} />
+          <SidebarEventRow key={ev.id} ev={ev} isLight={isLight} isV2={isV2} onEdit={() => openEventEditor(ev)} onDelete={() => confirmDeleteEvent(ev, deleteEventMut.mutate)} />
         ))}
         <GradientPrimaryButton
           label="Добавить событие"
           isLight={isLight}
+          gradientColors={ctaGradient}
+          accentRgb={isV2 ? '160, 106, 240' : '157, 107, 255'}
+          enableGlow={!isV2}
           onPress={() => setAddEventOpen(true)}
           disabled={createEventMut.isPending}
         />
@@ -735,8 +753,8 @@ export function CalendarScreen() {
 
   const sidebarFocusBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors, isLight)}>Фокусы недели</Text>
-      <View style={[cardShell(mainShellBorder, isLight)]}>
+      <Text style={sectionLabel(colors, isLight, isV2)}>Фокусы недели</Text>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
         {weekFocusQ.isLoading ? (
           <ActivityIndicator color={fillAccent} />
         ) : (weekFocusQ.data ?? []).length === 0 ? (
@@ -749,6 +767,7 @@ export function CalendarScreen() {
               isLast={i === (weekFocusQ.data ?? []).length - 1}
               colors={colors}
               isLight={isLight}
+              isV2={isV2}
               fillAccent={fillAccent}
               toggleBusy={toggleWeekFocusItemMut.isPending}
               onToggleDone={() => toggleWeekFocusItemMut.mutate(item)}
@@ -760,7 +779,7 @@ export function CalendarScreen() {
             setFocusDraftTitle('');
             setAddFocusOpen(true);
           }}
-          style={[outlineCta(isLight, colors), { marginTop: 12 }]}
+          style={[outlineCta(isLight, colors, isV2), { marginTop: 12 }]}
         >
           <Text style={{ fontSize: 13, fontWeight: '800', color: fillAccent, textAlign: 'center' }}>Добавить фокус</Text>
         </Pressable>
@@ -775,9 +794,9 @@ export function CalendarScreen() {
 
   const sidebarNotesBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors, isLight)}>Заметки</Text>
+      <Text style={sectionLabel(colors, isLight, isV2)}>Заметки</Text>
       {(weekNoteItemsQ.data ?? []).map((n) => (
-        <View key={n.id} style={[notePlate(mainShellBorder, isLight), { marginBottom: 10 }]}>
+        <View key={n.id} style={[notePlate(mainShellBorder, isLight, isV2), { marginBottom: 10 }]}>
           <Pressable
             onPress={() => {
               setEditingNote(n);
@@ -800,8 +819,8 @@ export function CalendarScreen() {
           </Pressable>
         </View>
       ))}
-      <View style={[cardShell(mainShellBorder, isLight)]}>
-        <Pressable onPress={() => setAddNoteOpen(true)} style={[outlineCta(isLight, colors), { marginTop: 0 }]}>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
+        <Pressable onPress={() => setAddNoteOpen(true)} style={[outlineCta(isLight, colors, isV2), { marginTop: 0 }]}>
           <Text style={{ fontSize: 13, fontWeight: '800', color: fillAccent, textAlign: 'center' }}>Добавить заметку</Text>
         </Pressable>
       </View>
@@ -810,8 +829,8 @@ export function CalendarScreen() {
 
   const sidebarTodayTasksBlock = (
     <View style={{ marginTop: spacing.lg }}>
-      <Text style={sectionLabel(colors, isLight)}>Задачи на сегодня</Text>
-      <View style={[cardShell(mainShellBorder, isLight)]}>
+      <Text style={sectionLabel(colors, isLight, isV2)}>Задачи на сегодня</Text>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
         {todayTasksQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
         {!todayTasksQ.isLoading && (todayTasksQ.data ?? []).length === 0 ? (
           <Text style={[typography.caption, { color: colors.textMuted }]}>Нет задач на сегодня</Text>
@@ -848,7 +867,7 @@ export function CalendarScreen() {
             fontWeight: '900',
             letterSpacing: -0.55,
             ...(Platform.OS === 'web' && !isLight
-              ? ({ textShadow: '0 0 40px rgba(123,92,255,0.5), 0 2px 12px rgba(0,0,0,0.85)' } as object)
+              ? (isV2 ? ({} as object) : ({ textShadow: '0 0 40px rgba(123,92,255,0.5), 0 2px 12px rgba(0,0,0,0.85)' } as object))
               : {}),
           },
         ]}
@@ -869,7 +888,7 @@ export function CalendarScreen() {
                 fontSize: 11,
                 fontWeight: '800',
                 color: isLight ? colors.textMuted : 'rgba(196,181,253,0.72)',
-                ...(Platform.OS === 'web' && !isLight ? ({ textShadow: '0 0 14px rgba(157,107,255,0.35)' } as object) : {}),
+                ...(Platform.OS === 'web' && !isLight && !isV2 ? ({ textShadow: '0 0 14px rgba(157,107,255,0.35)' } as object) : {}),
               }}
             >
               {label}
@@ -906,11 +925,15 @@ export function CalendarScreen() {
                         ? brand.primaryMuted
                         : '#F3F4F8'
                       : isToday
-                        ? 'rgba(123, 92, 255, 0.12)'
-                        : 'rgba(12, 6, 32, 0.42)',
-                    borderWidth: 1,
-                    borderColor: isToday ? (isLight ? fillAccent : 'rgba(157, 107, 255, 0.65)') : isLight ? mainShellBorder : 'rgba(157, 107, 255, 0.18)',
-                    ...(Platform.OS === 'web' && !isLight
+                        ? isV2
+                          ? '#2A2150'
+                          : 'rgba(123, 92, 255, 0.12)'
+                        : isV2
+                          ? '#1A1535'
+                          : 'rgba(12, 6, 32, 0.42)',
+                    borderWidth: isV2 ? 0 : 1,
+                    borderColor: isToday ? (isLight ? fillAccent : 'rgba(157, 107, 255, 0.65)') : isLight ? mainShellBorder : isV2 ? 'transparent' : 'rgba(157, 107, 255, 0.18)',
+                    ...(Platform.OS === 'web' && !isLight && !isV2
                       ? ({
                           backdropFilter: 'blur(12px) saturate(1.2)',
                           WebkitBackdropFilter: 'blur(12px) saturate(1.2)',
@@ -927,7 +950,7 @@ export function CalendarScreen() {
                       fontWeight: '900',
                       color: inMonth ? (isLight ? colors.text : '#F5F3FF') : colors.textMuted,
                       opacity: inMonth ? 1 : 0.45,
-                      ...(Platform.OS === 'web' && !isLight && inMonth && isToday
+                      ...(Platform.OS === 'web' && !isLight && !isV2 && inMonth && isToday
                         ? ({ textShadow: '0 0 24px rgba(157,107,255,0.55)' } as object)
                         : {}),
                     }}
@@ -1037,7 +1060,7 @@ export function CalendarScreen() {
     </ScrollView>
   );
 
-  const synaptixShell = isDesktop && !isLight;
+  const synaptixShell = isDesktop && !isLight && !isV2;
 
   const leftColumn = (
     <View
@@ -1049,7 +1072,7 @@ export function CalendarScreen() {
         borderRightColor: mainShellBorder,
         backgroundColor: synaptixShell ? undefined : isDesktop ? sidebarBg : 'transparent',
         borderRadius: isDesktop ? 20 : 0,
-        ...(synaptixShell ? (leftInfoPanelShell() as object) : {}),
+        ...(synaptixShell ? (leftInfoPanelShell(false) as object) : isV2 ? (leftInfoPanelShell(true) as object) : {}),
       }}
     >
       {miniMonth}
@@ -1104,7 +1127,7 @@ export function CalendarScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
         {Platform.OS === 'web' ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Image source={require('../../../assets/images/icon.png')} style={{ width: 28, height: 28, borderRadius: 7 }} contentFit="cover" />
+            <Image source={require('../../../assets/images/sophia-icon-1024.png')} style={{ width: 28, height: 28, borderRadius: 7 }} contentFit="cover" />
             <Text style={[typography.screenTitle, { color: '#FFFFFF', fontSize: isDesktop ? 26 : 22, fontWeight: '900', letterSpacing: -0.3 }]}>
               Sophia
             </Text>
@@ -1140,7 +1163,7 @@ export function CalendarScreen() {
     return (
       <ScreenCanvas>
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} />
+          <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} variant={variant} />
           <View style={{ flex: 1, minWidth: 0, padding: spacing.xl, justifyContent: 'center' }}>
             <Text style={[typography.title2, { color: colors.text }]}>Календарь</Text>
             <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}>
@@ -1155,9 +1178,20 @@ export function CalendarScreen() {
   return (
     <ScreenCanvas>
       <View style={{ flex: 1, flexDirection: 'row' }}>
-        <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} />
+        <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} variant={variant} />
         <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          {!isLight ? <CalendarAtmosphere /> : null}
+          {!isLight ? (
+            isV2 ? (
+              <LinearGradient
+                colors={['#1A1535', '#0B0918']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+              />
+            ) : (
+              <CalendarAtmosphere />
+            )
+          ) : null}
           {mainScroll}
         </View>
       </View>
@@ -1167,7 +1201,7 @@ export function CalendarScreen() {
           <Pressable
             style={[
               styles.modalCard,
-              modalCardShell(isLight),
+              modalCardShell(isLight, isV2),
               isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null,
               { overflow: 'visible' },
             ]}
@@ -1218,7 +1252,16 @@ export function CalendarScreen() {
                 <Text style={{ fontWeight: '800', color: colors.text }}>Отмена</Text>
               </Pressable>
               <View style={{ flex: 1 }}>
-                <GradientPrimaryButton label="Сохранить" isLight={isLight} compact onPress={addWeekEvent} disabled={createEventMut.isPending} />
+                <GradientPrimaryButton
+                  label="Сохранить"
+                  isLight={isLight}
+                  gradientColors={ctaGradient}
+                  accentRgb={isV2 ? '160, 106, 240' : '157, 107, 255'}
+                  enableGlow={!isV2}
+                  compact
+                  onPress={addWeekEvent}
+                  disabled={createEventMut.isPending}
+                />
               </View>
             </View>
           </Pressable>
@@ -1228,7 +1271,7 @@ export function CalendarScreen() {
       <Modal visible={addNoteOpen} animationType="fade" transparent onRequestClose={() => setAddNoteOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setAddNoteOpen(false)}>
           <Pressable
-            style={[styles.modalCard, modalCardShell(isLight), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
+            style={[styles.modalCard, modalCardShell(isLight, isV2), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
             onPress={() => {}}
           >
             <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Новая заметка</Text>
@@ -1245,7 +1288,16 @@ export function CalendarScreen() {
                 <Text style={{ fontWeight: '800', color: colors.text }}>Отмена</Text>
               </Pressable>
               <View style={{ flex: 1 }}>
-                <GradientPrimaryButton label="Сохранить" isLight={isLight} compact onPress={addNotePlate} disabled={createNoteMut.isPending} />
+                <GradientPrimaryButton
+                  label="Сохранить"
+                  isLight={isLight}
+                  gradientColors={ctaGradient}
+                  accentRgb={isV2 ? '160, 106, 240' : '157, 107, 255'}
+                  enableGlow={!isV2}
+                  compact
+                  onPress={addNotePlate}
+                  disabled={createNoteMut.isPending}
+                />
               </View>
             </View>
           </Pressable>
@@ -1255,7 +1307,7 @@ export function CalendarScreen() {
       <Modal visible={addFocusOpen} animationType="fade" transparent onRequestClose={() => setAddFocusOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setAddFocusOpen(false)}>
           <Pressable
-            style={[styles.modalCard, modalCardShell(isLight), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
+            style={[styles.modalCard, modalCardShell(isLight, isV2), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
             onPress={() => {}}
           >
             <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Фокус недели</Text>
@@ -1274,6 +1326,9 @@ export function CalendarScreen() {
                 <GradientPrimaryButton
                   label="Добавить"
                   isLight={isLight}
+                  gradientColors={ctaGradient}
+                  accentRgb={isV2 ? '160, 106, 240' : '157, 107, 255'}
+                  enableGlow={!isV2}
                   compact
                   onPress={() => {
                     if (!focusDraftTitle.trim()) {
@@ -1485,29 +1540,33 @@ function confirmDeleteEvent(ev: PlannerCalendarEventRow, del: (id: string) => vo
   ]);
 }
 
-function sectionLabel(colors: { textMuted: string }, isLight: boolean) {
+function sectionLabel(colors: { textMuted: string }, isLight: boolean, isV2: boolean) {
   return {
     fontSize: 10,
     fontWeight: '900' as const,
     letterSpacing: 1.55,
-    color: isLight ? colors.textMuted : 'rgba(210, 200, 255, 0.78)',
+    color: isLight ? colors.textMuted : isV2 ? '#C49BFF' : 'rgba(210, 200, 255, 0.78)',
     marginBottom: 8,
     textTransform: 'uppercase' as const,
-    ...(Platform.OS === 'web' && !isLight ? ({ textShadow: '0 0 22px rgba(157,107,255,0.45)' } as object) : {}),
+    ...(Platform.OS === 'web' && !isLight && !isV2 ? ({ textShadow: '0 0 22px rgba(157,107,255,0.45)' } as object) : {}),
   };
 }
 
-/** Лёгкий glass-контейнер инфо-панели: без инсет-теней и двойных рамок. */
-function leftInfoPanelShell() {
+/** Контейнер левой инфо-панели. Для v2 — только заливка без обводки/blur. */
+function leftInfoPanelShell(isV2: boolean) {
+  if (isV2) {
+    return {
+      borderRadius: 20,
+      borderWidth: 0,
+      backgroundColor: '#1A1535',
+    };
+  }
   return {
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(20, 14, 38, 0.34)',
+    borderWidth: 0,
+    backgroundColor: 'rgba(20, 14, 38, 0.74)',
     ...(Platform.OS === 'web'
       ? ({
-          backdropFilter: 'blur(15px)',
-          WebkitBackdropFilter: 'blur(15px)',
           boxShadow: '0 12px 32px rgba(0,0,0,0.28)',
         } as object)
       : {
@@ -1520,20 +1579,21 @@ function leftInfoPanelShell() {
   };
 }
 
-function cardShell(border: string, isLight: boolean) {
+function cardShell(border: string, isLight: boolean, isV2: boolean) {
   if (!isLight) {
+    if (isV2) {
+      return {
+        borderRadius: 16,
+        borderWidth: 0,
+        padding: 16,
+        backgroundColor: '#1A1535',
+      } as const;
+    }
     return {
       borderRadius: 16,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)',
+      borderWidth: 0,
       padding: 16,
-      backgroundColor: 'rgba(18, 10, 36, 0.34)',
-      ...(Platform.OS === 'web'
-        ? ({
-            backdropFilter: 'blur(15px)',
-            WebkitBackdropFilter: 'blur(15px)',
-          } as object)
-        : {}),
+      backgroundColor: 'rgba(18, 10, 36, 0.74)',
     } as const;
   }
   return {
@@ -1545,19 +1605,23 @@ function cardShell(border: string, isLight: boolean) {
   };
 }
 
-function notePlate(border: string, isLight: boolean) {
+function notePlate(border: string, isLight: boolean, isV2: boolean) {
   if (!isLight) {
+    if (isV2) {
+      return {
+        borderRadius: 14,
+        borderWidth: 0,
+        backgroundColor: '#1A1535',
+        flexDirection: 'row' as const,
+        alignItems: 'flex-start' as const,
+        gap: 10,
+        padding: 14,
+      } as const;
+    }
     return {
       borderRadius: 14,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)',
-      backgroundColor: 'rgba(18, 10, 36, 0.34)',
-      ...(Platform.OS === 'web'
-        ? ({
-            backdropFilter: 'blur(15px)',
-            WebkitBackdropFilter: 'blur(15px)',
-          } as object)
-        : {}),
+      borderWidth: 0,
+      backgroundColor: 'rgba(18, 10, 36, 0.74)',
       flexDirection: 'row' as const,
       alignItems: 'flex-start' as const,
       gap: 10,
@@ -1576,21 +1640,30 @@ function notePlate(border: string, isLight: boolean) {
   };
 }
 
-function modalCardShell(isLight: boolean) {
+function modalCardShell(isLight: boolean, isV2: boolean) {
   if (!isLight) {
+    if (isV2) {
+      return {
+        maxWidth: 420,
+        width: '100%' as const,
+        borderRadius: 20,
+        borderWidth: 0,
+        backgroundColor: '#1A1535',
+      } as const;
+    }
     return { ...calendarSynaptixCardStyle(), maxWidth: 420, width: '100%' as const } as const;
   }
   return { maxWidth: 420, width: '100%' as const };
 }
 
-function outlineCta(isLight: boolean, colors: { border: string }) {
+function outlineCta(isLight: boolean, colors: { border: string }, isV2: boolean) {
   return {
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: isLight ? colors.border : 'rgba(255,255,255,0.1)',
-    backgroundColor: isLight ? 'transparent' : 'rgba(255,255,255,0.03)',
+    borderColor: isLight ? colors.border : isV2 ? '#A06AF0' : 'rgba(255,255,255,0.1)',
+    backgroundColor: isLight ? 'transparent' : isV2 ? '#241C4A' : 'rgba(255,255,255,0.03)',
   };
 }
 
@@ -1611,8 +1684,18 @@ function ghostBtnCalendar(
   bg: string,
   colors: { border: string; text: string },
   brand: { surfaceBorderStrong: string },
+  isV2: boolean,
 ) {
   if (isLight) return ghostBtn(bg, colors, brand);
+  if (isV2) {
+    return {
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: 14,
+      borderWidth: 0,
+      backgroundColor: '#241C4A',
+    };
+  }
   return {
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -1653,11 +1736,13 @@ function primaryBtnText(on: string) {
 function SidebarEventRow({
   ev,
   isLight,
+  isV2,
   onEdit,
   onDelete,
 }: {
   ev: PlannerCalendarEventRow;
   isLight: boolean;
+  isV2: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -1665,7 +1750,33 @@ function SidebarEventRow({
   const chip = ev.event_date ? (ev.starts_at && ev.ends_at ? `${ev.event_date} · ${isoToHm(ev.starts_at)}` : ev.event_date) : 'Без даты';
   const c = calendarChipColorForId(ev.id);
   if (!isLight) {
-    const g = eventGemForId(ev.id);
+    if (isV2) {
+      return (
+        <View
+          style={{
+            marginBottom: 10,
+            borderRadius: 14,
+            overflow: 'hidden',
+            borderWidth: 0,
+            backgroundColor: '#1A1535',
+          }}
+        >
+          <View style={{ padding: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+              <Pressable onPress={onEdit} {...(webEventTitleProps(ev.title) as object)} style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[typography.caption, { color: '#C49BFF', fontWeight: '800' }]}>{chip}</Text>
+                <Text style={{ color: '#F3EEFF', fontWeight: '700', marginTop: 4, fontSize: 14 }} numberOfLines={4}>
+                  {ev.title}
+                </Text>
+              </Pressable>
+              <Pressable onPress={onDelete} hitSlop={8}>
+                <Ionicons name="trash-outline" size={18} color={'#C49BFF'} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      );
+    }
     return (
       <View
         style={{
@@ -1783,6 +1894,7 @@ function FocusLine({
   isLast,
   colors,
   isLight,
+  isV2,
   fillAccent,
   toggleBusy,
   onToggleDone,
@@ -1791,6 +1903,7 @@ function FocusLine({
   isLast: boolean;
   colors: { text: string; textMuted: string };
   isLight: boolean;
+  isV2: boolean;
   fillAccent: string;
   toggleBusy: boolean;
   onToggleDone: () => void;
@@ -1827,7 +1940,7 @@ function FocusLine({
             marginTop: 2,
             textDecorationLine: done ? 'line-through' : 'none',
             opacity: done ? 0.5 : 1,
-            ...(Platform.OS === 'web' && !isLight && !done ? ({ textShadow: '0 0 16px rgba(157,107,255,0.22)' } as object) : {}),
+            ...(Platform.OS === 'web' && !isLight && !isV2 && !done ? ({ textShadow: '0 0 16px rgba(157,107,255,0.22)' } as object) : {}),
           }}
         >
           {title}
