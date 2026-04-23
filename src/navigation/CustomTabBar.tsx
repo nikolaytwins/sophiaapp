@@ -11,6 +11,7 @@ import { useAppTheme } from '@/theme';
 
 const TAB_HREF: Record<string, Href> = {
   day: '/day',
+  calendar: '/calendar' as Href,
   sprint: '/sprint' as Href,
   strategy: '/strategy' as Href,
   goals: '/goals' as Href,
@@ -22,6 +23,7 @@ const TAB_HREF: Record<string, Href> = {
 
 const LABELS: Record<string, string> = {
   day: 'День',
+  calendar: 'Календарь',
   sprint: 'Спринт',
   strategy: 'Стратегия',
   goals: 'Цели',
@@ -33,6 +35,7 @@ const LABELS: Record<string, string> = {
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   day: 'sunny-outline',
+  calendar: 'calendar-outline',
   sprint: 'flag-outline',
   strategy: 'navigate-circle-outline',
   goals: 'trophy-outline',
@@ -44,7 +47,7 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 /** Порядок и состав нижнего меню (`inbox` скрыт — только `router.push`). `sprint` временно скрыт. */
-const TAB_BAR_ROUTE_ORDER = ['day', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
+const TAB_BAR_ROUTE_ORDER = ['day', 'calendar', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();

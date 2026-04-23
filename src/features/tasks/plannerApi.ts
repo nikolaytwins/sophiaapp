@@ -77,6 +77,23 @@ async function clearPlannerFocusExcept(
   if (error) throw error;
 }
 
+export async function listPlannerTasksInDateRange(startKey: string, endKey: string): Promise<PlannerTaskRow[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const userId = await requireUserId();
+  const { data, error } = await sb
+    .from('planner_tasks')
+    .select('id,day_date,title,priority,is_done,is_focus,is_week_focus,sort_order,created_at,updated_at')
+    .eq('user_id', userId)
+    .gte('day_date', startKey)
+    .lte('day_date', endKey)
+    .order('day_date', { ascending: true })
+    .order('is_done', { ascending: true })
+    .order('sort_order', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(normalizePlannerTaskRow);
+}
+
 export async function listPlannerTasks(dayDate: string): Promise<PlannerTaskRow[]> {
   const sb = getSupabase();
   if (!sb) return [];
