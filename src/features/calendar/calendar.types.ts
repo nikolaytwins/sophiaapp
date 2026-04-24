@@ -1,3 +1,22 @@
+/** Тип события → цвет в UI. `none` — палитра по id, как раньше. */
+export type PlannerCalendarEventKind = 'none' | 'important' | 'work' | 'day_off' | 'personal';
+
+export const PLANNER_EVENT_KIND_LABELS: Record<PlannerCalendarEventKind, string> = {
+  none: 'Без типа',
+  important: 'Важное',
+  work: 'Работа',
+  day_off: 'Выходной',
+  personal: 'Личное',
+};
+
+export const PLANNER_EVENT_KIND_OPTIONS: readonly PlannerCalendarEventKind[] = [
+  'none',
+  'important',
+  'work',
+  'day_off',
+  'personal',
+];
+
 export type PlannerCalendarEventRow = {
   id: string;
   week_monday: string;
@@ -11,6 +30,7 @@ export type PlannerCalendarEventRow = {
   /** Интервал события (локальное время при создании через ISO). null = весь день. */
   starts_at: string | null;
   ends_at: string | null;
+  event_kind: PlannerCalendarEventKind;
 };
 
 export type PlannerWeekNotesRow = {

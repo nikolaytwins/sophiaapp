@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { PlannerCalendarEventRow } from '@/features/calendar/calendar.types';
-import { eventGemForId, eventGemWebShadow, eventPastelForId } from '@/features/calendar/calendarEventChips';
+import { eventGemForEvent, eventGemWebShadow, eventPastelForEvent } from '@/features/calendar/calendarEventChips';
 import { shortWeekdayRu } from '@/features/calendar/calendarFormat';
 import { webEventTitleProps } from '@/features/calendar/calendarWebTooltip';
 import { isoToHm } from '@/features/calendar/calendarLocalTime';
@@ -38,16 +38,17 @@ function floatingCardShadowLight(): object {
   return { elevation: 5 };
 }
 
-function gemNativeShadow(gem: ReturnType<typeof eventGemForId>): object {
+function gemNativeShadow(gem: ReturnType<typeof eventGemForEvent>): object {
+  const accent = Boolean(gem.isAccent);
   if (Platform.OS === 'ios') {
     return {
-      shadowColor: `rgba(${gem.glowRgb},0.55)`,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 14,
+      shadowColor: `rgba(${gem.glowRgb},${accent ? 0.78 : 0.55})`,
+      shadowOffset: { width: 0, height: accent ? 8 : 6 },
+      shadowOpacity: accent ? 0.52 : 0.35,
+      shadowRadius: accent ? 22 : 14,
     };
   }
-  return { elevation: 8 };
+  return { elevation: accent ? 12 : 8 };
 }
 
 type Props = {
@@ -151,7 +152,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
               <View style={{ paddingHorizontal: 4, paddingBottom: 8, minHeight: ALLDAY_MIN_H, maxHeight: 92 }}>
                 {allDay.map((ev) => {
                   if (isLight) {
-                    const p = eventPastelForId(ev.id);
+                    const p = eventPastelForEvent(ev);
                     return (
                       <Pressable
                         key={ev.id}
@@ -175,7 +176,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                       </Pressable>
                     );
                   }
-                  const g = eventGemForId(ev.id);
+                  const g = eventGemForEvent(ev);
                   return (
                     <Pressable
                       key={ev.id}
@@ -225,7 +226,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                   const showFaces = lay.height >= 56;
 
                   if (isLight) {
-                    const p = eventPastelForId(ev.id);
+                    const p = eventPastelForEvent(ev);
                     return (
                       <Pressable
                         key={ev.id}
@@ -281,7 +282,7 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
                     );
                   }
 
-                  const g = eventGemForId(ev.id);
+                  const g = eventGemForEvent(ev);
                   return (
                     <Pressable
                       key={ev.id}

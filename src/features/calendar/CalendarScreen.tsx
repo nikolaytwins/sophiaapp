@@ -21,7 +21,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured } from '@/config/env';
-import type { PlannerCalendarEventRow, PlannerWeekNoteItemRow } from '@/features/calendar/calendar.types';
+import type {
+  PlannerCalendarEventKind,
+  PlannerCalendarEventRow,
+  PlannerWeekNoteItemRow,
+} from '@/features/calendar/calendar.types';
+import { PLANNER_EVENT_KIND_LABELS, PLANNER_EVENT_KIND_OPTIONS } from '@/features/calendar/calendar.types';
 import {
   createPlannerCalendarEvent,
   createPlannerWeekNoteItem,
@@ -35,7 +40,7 @@ import {
 } from '@/features/calendar/calendarApi';
 import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
 import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
-import { calendarChipColorForId } from '@/features/calendar/calendarEventChips';
+import { calendarChipColorForEvent, normalizeEventKind } from '@/features/calendar/calendarEventChips';
 import {
   CAL_PRIMARY_GRADIENT,
   calendarSynaptixGlowWeb,
@@ -184,6 +189,65 @@ function GradientPrimaryButton({
   );
 }
 
+function EventKindPicker({
+  value,
+  onChange,
+  marginTop,
+  isLight,
+  colors,
+  typography,
+  fillAccent,
+  brand,
+}: {
+  value: PlannerCalendarEventKind;
+  onChange: (k: PlannerCalendarEventKind) => void;
+  marginTop?: number;
+  isLight: boolean;
+  colors: { text: string; textMuted: string; border: string };
+  typography: { caption: object };
+  fillAccent: string;
+  brand: { primaryMuted: string };
+}) {
+  const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
+  return (
+    <View style={{ marginTop: marginTop ?? 12 }}>
+      <Text style={[typography.caption, { color: colors.textMuted }]}>Тип события</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {PLANNER_EVENT_KIND_OPTIONS.map((k) => {
+          const on = value === k;
+          return (
+            <Pressable
+              key={k}
+              onPress={() => onChange(k)}
+              style={StyleSheet.flatten([
+                {
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: on ? (isLight ? fillAccent : 'rgba(115, 55, 221, 0.55)') : colors.border,
+                  backgroundColor: on ? (isLight ? brand.primaryMuted : 'rgba(115, 55, 221, 0.14)') : 'transparent',
+                },
+                webPointer,
+              ])}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '800',
+                  color: on ? (isLight ? fillAccent : '#EDE9FE') : colors.textMuted,
+                }}
+              >
+                {PLANNER_EVENT_KIND_LABELS[k]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): PlannerCalendarEventRow[] {
   return events.filter((e) => e.event_date === dateKey);
 }
@@ -220,10 +284,12 @@ export function CalendarScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [newWeekEventTitle, setNewWeekEventTitle] = useState('');
   const [newWeekEventDate, setNewWeekEventDate] = useState('');
+  const [newWeekEventKind, setNewWeekEventKind] = useState<PlannerCalendarEventKind>('none');
   const [newNoteDraft, setNewNoteDraft] = useState('');
   const [newWeekEventStart, setNewWeekEventStart] = useState('');
   const [newWeekEventEnd, setNewWeekEventEnd] = useState('');
   const [modalNewTitle, setModalNewTitle] = useState('');
+  const [modalNewKind, setModalNewKind] = useState<PlannerCalendarEventKind>('none');
   const [modalDayStart, setModalDayStart] = useState('');
   const [modalDayEnd, setModalDayEnd] = useState('');
   const [editingNote, setEditingNote] = useState<PlannerWeekNoteItemRow | null>(null);
@@ -234,6 +300,7 @@ export function CalendarScreen() {
   const [evEditStart, setEvEditStart] = useState('09:00');
   const [evEditEnd, setEvEditEnd] = useState('10:00');
   const [evEditNote, setEvEditNote] = useState('');
+  const [evEditKind, setEvEditKind] = useState<PlannerCalendarEventKind>('none');
   const [evAllDay, setEvAllDay] = useState(false);
   const [addEventOpen, setAddEventOpen] = useState(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
@@ -261,6 +328,7 @@ export function CalendarScreen() {
     if (!addEventOpen) return;
     setNewWeekEventTitle('');
     setNewWeekEventDate('');
+    setNewWeekEventKind('none');
     setNewWeekEventStart('');
     setNewWeekEventEnd('');
   }, [addEventOpen]);
@@ -268,6 +336,7 @@ export function CalendarScreen() {
   useEffect(() => {
     if (!dayModalKey) return;
     setModalNewTitle('');
+    setModalNewKind('none');
     setModalDayStart('');
     setModalDayEnd('');
   }, [dayModalKey]);
@@ -435,6 +504,7 @@ export function CalendarScreen() {
     setEditingEvent(ev);
     setEvEditTitle(ev.title);
     setEvEditNote(ev.note ?? '');
+    setEvEditKind(normalizeEventKind(ev.event_kind));
     setEvEditDate(ev.event_date ?? '');
     const timed = Boolean(ev.starts_at && ev.ends_at);
     setEvAllDay(!timed);
@@ -480,11 +550,12 @@ export function CalendarScreen() {
       }
     }
     createEventMut.mutate(
-      { week_monday: weekMonday, event_date: eventDate, title, starts_at, ends_at },
+      { week_monday: weekMonday, event_date: eventDate, title, starts_at, ends_at, event_kind: newWeekEventKind },
       {
         onSuccess: () => {
           setNewWeekEventTitle('');
           setNewWeekEventDate('');
+          setNewWeekEventKind('none');
           setNewWeekEventStart('');
           setNewWeekEventEnd('');
           setAddEventOpen(false);
@@ -534,10 +605,18 @@ export function CalendarScreen() {
       }
     }
     createEventMut.mutate(
-      { week_monday: weekMonday, event_date: dayModalKey, title, starts_at, ends_at },
+      {
+        week_monday: weekMonday,
+        event_date: dayModalKey,
+        title,
+        starts_at,
+        ends_at,
+        event_kind: modalNewKind,
+      },
       {
         onSuccess: () => {
           setModalNewTitle('');
+          setModalNewKind('none');
           setModalDayStart('');
           setModalDayEnd('');
           setDayModalKey(null);
@@ -559,13 +638,14 @@ export function CalendarScreen() {
     if (editingEvent.event_date == null && !hasDate) {
       updateEventMut.mutate({
         id: editingEvent.id,
-        patch: { title, note: evEditNote.trim() || null },
+        patch: { title, note: evEditNote.trim() || null, event_kind: evEditKind },
       });
       return;
     }
     const patch: Parameters<typeof updatePlannerCalendarEvent>[1] = {
       title,
       note: evEditNote.trim() || null,
+      event_kind: evEditKind,
       event_date: hasDate ? d : editingEvent.event_date,
     };
     const ts = evEditStart.trim();
@@ -1010,9 +1090,9 @@ export function CalendarScreen() {
                         borderRadius: 8,
                         paddingHorizontal: 6,
                         paddingVertical: 4,
-                        backgroundColor: `${calendarChipColorForId(ev.id)}22`,
+                        backgroundColor: `${calendarChipColorForEvent(ev)}22`,
                         borderLeftWidth: 3,
-                        borderLeftColor: calendarChipColorForId(ev.id),
+                        borderLeftColor: calendarChipColorForEvent(ev),
                       }}
                     >
                       <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: isLight ? colors.text : '#EDE9FE' }}>
@@ -1090,9 +1170,9 @@ export function CalendarScreen() {
               marginTop: 10,
               borderRadius: 16,
               padding: 14,
-              backgroundColor: `${calendarChipColorForId(ev.id)}20`,
+              backgroundColor: `${calendarChipColorForEvent(ev)}20`,
               borderLeftWidth: 5,
-              borderLeftColor: calendarChipColorForId(ev.id),
+              borderLeftColor: calendarChipColorForEvent(ev),
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>{ev.title}</Text>
@@ -1242,6 +1322,16 @@ export function CalendarScreen() {
               placeholder="Название"
               placeholderTextColor={colors.textMuted}
               style={[typography.body, minimalField(colors, isLight), { marginTop: 14 }]}
+            />
+            <EventKindPicker
+              value={newWeekEventKind}
+              onChange={setNewWeekEventKind}
+              marginTop={12}
+              isLight={isLight}
+              colors={colors}
+              typography={typography}
+              fillAccent={fillAccent}
+              brand={brand}
             />
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: 12 }]}>Дата</Text>
             <View style={{ marginTop: 6 }}>
@@ -1417,6 +1507,16 @@ export function CalendarScreen() {
                   placeholderTextColor={colors.textMuted}
                   style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 8 }]}
                 />
+                <EventKindPicker
+                  value={modalNewKind}
+                  onChange={setModalNewKind}
+                  marginTop={10}
+                  isLight={isLight}
+                  colors={colors}
+                  typography={typography}
+                  fillAccent={fillAccent}
+                  brand={brand}
+                />
                 <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted }]}>Время (необязательно), HH:mm</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                   <TextInput
@@ -1487,6 +1587,16 @@ export function CalendarScreen() {
                 value={evEditTitle}
                 onChangeText={setEvEditTitle}
                 style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 6 }]}
+              />
+              <EventKindPicker
+                value={evEditKind}
+                onChange={setEvEditKind}
+                marginTop={spacing.md}
+                isLight={isLight}
+                colors={colors}
+                typography={typography}
+                fillAccent={fillAccent}
+                brand={brand}
               />
               <Text style={[typography.caption, { marginTop: spacing.md }]}>Дата</Text>
               <View style={{ marginTop: 6, zIndex: 20 }}>
@@ -1773,7 +1883,7 @@ function SidebarEventRow({
 }) {
   const { colors, typography } = useAppTheme();
   const chip = ev.event_date ? (ev.starts_at && ev.ends_at ? `${ev.event_date} · ${isoToHm(ev.starts_at)}` : ev.event_date) : 'Без даты';
-  const c = calendarChipColorForId(ev.id);
+  const c = calendarChipColorForEvent(ev);
   if (!isLight) {
     if (isV2) {
       return (

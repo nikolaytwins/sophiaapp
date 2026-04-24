@@ -1,14 +1,16 @@
 import { addDays, startOfWeekMondayKey } from '@/features/habits/habitLogic';
 import type {
+  PlannerCalendarEventKind,
   PlannerCalendarEventRow,
   PlannerWeekNoteItemRow,
   PlannerWeekNotesRow,
 } from '@/features/calendar/calendar.types';
+import { normalizeEventKind } from '@/features/calendar/calendarEventChips';
 import { isoToLocalDateKey } from '@/features/calendar/calendarLocalTime';
 import { getSupabase } from '@/lib/supabase';
 
 const EV_FIELDS =
-  'id,week_monday,event_date,title,note,sort_order,created_at,updated_at,starts_at,ends_at' as const;
+  'id,week_monday,event_date,title,note,sort_order,created_at,updated_at,starts_at,ends_at,event_kind' as const;
 
 async function requireUserId(): Promise<string> {
   const sb = getSupabase();
@@ -29,6 +31,7 @@ function normalizeEvent(row: PlannerCalendarEventRow): PlannerCalendarEventRow {
     note: row.note ?? null,
     starts_at: row.starts_at ?? null,
     ends_at: row.ends_at ?? null,
+    event_kind: normalizeEventKind(row.event_kind),
   };
 }
 
@@ -123,6 +126,7 @@ export async function createPlannerCalendarEvent(input: {
   note?: string;
   starts_at?: string | null;
   ends_at?: string | null;
+  event_kind?: PlannerCalendarEventKind;
 }): Promise<PlannerCalendarEventRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
@@ -151,6 +155,7 @@ export async function createPlannerCalendarEvent(input: {
       note: input.note?.trim() || null,
       starts_at: startsAt,
       ends_at: endsAt,
+      event_kind: normalizeEventKind(input.event_kind),
       sort_order: Date.now() % 1_000_000_000,
       updated_at: new Date().toISOString(),
     })
@@ -169,6 +174,7 @@ export async function updatePlannerCalendarEvent(
     week_monday?: string;
     starts_at?: string | null;
     ends_at?: string | null;
+    event_kind?: PlannerCalendarEventKind;
   }
 ): Promise<PlannerCalendarEventRow> {
   const sb = getSupabase();
@@ -208,6 +214,7 @@ export async function updatePlannerCalendarEvent(
   };
   if (patch.title !== undefined) row.title = patch.title.trim();
   if (patch.note !== undefined) row.note = patch.note === null || patch.note === '' ? null : patch.note.trim();
+  if (patch.event_kind !== undefined) row.event_kind = normalizeEventKind(patch.event_kind);
 
   const { data, error } = await sb.from('planner_calendar_events').update(row).eq('id', id).select(EV_FIELDS).single();
   if (error) throw error;
