@@ -136,6 +136,7 @@ function BudgetCard({
   onDelete,
   onQuickExpense,
   nested,
+  embedded = false,
 }: {
   line: FinanceBudgetLine;
   editable?: boolean;
