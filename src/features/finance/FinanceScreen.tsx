@@ -30,7 +30,7 @@ import {
 import { FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
-import { FinanceQuickTransactionBar } from '@/features/finance/FinanceQuickTransactionBar';
+import { FinanceTransactionTable } from '@/features/finance/FinanceTransactionTable';
 import {
   enrichMonthSnapshots,
   MonthHistoryCards,
@@ -38,7 +38,7 @@ import {
   type MonthHistoryViewMode,
 } from '@/features/finance/FinanceMonthHistoryViews';
 import { FINANCE_QUERY_KEY, financeExpenseAnalyticsKey } from '@/features/finance/queryKeys';
-import type { FinanceBudgetLine, FinanceTransaction } from '@/features/finance/finance.types';
+import type { FinanceBudgetLine } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
@@ -223,53 +223,6 @@ function BudgetCard({
           }}
         />
       </View>
-    </View>
-  );
-}
-
-function TransactionRow({ t }: { t: FinanceTransaction }) {
-  const { colors, radius, typography } = useAppTheme();
-  const d = new Date(t.date);
-  const dateLabel = Number.isFinite(d.getTime())
-    ? d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-    : t.date.slice(0, 10);
-  const isIncome = t.type === 'income';
-  const isExpense = t.type === 'expense';
-  const sign = isIncome ? '+' : isExpense ? '−' : '';
-  const amountColor = isIncome ? '#4ADE80' : isExpense ? '#FB7185' : colors.text;
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        marginBottom: 8,
-      }}
-    >
-      <View style={{ width: 52 }}>
-        <Text style={[typography.caption, { color: colors.textMuted, fontVariant: ['tabular-nums'] }]}>
-          {dateLabel}
-        </Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 8 }}>
-        <Text style={[typography.body, { fontWeight: '700', color: colors.text }]} numberOfLines={2}>
-          {t.description || t.category || t.type}
-        </Text>
-        {t.category ? (
-          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
-            {t.category}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={{ fontSize: 15, fontWeight: '800', color: amountColor, fontVariant: ['tabular-nums'] }}>
-        {sign}
-        {fmtMoney(t.amount)}
-      </Text>
     </View>
   );
 }
@@ -467,9 +420,6 @@ export function FinanceScreen() {
           </Text>
         ) : overview ? (
           <>
-            {mainTab === 'transactions' ? (
-              <FinanceQuickTransactionBar userId={userId} overview={overview} onSaved={invalidateFinance} />
-            ) : null}
             {mainTab === 'overview' ? (
               <>
                 <View style={{ marginTop: spacing.md, width: heroPageW, alignSelf: 'center' }}>
@@ -850,19 +800,14 @@ export function FinanceScreen() {
 
             {mainTab === 'transactions' ? (
               <View style={{ marginTop: spacing.md }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-                  <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
-                    Последние операции
-                  </Text>
-                  <Pressable onPress={() => openAddTransaction(null)} hitSlop={8}>
-                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 14 }}>+ Операция</Text>
-                  </Pressable>
-                </View>
-                {overview.transactionsRecent.length === 0 ? (
-                  <Text style={{ color: colors.textMuted, lineHeight: 22 }}>Транзакций пока нет.</Text>
-                ) : (
-                  overview.transactionsRecent.map((t) => <TransactionRow key={t.id} t={t} />)
-                )}
+                <FinanceTransactionTable
+                  userId={userId}
+                  overview={overview}
+                  transactions={overview.transactionsRecent}
+                  onSaved={invalidateFinance}
+                  prefillCategoryName={addTxPrefill}
+                  onOpenFullForm={() => openAddTransaction(null)}
+                />
               </View>
             ) : null}
 
@@ -971,29 +916,6 @@ export function FinanceScreen() {
         />
       ) : null}
 
-      {overview && userId && mainTab === 'transactions' ? (
-        <Pressable
-          onPress={() => openAddTransaction(null)}
-          style={{
-            position: 'absolute',
-            right: spacing.lg,
-            bottom: insets.bottom + 88,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: brand.primary,
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOpacity: 0.22,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 8,
-          }}
-        >
-          <Ionicons name="add" size={30} color="#fff" />
-        </Pressable>
-      ) : null}
     </ScreenCanvas>
   );
 }

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { createElement, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,10 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  accountBucketFromType,
-  createFinanceTransaction,
-} from '@/features/finance/financeApi';
+import { createFinanceTransaction } from '@/features/finance/financeApi';
 import type { FinanceOverview } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
@@ -49,7 +46,7 @@ type Props = {
   onClose: () => void;
   userId: string;
   overview: FinanceOverview;
-  /** Имя категории из бюджета — как в Twinworks, расход сразу в категории. */
+  /** Имя категории из бюджета — расход сразу в категории. */
   prefillCategoryName?: string | null;
 };
 
@@ -69,26 +66,17 @@ export function FinanceAddTransactionModal({
   const [amountDraft, setAmountDraft] = useState('');
   const [description, setDescription] = useState('');
   const [dateYmd, setDateYmd] = useState(localYmd);
-  const [accountId, setAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const spendAccounts = useMemo(() => {
-    const list = overview.accounts.filter((a) => accountBucketFromType(a.type) === 'available');
-    const sorted = [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ru'));
-    return sorted.length > 0 ? sorted : [...overview.accounts].sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [overview.accounts]);
 
   useEffect(() => {
     if (!visible) return;
     setError(null);
-    setKind(prefillCategoryName ? 'expense' : 'expense');
+    setKind('expense');
     setCategoryName(prefillCategoryName?.trim() ?? '');
     setAmountDraft('');
     setDescription('');
     setDateYmd(localYmd());
-    const first = spendAccounts[0]?.id ?? null;
-    setAccountId(first);
-  }, [visible, prefillCategoryName, spendAccounts]);
+  }, [visible, prefillCategoryName]);
 
   const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
@@ -106,24 +94,20 @@ export function FinanceAddTransactionModal({
         if (!cat && overview.budgetLines.length > 0) {
           throw new Error('Выбери категорию расхода');
         }
-        if (!accountId) throw new Error('Нет счёта для списания — добавь счёт в структуре');
         await createFinanceTransaction(userId, {
           type: 'expense',
           amount: amt,
           dateISO,
           category: cat || null,
           description: description.trim() || null,
-          fromAccountId: accountId,
         });
       } else {
-        if (!accountId) throw new Error('Нет счёта для зачисления');
         await createFinanceTransaction(userId, {
           type: 'income',
           amount: amt,
           dateISO,
           category: categoryName.trim() || null,
           description: description.trim() || null,
-          toAccountId: accountId,
         });
       }
     },
@@ -143,6 +127,20 @@ export function FinanceAddTransactionModal({
     color: colors.text,
     fontSize: 16,
     backgroundColor: colors.surface,
+  };
+
+  const webSelectStyle: React.CSSProperties = {
+    width: '100%',
+    minHeight: 48,
+    padding: '12px 14px',
+    borderRadius: radius.lg,
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: 16,
+    outline: 'none',
+    cursor: 'pointer',
+    boxSizing: 'border-box',
   };
 
   return (
@@ -170,8 +168,7 @@ export function FinanceAddTransactionModal({
           >
             <Text style={[typography.title2, { color: colors.text, marginBottom: 6 }]}>Новая операция</Text>
             <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 16, lineHeight: 20 }]}>
-              Расход привязывается к категории бюджета (как в Twinworks) и списывается с выбранного счёта. Доход
-              зачисляется на счёт.
+              Запись в журнале расходов и доходов. На баланс счетов в разделе «Счета» это не влияет.
             </Text>
 
             <View style={{ marginBottom: 16 }}>
@@ -188,29 +185,30 @@ export function FinanceAddTransactionModal({
             {kind === 'expense' && overview.budgetLines.length > 0 ? (
               <>
                 <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>Категория</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                  {overview.budgetLines.map((line) => {
-                    const on = categoryName === line.title;
-                    return (
-                      <Pressable
-                        key={line.id}
-                        onPress={() => setCategoryName(line.title)}
-                        style={{
-                          paddingVertical: 10,
-                          paddingHorizontal: 14,
-                          borderRadius: radius.lg,
-                          borderWidth: 1,
-                          borderColor: on ? brand.primary : colors.border,
-                          backgroundColor: on ? 'rgba(168,85,247,0.12)' : colors.surface,
-                        }}
-                      >
-                        <Text style={{ fontWeight: '700', color: on ? brand.primary : colors.text, fontSize: 13 }}>
-                          {line.title}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                {Platform.OS === 'web' ? (
+                  <View style={{ marginBottom: 16 }}>
+                    {createElement(
+                      'select',
+                      {
+                        value: categoryName,
+                        onChange: (e: { target: { value: string } }) => setCategoryName(e.target.value),
+                        style: webSelectStyle,
+                      },
+                      createElement('option', { value: '' }, '—'),
+                      ...overview.budgetLines.map((line) =>
+                        createElement('option', { key: line.id, value: line.title }, line.title)
+                      )
+                    )}
+                  </View>
+                ) : (
+                  <TextInput
+                    value={categoryName}
+                    onChangeText={setCategoryName}
+                    placeholder="Категория"
+                    placeholderTextColor={colors.textMuted}
+                    style={[inputStyle, { marginBottom: 16 }]}
+                  />
+                )}
               </>
             ) : kind === 'expense' ? (
               <>
@@ -258,42 +256,25 @@ export function FinanceAddTransactionModal({
             />
 
             <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>Дата (ГГГГ-ММ-ДД)</Text>
-            <TextInput
-              value={dateYmd}
-              onChangeText={setDateYmd}
-              placeholder={localYmd()}
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              style={[inputStyle, { marginBottom: 16 }]}
-            />
-
-            <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>
-              {kind === 'expense' ? 'Счёт списания' : 'Счёт зачисления'}
-            </Text>
-            <View style={{ gap: 8, marginBottom: 20 }}>
-              {spendAccounts.map((a) => {
-                const on = accountId === a.id;
-                return (
-                  <Pressable
-                    key={a.id}
-                    onPress={() => setAccountId(a.id)}
-                    style={{
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      borderColor: on ? brand.primary : colors.border,
-                      backgroundColor: on ? 'rgba(168,85,247,0.1)' : colors.surface,
-                    }}
-                  >
-                    <Text style={{ fontWeight: '800', color: colors.text }}>{a.name}</Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                      {a.type} · {Math.round(a.balance).toLocaleString('ru-RU')} ₽
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {Platform.OS === 'web' ? (
+              <View style={{ marginBottom: 20 }}>
+                {createElement('input', {
+                  type: 'date',
+                  value: dateYmd,
+                  onChange: (e: { target: { value: string } }) => setDateYmd(e.target.value),
+                  style: webSelectStyle,
+                })}
+              </View>
+            ) : (
+              <TextInput
+                value={dateYmd}
+                onChangeText={setDateYmd}
+                placeholder={localYmd()}
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                style={[inputStyle, { marginBottom: 20 }]}
+              />
+            )}
 
             {error ? (
               <Text style={{ color: colors.danger, marginBottom: 12, fontSize: 14 }}>{error}</Text>

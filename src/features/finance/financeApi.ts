@@ -372,8 +372,6 @@ export type CreateFinanceTransactionInput = {
   dateISO: string;
   category?: string | null;
   description?: string | null;
-  fromAccountId?: string | null;
-  toAccountId?: string | null;
 };
 
 function newFinanceTransactionId(): string {
@@ -383,7 +381,7 @@ function newFinanceTransactionId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-/** Новая операция + обновление баланса счёта (Twinworks: расход с from, доход на to). */
+/** Новая операция в журнале. Балансы счетов не меняются. */
 export async function createFinanceTransaction(
   userId: string,
   input: CreateFinanceTransactionInput
@@ -400,91 +398,26 @@ export async function createFinanceTransaction(
   const ts = nowIso();
   const id = newFinanceTransactionId();
 
-  const rollbackTx = async () => {
-    await sb.from('finance_transactions').delete().eq('id', id).eq('user_id', userId);
-  };
+  const category =
+    input.category != null && String(input.category).trim() ? String(input.category).trim() : null;
+  const description =
+    input.description != null && String(input.description).trim() ? String(input.description).trim() : null;
 
-  if (input.type === 'expense') {
-    if (!input.fromAccountId) throw new Error('Выбери счёт списания');
-
-    const { data: accRow, error: selErr } = await sb
-      .from('finance_accounts')
-      .select('balance')
-      .eq('id', input.fromAccountId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (selErr) throw selErr;
-    if (!accRow) throw new Error('Счёт не найден');
-
-    const bal = num((accRow as { balance?: unknown }).balance);
-
-    const { error: insErr } = await sb.from('finance_transactions').insert({
-      id,
-      user_id: userId,
-      date: input.dateISO,
-      type: 'expense',
-      amount,
-      currency,
-      category: input.category != null && String(input.category).trim() ? String(input.category).trim() : null,
-      description:
-        input.description != null && String(input.description).trim() ? String(input.description).trim() : null,
-      from_account_id: input.fromAccountId,
-      to_account_id: null,
-      created_at: ts,
-      updated_at: ts,
-    });
-    if (insErr) throw insErr;
-
-    const { error: upErr } = await sb
-      .from('finance_accounts')
-      .update({ balance: bal - amount, updated_at: ts })
-      .eq('id', input.fromAccountId)
-      .eq('user_id', userId);
-    if (upErr) {
-      await rollbackTx();
-      throw upErr;
-    }
-  } else {
-    if (!input.toAccountId) throw new Error('Выбери счёт зачисления');
-
-    const { data: accRow, error: selErr } = await sb
-      .from('finance_accounts')
-      .select('balance')
-      .eq('id', input.toAccountId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (selErr) throw selErr;
-    if (!accRow) throw new Error('Счёт не найден');
-
-    const bal = num((accRow as { balance?: unknown }).balance);
-
-    const { error: insErr } = await sb.from('finance_transactions').insert({
-      id,
-      user_id: userId,
-      date: input.dateISO,
-      type: 'income',
-      amount,
-      currency,
-      category: input.category != null && String(input.category).trim() ? String(input.category).trim() : null,
-      description:
-        input.description != null && String(input.description).trim() ? String(input.description).trim() : null,
-      from_account_id: null,
-      to_account_id: input.toAccountId,
-      created_at: ts,
-      updated_at: ts,
-    });
-    if (insErr) throw insErr;
-
-    const { error: upErr } = await sb
-      .from('finance_accounts')
-      .update({ balance: bal + amount, updated_at: ts })
-      .eq('id', input.toAccountId)
-      .eq('user_id', userId);
-    if (upErr) {
-      await rollbackTx();
-      throw upErr;
-    }
-  }
+  const { error: insErr } = await sb.from('finance_transactions').insert({
+    id,
+    user_id: userId,
+    date: input.dateISO,
+    type: input.type,
+    amount,
+    currency,
+    category,
+    description,
+    from_account_id: null,
+    to_account_id: null,
+    created_at: ts,
+    updated_at: ts,
+  });
+  if (insErr) throw insErr;
 
   return id;
 }
