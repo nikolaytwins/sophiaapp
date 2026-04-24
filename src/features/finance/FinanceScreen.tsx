@@ -48,6 +48,11 @@ import { useAppTheme } from '@/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+type FinanceCategoryModalState =
+  | null
+  | { mode: 'create' }
+  | { mode: 'edit'; id: string; initial: FinanceCategoryInput };
+
 const FINANCE_HERO_IMAGE = require('../../assets/images/finance-hero-sophia.png');
 
 /** Кроп маскота: справа в кадре, как на референсе «Финансы». */
@@ -63,14 +68,14 @@ const RED_EXPENSE = '#FB7185';
 
 const CLOUD_HREF = '/cloud' as Href;
 
-/** Голубое диффузное свечение снизу (как атмосфера календаря), слой под контентом — плашки таблицы выше. */
+/** Диффузное фиолетовое свечение (как rail календаря), слой под контентом — плашки таблицы выше. */
 function FinancePageGlow({ isLight }: { isLight: boolean }) {
   if (isLight) {
     return (
       <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
         <LinearGradient
           pointerEvents="none"
-          colors={['transparent', 'rgba(56, 189, 248, 0.07)', 'rgba(124, 58, 237, 0.05)']}
+          colors={['transparent', 'rgba(124, 58, 237, 0.06)', 'rgba(167, 139, 250, 0.05)']}
           locations={[0, 0.62, 1]}
           start={{ x: 0.45, y: 0 }}
           end={{ x: 0.55, y: 1 }}
@@ -91,27 +96,27 @@ function FinancePageGlow({ isLight }: { isLight: boolean }) {
             borderRadius: 310,
             bottom: '-14%',
             left: '-8%',
-            backgroundColor: 'rgba(56, 189, 248, 0.28)',
-            opacity: 0.72,
+            backgroundColor: 'rgba(123, 92, 255, 0.26)',
+            opacity: 0.75,
             ...blur,
           }}
         />
         <View
           style={{
             position: 'absolute',
-            width: 440,
-            height: 440,
-            borderRadius: 220,
-            bottom: '0%',
-            right: '-20%',
-            backgroundColor: 'rgba(123, 92, 255, 0.18)',
-            opacity: 0.58,
+            width: 480,
+            height: 420,
+            borderRadius: 240,
+            bottom: '2%',
+            right: '-18%',
+            backgroundColor: 'rgba(167, 139, 250, 0.18)',
+            opacity: 0.65,
             ...blur,
           }}
         />
         <LinearGradient
           pointerEvents="none"
-          colors={['transparent', 'rgba(56, 189, 248, 0.04)', 'transparent']}
+          colors={['transparent', 'rgba(99, 102, 241, 0.06)', 'transparent']}
           start={{ x: 0.5, y: 0.35 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFillObject}
@@ -123,7 +128,7 @@ function FinancePageGlow({ isLight }: { isLight: boolean }) {
     <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
       <LinearGradient
         pointerEvents="none"
-        colors={['transparent', 'rgba(56, 189, 248, 0.09)', 'rgba(56, 189, 248, 0.04)']}
+        colors={['transparent', 'rgba(123, 92, 255, 0.1)', 'rgba(99, 102, 241, 0.05)']}
         locations={[0, 0.72, 1]}
         start={{ x: 0.35, y: 0.2 }}
         end={{ x: 0.55, y: 1 }}
@@ -321,7 +326,7 @@ export function FinanceScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [mainTab, setMainTab] = useState<MainTab>('overview');
-  const [catModal, setCatModal] = useState<{ id: string; initial: FinanceCategoryInput } | null>(null);
+  const [catModal, setCatModal] = useState<FinanceCategoryModalState>(null);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [addTxPrefill, setAddTxPrefill] = useState<string | null>(null);
   const [historyViewMode, setHistoryViewMode] = useState<MonthHistoryViewMode>('table');
@@ -398,6 +403,7 @@ export function FinanceScreen() {
     (line: FinanceBudgetLine) => {
       const cat = overview?.expenseCategories.find((c) => c.id === line.id);
       setCatModal({
+        mode: 'edit',
         id: line.id,
         initial: {
           name: line.title,
@@ -409,6 +415,11 @@ export function FinanceScreen() {
     },
     [overview]
   );
+
+  const openAddCategory = useCallback(() => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setCatModal({ mode: 'create' });
+  }, []);
 
   const confirmDeleteCategory = useCallback(
     (line: FinanceBudgetLine) => {
@@ -915,6 +926,9 @@ export function FinanceScreen() {
                   <Text style={[typography.caption, { color: colors.textMuted, flex: 1, lineHeight: 20 }]}>
                     Расходы по категориям за текущий месяц (к плану). Карандаш — лимит и название, корзина — удалить.
                   </Text>
+                  <Pressable onPress={openAddCategory} hitSlop={8}>
+                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Добавить</Text>
+                  </Pressable>
                   <Pressable onPress={openCategorySettings} hitSlop={8}>
                     <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Настройки</Text>
                   </Pressable>
@@ -932,7 +946,23 @@ export function FinanceScreen() {
                   />
                 ) : null}
                 {overview.budgetLines.length === 0 ? (
-                  <Text style={{ color: colors.textMuted }}>Нет категорий.</Text>
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Text style={{ color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md }}>
+                      Нет категорий. Добавь первую или импортируй данные (см. scripts/FINANCE_IMPORT.md).
+                    </Text>
+                    <Pressable
+                      onPress={openAddCategory}
+                      style={{
+                        alignSelf: 'flex-start',
+                        paddingVertical: 14,
+                        paddingHorizontal: 18,
+                        borderRadius: radius.lg,
+                        backgroundColor: brand.primary,
+                      }}
+                    >
+                      <Text style={{ fontWeight: '800', color: '#fff', fontSize: 15 }}>Добавить категорию</Text>
+                    </Pressable>
+                  </View>
                 ) : (
                   overview.budgetLines.map((line) => (
                     <BudgetCard
@@ -990,9 +1020,9 @@ export function FinanceScreen() {
         visible={catModal != null}
         onClose={() => setCatModal(null)}
         userId={userId ?? ''}
-        mode="edit"
-        categoryId={catModal?.id}
-        initial={catModal?.initial}
+        mode={catModal?.mode === 'edit' ? 'edit' : 'create'}
+        categoryId={catModal?.mode === 'edit' ? catModal.id : undefined}
+        initial={catModal?.mode === 'edit' ? catModal.initial : undefined}
         allCategories={overview?.expenseCategories}
       />
 

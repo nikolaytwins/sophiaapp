@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { createElement, useEffect, useRef, useState } from 'react';
 import {
@@ -59,11 +58,11 @@ function fmtMoney(n: number, fractionDigits = 0) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: fractionDigits }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
-/** Ширины колонок: дата шире, чтобы год в поле не обрезался. */
+/** Ширины колонок: дата шире, чтобы год в поле не обрезался; категория — длинные названия и подкатегории. */
 const COL = {
   date: 128,
   amount: 96,
-  category: 136,
+  category: 228,
   actions: 52,
 } as const;
 
@@ -78,18 +77,15 @@ const sans =
       } as const)
     : ({} as const);
 
+const FINANCE_TABLE_BG_DARK = '#05040b';
+
 function tableShellOuter(isLight: boolean): object {
   if (Platform.OS === 'web' && !isLight) {
     return {
       borderRadius: 16,
       overflow: 'hidden' as const,
-      borderWidth: 1,
-      borderColor: 'rgba(157, 107, 255, 0.22)',
-      backgroundColor: 'rgba(18, 8, 42, 0.42)',
-      backdropFilter: 'blur(14px) saturate(1.2)',
-      WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
-      boxShadow:
-        'inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 28px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)',
+      borderWidth: 0,
+      backgroundColor: FINANCE_TABLE_BG_DARK,
     };
   }
   if (Platform.OS === 'web' && isLight) {
@@ -106,9 +102,9 @@ function tableShellOuter(isLight: boolean): object {
   return {
     borderRadius: 16,
     overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: isLight ? 'rgba(15,17,24,0.1)' : 'rgba(157, 107, 255, 0.28)',
-    backgroundColor: isLight ? 'rgba(255,255,255,0.94)' : 'rgba(22, 12, 48, 0.88)',
+    borderWidth: isLight ? 1 : 0,
+    borderColor: isLight ? 'rgba(15,17,24,0.1)' : 'transparent',
+    backgroundColor: isLight ? 'rgba(255,255,255,0.94)' : FINANCE_TABLE_BG_DARK,
   };
 }
 
@@ -759,12 +755,12 @@ export function FinanceTransactionTable({
             __html: `
 input.finance-web-date { color-scheme: dark; }
 input.finance-web-date::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.92;
+  opacity: 1;
   cursor: pointer;
+  filter: invert(62%) sepia(53%) saturate(1286%) hue-rotate(228deg) brightness(103%) contrast(97%);
 }
 input.finance-web-date::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
+  filter: invert(70%) sepia(45%) saturate(1200%) hue-rotate(228deg) brightness(108%) contrast(100%);
 }
 `.trim(),
           },
@@ -872,13 +868,7 @@ input.finance-web-date::-webkit-calendar-picker-indicator:hover {
         </Pressable>
       </View>
 
-      {Platform.OS === 'web' ? (
-        tableShell
-      ) : (
-        <BlurView intensity={isLight ? 52 : 40} tint={isLight ? 'light' : 'dark'} style={[{ width: '100%' }, tableShellOuter(isLight)]}>
-          {body}
-        </BlurView>
-      )}
+      {tableShell}
     </View>
   );
 }
