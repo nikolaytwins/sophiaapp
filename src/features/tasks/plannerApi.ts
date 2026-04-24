@@ -117,10 +117,9 @@ function normalizePlannerTaskRow(row: PlannerTaskRow & { is_week_focus?: boolean
   };
 }
 
-export async function listPlannerWeekFocusTasks(anchorDateKey: string): Promise<PlannerTaskRow[]> {
+async function listPlannerWeekFocusTasksForUser(userId: string, anchorDateKey: string): Promise<PlannerTaskRow[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const userId = await requireUserId();
   const start = startOfWeekMondayKey(anchorDateKey);
   const end = addDays(start, 6);
   const { data, error } = await sb
@@ -137,6 +136,11 @@ export async function listPlannerWeekFocusTasks(anchorDateKey: string): Promise<
   return (data ?? []).map((r) => normalizePlannerTaskRow(r as PlannerTaskRow));
 }
 
+export async function listPlannerWeekFocusTasks(anchorDateKey: string): Promise<PlannerTaskRow[]> {
+  const userId = await requireUserId();
+  return listPlannerWeekFocusTasksForUser(userId, anchorDateKey);
+}
+
 function normalizePlannerWeekFocusStandaloneRow(row: PlannerWeekFocusStandaloneRow): PlannerWeekFocusStandaloneRow {
   return {
     ...row,
@@ -144,10 +148,9 @@ function normalizePlannerWeekFocusStandaloneRow(row: PlannerWeekFocusStandaloneR
   };
 }
 
-export async function listPlannerWeekFocusStandalone(weekMondayKey: string): Promise<PlannerWeekFocusStandaloneRow[]> {
+async function listPlannerWeekFocusStandaloneForUser(userId: string, weekMondayKey: string): Promise<PlannerWeekFocusStandaloneRow[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const userId = await requireUserId();
   const mon = startOfWeekMondayKey(weekMondayKey);
   const { data, error } = await sb
     .from('planner_week_focus')
@@ -158,6 +161,11 @@ export async function listPlannerWeekFocusStandalone(weekMondayKey: string): Pro
     .order('sort_order', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => normalizePlannerWeekFocusStandaloneRow(r as PlannerWeekFocusStandaloneRow));
+}
+
+export async function listPlannerWeekFocusStandalone(weekMondayKey: string): Promise<PlannerWeekFocusStandaloneRow[]> {
+  const userId = await requireUserId();
+  return listPlannerWeekFocusStandaloneForUser(userId, weekMondayKey);
 }
 
 function weekFocusItemDone(item: PlannerWeekFocusListItem): boolean {
@@ -185,10 +193,11 @@ export function sortMergedWeekFocusItems(items: PlannerWeekFocusListItem[]): Pla
 
 /** Задачи с флагом «фокус недели» + отдельные фокусы недели (без дня). */
 export async function listMergedWeekFocus(anchorDateKey: string): Promise<PlannerWeekFocusListItem[]> {
+  const userId = await requireUserId();
   const mon = startOfWeekMondayKey(anchorDateKey);
   const [standalone, tasks] = await Promise.all([
-    listPlannerWeekFocusStandalone(mon),
-    listPlannerWeekFocusTasks(anchorDateKey),
+    listPlannerWeekFocusStandaloneForUser(userId, mon),
+    listPlannerWeekFocusTasksForUser(userId, anchorDateKey),
   ]);
   const items: PlannerWeekFocusListItem[] = [
     ...standalone.map((row) => ({ kind: 'standalone' as const, row })),

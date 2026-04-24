@@ -34,12 +34,10 @@ import {
   updatePlannerWeekNoteItem,
 } from '@/features/calendar/calendarApi';
 import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
-import { CalendarLeftNavRail } from '@/features/calendar/CalendarLeftNavRail';
 import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
 import { calendarChipColorForId } from '@/features/calendar/calendarEventChips';
 import {
   CAL_PRIMARY_GRADIENT,
-  calendarSynaptixCardStyle,
   calendarSynaptixGlowWeb,
   calendarSynaptixGlowWebHover,
 } from '@/features/calendar/calendarPremiumShell';
@@ -68,13 +66,13 @@ import {
   PLANNER_WEEK_NOTE_ITEMS_QUERY_KEY,
 } from '@/features/tasks/queryKeys';
 import { invalidatePlannerCalendarQueries, invalidatePlannerWeekQueries } from '@/features/tasks/plannerWeekInvalidation';
-import { getSupabase } from '@/lib/supabase';
 import { useSupabaseAuthSession } from '@/hooks/useSupabaseAuthSession';
+import { getSupabase } from '@/lib/supabase';
+import { WEB_NAV_LG_MIN } from '@/navigation/navConstants';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
-const LG_MIN = 1100;
 const CONTENT_MAX = 1760;
 const SIDEBAR_W = 328;
 const DESKTOP_PAD = 24;
@@ -85,8 +83,6 @@ const CAL_SOLID_ACCENT = '#7337dd';
 const CAL_SOLID_ACCENT_RGB = '115, 55, 221';
 
 export type CalendarMainView = 'month' | 'week' | 'day';
-export type CalendarVisualVariant = 'default' | 'v2';
-
 function minimalField(colors: { text: string }, isLight: boolean) {
   const base = {
     borderWidth: 1,
@@ -105,17 +101,15 @@ function minimalField(colors: { text: string }, isLight: boolean) {
   if (Platform.OS === 'web') {
     return {
       ...base,
-      borderColor: 'rgba(157, 107, 255, 0.38)',
-      backgroundColor: 'rgba(12, 4, 32, 0.55)',
-      backdropFilter: 'blur(16px) saturate(1.4)',
-      WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 28px rgba(0,0,0,0.45)',
+      borderColor: 'rgba(157, 107, 255, 0.35)',
+      backgroundColor: '#16101f',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
     } as const;
   }
   return {
     ...base,
     borderColor: 'rgba(157, 107, 255, 0.35)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#16101f',
   };
 }
 
@@ -194,20 +188,16 @@ function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): Planne
   return events.filter((e) => e.event_date === dateKey);
 }
 
-export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisualVariant } = {}) {
+export function CalendarScreen() {
   const { colors, spacing, typography, brand, isLight } = useAppTheme();
   const { isAuthed, displayName } = useSupabaseAuthSession();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { width: windowWidth } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && windowWidth >= LG_MIN;
+  const isDesktop = Platform.OS === 'web' && windowWidth >= WEB_NAV_LG_MIN;
   const profileTitle = isAuthed ? displayName || 'Профиль' : 'Гость';
-  const [navRailCollapsed, setNavRailCollapsed] = useState(() => !isDesktop);
-  useEffect(() => {
-    setNavRailCollapsed(!isDesktop);
-  }, [isDesktop]);
 
-  const isV2 = variant === 'v2' && !isLight;
+  const isV2 = false;
   const fillAccent = isV2 ? '#8040E8' : brand.primary;
   const labelAccent = isV2 ? '#C49BFF' : '#C4B5FD';
   const ctaGradient = isV2 ? (['#A06AF0', '#5A27B0'] as const) : CAL_PRIMARY_GRADIENT;
@@ -303,6 +293,8 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
     queryKey: [...PLANNER_WEEK_FOCUS_QUERY_KEY, weekMonday],
     queryFn: () => listMergedWeekFocus(weekAnchorKey),
     enabled,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData,
   });
 
   const weekNoteItemsQ = useQuery({
@@ -797,7 +789,7 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
     <View style={{ marginTop: spacing.lg }}>
       <Text style={sectionLabel(colors, isLight, isV2)}>Фокусы недели</Text>
       <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
-        {weekFocusQ.isLoading ? (
+        {weekFocusQ.data === undefined && weekFocusQ.isFetching ? (
           <ActivityIndicator color={fillAccent} />
         ) : (weekFocusQ.data ?? []).length === 0 ? (
           <Text style={[typography.caption, { color: colors.textMuted }]}>Пока нет фокусов на эту неделю</Text>
@@ -1195,14 +1187,11 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
   if (!supabaseOn) {
     return (
       <ScreenCanvas>
-        <View style={{ flex: 1, flexDirection: 'row' }}>
-          <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} variant={variant} />
-          <View style={{ flex: 1, minWidth: 0, padding: spacing.xl, justifyContent: 'center' }}>
-            <Text style={[typography.title2, { color: colors.text }]}>Календарь</Text>
-            <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}>
-              Подключи Supabase, чтобы хранить события и заметки в облаке.
-            </Text>
-          </View>
+        <View style={{ flex: 1, minWidth: 0, padding: spacing.xl, justifyContent: 'center' }}>
+          <Text style={[typography.title2, { color: colors.text }]}>Календарь</Text>
+          <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}>
+            Подключи Supabase, чтобы хранить события и заметки в облаке.
+          </Text>
         </View>
       </ScreenCanvas>
     );
@@ -1210,23 +1199,20 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
 
   return (
     <ScreenCanvas>
-      <View style={{ flex: 1, flexDirection: 'row' }}>
-        <CalendarLeftNavRail collapsed={navRailCollapsed} onToggleCollapsed={() => setNavRailCollapsed((c) => !c)} isLight={isLight} variant={variant} />
-        <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          {!isLight ? (
-            isV2 ? (
-              <LinearGradient
-                colors={['#1A1535', '#0B0918']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-              />
-            ) : (
-              <CalendarAtmosphere />
-            )
-          ) : null}
-          {mainScroll}
-        </View>
+      <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        {!isLight ? (
+          isV2 ? (
+            <LinearGradient
+              colors={['#1A1535', '#0B0918']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+          ) : (
+            <CalendarAtmosphere />
+          )
+        ) : null}
+        {mainScroll}
       </View>
 
       <Modal visible={addEventOpen} animationType="fade" transparent onRequestClose={() => setAddEventOpen(false)}>
@@ -1673,18 +1659,15 @@ function notePlate(border: string, isLight: boolean, isV2: boolean) {
   };
 }
 
-function modalCardShell(isLight: boolean, isV2: boolean) {
+function modalCardShell(isLight: boolean, _isV2: boolean) {
   if (!isLight) {
-    if (isV2) {
-      return {
-        maxWidth: 420,
-        width: '100%' as const,
-        borderRadius: 20,
-        borderWidth: 0,
-        backgroundColor: '#1A1535',
-      } as const;
-    }
-    return { ...calendarSynaptixCardStyle(), maxWidth: 420, width: '100%' as const } as const;
+    return {
+      maxWidth: 420,
+      width: '100%' as const,
+      borderRadius: 20,
+      borderWidth: 0,
+      backgroundColor: '#1A1535',
+    } as const;
   }
   return { maxWidth: 420, width: '100%' as const };
 }

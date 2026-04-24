@@ -72,11 +72,6 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     [colors, isLight, shadows, typography]
   );
 
-  const currentName = state.routes[state.index]?.name;
-  if (currentName === 'calendar') {
-    return null;
-  }
-
   const visibleRoutes = TAB_BAR_ROUTE_ORDER.map((name) => state.routes.find((r) => r.name === name)).filter(
     (r): r is (typeof state.routes)[number] => r != null
   );

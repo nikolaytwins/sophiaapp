@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link, type Href, useRouter } from 'expo-router';
+import { Link, type Href, usePathname, useRouter, useSegments } from 'expo-router';
 import { Fragment, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,17 +14,21 @@ import { useAppTheme } from '@/theme';
 const RAIL_W_EXPANDED = 218;
 const RAIL_W_COLLAPSED = 60;
 
-const RAIL_BG_DEFAULT_DARK = '#06050a';
+/** Фон бокового меню: плоский тёмный, без «стекла» и без свечения по краям. */
+export const APP_NAV_RAIL_BG_DARK = '#05040b';
+
 const RAIL_ITEM_ACTIVE_SOLID = '#7337dd';
 
-type Props = {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  isLight: boolean;
-  variant?: 'default' | 'v2';
-};
+function routeNameFromPathname(pathname: string): string | null {
+  const p = pathname.split('?')[0] ?? '';
+  for (const name of TAB_BAR_ROUTE_ORDER) {
+    const href = String(TAB_HREF[name] ?? `/${name}`);
+    if (p === href || p.startsWith(`${href}/`)) return name;
+  }
+  return null;
+}
 
-function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight: boolean; isV2: boolean }) {
+function RailDayHero({ collapsed, isLight }: { collapsed: boolean; isLight: boolean }) {
   const { colors, typography } = useAppTheme();
   const router = useRouter();
   const href = '/day' as Href;
@@ -35,23 +39,18 @@ function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight
         marginTop: 4,
         borderRadius: 16,
         overflow: 'hidden',
-        borderWidth: isV2 ? 0 : 1,
-        borderColor: isLight ? colors.border : 'rgba(167,139,250,0.32)',
-        ...(Platform.OS === 'web'
-          ? ({
-              ...(isV2 ? {} : { boxShadow: '0 16px 48px rgba(0,0,0,0.62), 0 0 64px rgba(123,92,255,0.28), 0 0 100px rgba(244,114,182,0.1), inset 0 1px 0 rgba(255,255,255,0.06)' }),
-            } as object)
-          : { elevation: isV2 ? 0 : 10 }),
+        borderWidth: isLight ? 1 : 0,
+        borderColor: isLight ? colors.border : 'transparent',
+        ...(Platform.OS === 'web' ? {} : { elevation: isLight ? 4 : 0 }),
       }}
     >
       <View style={{ height: 132, position: 'relative' }}>
         <LinearGradient
-          colors={isV2 ? ['#1A1535', '#171131'] : ['#141018', '#0a090f']}
+          colors={isLight ? ['#f4f4f8', '#e8e8ee'] : ['#0c0a12', '#08060e']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        {!isV2 ? <LinearGradient colors={['rgba(76,29,149,0.45)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} /> : null}
         <Image
           source={HABIT_HERO_SOPHIA_IMAGE}
           style={StyleSheet.absoluteFillObject}
@@ -59,21 +58,13 @@ function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight
           contentPosition={{ top: '8%', left: '50%' }}
         />
         <LinearGradient
-          colors={isV2 ? ['transparent', 'rgba(11,9,24,0.9)'] : ['transparent', 'rgba(6,4,16,0.55)', 'rgba(6,4,16,0.92)']}
+          colors={isLight ? ['transparent', 'rgba(255,255,255,0.75)'] : ['transparent', 'rgba(5,4,11,0.92)']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        {!isV2 ? (
-          <LinearGradient
-            colors={['rgba(8,8,14,0.75)', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 0.45, y: 0.5 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-        ) : null}
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, padding: 12, justifyContent: 'flex-end' }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', letterSpacing: 1.6, color: isV2 ? '#C49BFF' : 'rgba(196,181,253,0.75)' }}>СОФИЯ</Text>
+          <Text style={{ fontSize: 9, fontWeight: '800', letterSpacing: 1.6, color: isLight ? colors.textMuted : 'rgba(196,181,253,0.7)' }}>СОФИЯ</Text>
           <Text style={[typography.title2, { color: '#F4F4F8', fontWeight: '800', fontSize: 17, marginTop: 4, letterSpacing: -0.3 }]}>
             День вместе
           </Text>
@@ -91,13 +82,8 @@ function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight
           height: 44,
           borderRadius: 22,
           overflow: 'hidden',
-          borderWidth: isV2 ? 0 : 1,
-          borderColor: isLight ? colors.border : 'rgba(167,139,250,0.45)',
-          ...(Platform.OS === 'web'
-            ? ({
-              ...(isV2 ? {} : { boxShadow: '0 0 32px rgba(123,92,255,0.45), 0 0 56px rgba(244,114,182,0.12), 0 10px 28px rgba(0,0,0,0.55)' }),
-            } as object)
-            : { shadowColor: '#7C3AED', shadowOpacity: isV2 ? 0 : 0.35, shadowRadius: isV2 ? 0 : 10, shadowOffset: { width: 0, height: 4 }, elevation: isV2 ? 0 : 6 }),
+          borderWidth: isLight ? 1 : 0,
+          borderColor: isLight ? colors.border : 'transparent',
         }}
       >
         <Image source={HABIT_HERO_SOPHIA_IMAGE} style={StyleSheet.absoluteFillObject} contentFit="cover" contentPosition="top" />
@@ -151,18 +137,32 @@ function RailDayHero({ collapsed, isLight, isV2 }: { collapsed: boolean; isLight
   );
 }
 
-export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, variant = 'default' }: Props) {
+type Props = {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  isLight: boolean;
+};
+
+export function AppLeftNavRail({ collapsed, onToggleCollapsed, isLight }: Props) {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const segments = useSegments();
   const { colors, brand, typography } = useAppTheme();
   const router = useRouter();
-  const isV2 = variant === 'v2' && !isLight;
   const w = collapsed ? RAIL_W_COLLAPSED : RAIL_W_EXPANDED;
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
+
+  const activeRoute = useMemo(() => {
+    const last = segments[segments.length - 1];
+    const order = TAB_BAR_ROUTE_ORDER as unknown as readonly string[];
+    if (last && order.includes(last)) return last;
+    return routeNameFromPathname(pathname);
+  }, [segments, pathname]);
 
   const shell = useMemo(() => {
     if (!isLight) {
       return {
-        backgroundColor: isV2 ? '#1A1535' : RAIL_BG_DEFAULT_DARK,
+        backgroundColor: APP_NAV_RAIL_BG_DARK,
         borderRadius: 0,
         borderWidth: 0,
       };
@@ -173,7 +173,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
       borderWidth: 1,
       borderColor: colors.border,
     };
-  }, [colors.border, colors.surface2, isLight, isV2]);
+  }, [colors.border, colors.surface2, isLight]);
 
   return (
     <View
@@ -190,7 +190,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
           paddingHorizontal: collapsed ? 6 : 8,
           justifyContent: 'space-between',
           borderRightWidth: 1,
-          borderRightColor: isLight ? colors.border : isV2 ? 'rgba(196,155,255,0.08)' : 'rgba(196,155,255,0.12)',
+          borderRightColor: isLight ? colors.border : 'rgba(255,255,255,0.06)',
         },
         shell as object,
       ]}
@@ -201,7 +201,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                 <Image
-                  source={require('../../../assets/images/sophia-icon-1024.png')}
+                  source={require('../../assets/images/sophia-icon-1024.png')}
                   style={{ width: 28, height: 28, borderRadius: 7 }}
                   contentFit="cover"
                 />
@@ -227,7 +227,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
           ) : (
             <View style={{ alignItems: 'center', marginBottom: 8 }}>
               <Image
-                source={require('../../../assets/images/sophia-icon-1024.png')}
+                source={require('../../assets/images/sophia-icon-1024.png')}
                 style={{ width: 28, height: 28, borderRadius: 7 }}
                 contentFit="cover"
               />
@@ -266,20 +266,16 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
         <View style={{ gap: 2 }}>
           {TAB_BAR_ROUTE_ORDER.map((routeName) => {
             const href = TAB_HREF[routeName] ?? (`/${routeName}` as Href);
-            const focused = routeName === 'calendar';
+            const focused = activeRoute === routeName;
             const hovered = hoveredRoute === routeName;
             const tint = isLight
               ? focused
                 ? colors.accent
                 : colors.textMuted
               : focused
-                ? isV2
-                  ? '#C49BFF'
-                  : '#FFFFFF'
+                ? '#FFFFFF'
                 : hovered
-                  ? isV2
-                    ? '#E2CCFF'
-                    : 'rgba(255,255,255,0.72)'
+                  ? 'rgba(255,255,255,0.72)'
                   : 'rgba(255,255,255,0.38)';
             const iconName = (TAB_ICONS[routeName] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
             const label = TAB_LABELS[routeName] ?? routeName;
@@ -305,25 +301,11 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
                   paddingHorizontal: collapsed ? 4 : 8,
                   borderRadius: 12,
                   overflow: 'hidden',
-                  backgroundColor: focused
-                    ? isLight
-                      ? brand.primaryMuted
-                      : isV2
-                        ? 'transparent'
-                        : RAIL_ITEM_ACTIVE_SOLID
-                    : 'transparent',
+                  backgroundColor: focused ? (isLight ? brand.primaryMuted : RAIL_ITEM_ACTIVE_SOLID) : 'transparent',
                   borderWidth: 0,
                   borderColor: 'transparent',
                 }}
               >
-                {focused && !isLight && isV2 ? (
-                  <LinearGradient
-                    colors={['#7B5CFF', '#9D6BFF', '#6D28D9']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[StyleSheet.absoluteFillObject, { borderRadius: 12 }]}
-                  />
-                ) : null}
                 <Ionicons name={iconName} size={22} color={tint} />
                 {!collapsed ? (
                   <Text style={[typography.body, { fontSize: 13, fontWeight: '700', color: tint, flex: 1 }]} numberOfLines={1}>
@@ -346,7 +328,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
       </View>
 
       <View style={{ paddingTop: 8 }}>
-        <RailDayHero collapsed={collapsed} isLight={isLight} isV2={isV2} />
+        <RailDayHero collapsed={collapsed} isLight={isLight} />
       </View>
     </View>
   );
