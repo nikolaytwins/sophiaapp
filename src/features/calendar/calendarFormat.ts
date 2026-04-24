@@ -24,3 +24,11 @@ export function shortWeekdayRu(dateKey: string): string {
   const idx = day === 0 ? 6 : day - 1;
   return WEEKDAY_SHORT_RU[idx] ?? '';
 }
+
+/** Длинная подпись дня для шапки (напр. «Пятница, 24 апреля 2026 г.»). */
+export function fullDayTitleRu(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const raw = dt.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}

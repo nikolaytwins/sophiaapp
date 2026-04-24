@@ -39,8 +39,14 @@ import {
   updatePlannerWeekNoteItem,
 } from '@/features/calendar/calendarApi';
 import { CalendarAtmosphere } from '@/features/calendar/CalendarAtmosphere';
-import { monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
-import { calendarChipColorForEvent, normalizeEventKind } from '@/features/calendar/calendarEventChips';
+import { fullDayTitleRu, monthTitleRu, shortWeekdayRu, weekRangeLabelRu } from '@/features/calendar/calendarFormat';
+import {
+  calendarChipColorForEvent,
+  eventGemForEvent,
+  eventGemWebShadow,
+  eventPastelForEvent,
+  normalizeEventKind,
+} from '@/features/calendar/calendarEventChips';
 import {
   CAL_PRIMARY_GRADIENT,
   calendarSynaptixGlowWeb,
@@ -264,6 +270,62 @@ function eventsOnDay(events: PlannerCalendarEventRow[], dateKey: string): Planne
   return events.filter((e) => e.event_date === dateKey);
 }
 
+/** Превью события в ячейке месяца — те же pastel / gem, что на неделе. */
+function MonthGridEventSnippet({
+  ev,
+  isLight,
+  onPress,
+}: {
+  ev: PlannerCalendarEventRow;
+  isLight: boolean;
+  onPress: () => void;
+}) {
+  if (isLight) {
+    const p = eventPastelForEvent(ev);
+    return (
+      <Pressable
+        onPress={onPress}
+        {...(webEventTitleProps(ev.title) as object)}
+        style={{
+          marginTop: 4,
+          borderRadius: 10,
+          paddingHorizontal: 7,
+          paddingVertical: 5,
+          backgroundColor: p.fill,
+          borderWidth: 1,
+          borderColor: p.border,
+          ...(Platform.OS === 'web' ? ({ boxShadow: '0 4px 14px rgba(15,17,24,0.06)' } as object) : {}),
+        }}
+      >
+        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '800', color: p.text }}>
+          {ev.title}
+        </Text>
+      </Pressable>
+    );
+  }
+  const g = eventGemForEvent(ev);
+  return (
+    <Pressable
+      onPress={onPress}
+      {...(webEventTitleProps(ev.title) as object)}
+      style={{
+        marginTop: 4,
+        borderRadius: 10,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: g.border,
+        ...(Platform.OS === 'web' ? ({ boxShadow: eventGemWebShadow(g) } as object) : {}),
+      }}
+    >
+      <LinearGradient colors={[...g.gradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 7, paddingVertical: 5 }}>
+        <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '800', color: g.text }}>
+          {ev.title}
+        </Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 export function CalendarScreen() {
   const { colors, spacing, typography, brand, isLight } = useAppTheme();
   const { isAuthed, displayName } = useSupabaseAuthSession();
@@ -323,6 +385,11 @@ export function CalendarScreen() {
   const weekMonday = startOfWeekMondayKey(weekAnchorKey);
   const weekSun = addDays(weekMonday, 6);
   const dayKeysWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)), [weekMonday]);
+  /** Неделя, в которой лежит день в режиме «День» — полоска быстрого выбора даты. */
+  const dayViewStripKeys = useMemo(() => {
+    const mon = startOfWeekMondayKey(dayViewDateKey);
+    return Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+  }, [dayViewDateKey]);
 
   const { gridStart, gridEnd } = useMemo(() => monthGridRange(viewYm.y, viewYm.m), [viewYm]);
   const rows = useMemo(() => monthCalendarRows(viewYm.y, viewYm.m), [viewYm]);
@@ -817,7 +884,7 @@ export function CalendarScreen() {
       <View style={{ flexDirection: 'row', marginBottom: 4 }}>
         {WEEKDAY_SHORT_RU.map((label) => (
           <View key={`h-${label}`} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted }}>{label}</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, opacity: isLight ? 0.85 : 1 }}>{label}</Text>
           </View>
         ))}
       </View>
@@ -836,10 +903,18 @@ export function CalendarScreen() {
                   marginHorizontal: 2,
                   minHeight: 36,
                   paddingVertical: 8,
-                  borderRadius: 10,
+                  borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isToday ? (isV2 ? '#2A2150' : brand.primaryMuted) : selWeek ? (isV2 ? '#241C4A' : 'rgba(168,85,247,0.12)') : 'transparent',
+                  backgroundColor: isToday
+                    ? isV2
+                      ? '#2A2150'
+                      : brand.primaryMuted
+                    : selWeek
+                      ? isV2
+                        ? '#241C4A'
+                        : 'rgba(123, 92, 255, 0.08)'
+                      : 'transparent',
                   borderWidth: isToday && !isV2 ? 1 : 0,
                   borderColor: isV2 ? 'transparent' : fillAccent,
                 }}
@@ -1021,9 +1096,10 @@ export function CalendarScreen() {
           <View key={label} style={{ flex: 1, alignItems: 'center' }}>
             <Text
               style={{
-                fontSize: 11,
-                fontWeight: '800',
+                fontSize: 10,
+                fontWeight: '700',
                 color: isLight ? colors.textMuted : 'rgba(196,181,253,0.72)',
+                opacity: isLight ? 0.85 : 1,
                 ...(Platform.OS === 'web' && !isLight && !isV2 ? ({ textShadow: '0 0 14px rgba(157,107,255,0.35)' } as object) : {}),
               }}
             >
@@ -1054,8 +1130,9 @@ export function CalendarScreen() {
                     flex: 1,
                     marginHorizontal: 3,
                     minHeight: isDesktop ? 104 : 76,
-                    borderRadius: 16,
+                    borderRadius: 14,
                     padding: 8,
+                    overflow: 'hidden',
                     backgroundColor: isLight
                       ? isToday
                         ? brand.primaryMuted
@@ -1063,12 +1140,20 @@ export function CalendarScreen() {
                       : isToday
                         ? isV2
                           ? '#2A2150'
-                          : 'rgba(123, 92, 255, 0.12)'
+                          : 'rgba(123, 92, 255, 0.06)'
                         : isV2
                           ? '#1A1535'
-                          : 'rgba(12, 6, 32, 0.42)',
+                          : 'transparent',
                     borderWidth: isV2 ? 0 : 1,
-                    borderColor: isToday ? (isLight ? fillAccent : 'rgba(157, 107, 255, 0.65)') : isLight ? mainShellBorder : isV2 ? 'transparent' : 'rgba(157, 107, 255, 0.18)',
+                    borderColor: isToday
+                      ? isLight
+                        ? fillAccent
+                        : 'rgba(157, 107, 255, 0.55)'
+                      : isLight
+                        ? mainShellBorder
+                        : isV2
+                          ? 'transparent'
+                          : 'rgba(123, 92, 255, 0.16)',
                     ...(Platform.OS === 'web' && !isLight && !isV2
                       ? ({
                           backdropFilter: 'blur(12px) saturate(1.2)',
@@ -1094,24 +1179,7 @@ export function CalendarScreen() {
                     {Number(dateKey.slice(8, 10))}
                   </Text>
                   {evs.map((ev) => (
-                    <Pressable
-                      key={ev.id}
-                      onPress={() => openEventEditor(ev)}
-                      {...(webEventTitleProps(ev.title) as object)}
-                      style={{
-                        marginTop: 4,
-                        borderRadius: 8,
-                        paddingHorizontal: 6,
-                        paddingVertical: 4,
-                        backgroundColor: `${calendarChipColorForEvent(ev)}22`,
-                        borderLeftWidth: 3,
-                        borderLeftColor: calendarChipColorForEvent(ev),
-                      }}
-                    >
-                      <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: isLight ? colors.text : '#EDE9FE' }}>
-                        {ev.title}
-                      </Text>
-                    </Pressable>
+                    <MonthGridEventSnippet key={ev.id} ev={ev} isLight={isLight} onPress={() => openEventEditor(ev)} />
                   ))}
                   {nEv > 0 ? (
                     <View style={{ flexDirection: 'row', gap: 3, marginTop: 6 }}>
@@ -1141,59 +1209,113 @@ export function CalendarScreen() {
     />
   );
 
+  const syncDayNav = (k: string) => {
+    setDayViewDateKey(k);
+    setWeekAnchorKey(k);
+    setViewYm({ y: Number(k.slice(0, 4)), m: Number(k.slice(5, 7)) });
+  };
+
   const dayMainBoard = (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <Pressable
-          onPress={() => {
-            const k = addDays(dayViewDateKey, -1);
-            setDayViewDateKey(k);
-            setWeekAnchorKey(k);
-            setViewYm({ y: Number(k.slice(0, 4)), m: Number(k.slice(5, 7)) });
-          }}
-          style={ghostBtn('transparent', colors, brand)}
-        >
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: spacing.sm }}>
+        <Pressable onPress={() => syncDayNav(addDays(dayViewDateKey, -1))} style={ghostBtn('transparent', colors, brand)}>
           <Ionicons name="chevron-back" size={22} color={fillAccent} />
         </Pressable>
-        <Text style={[typography.title2, { color: colors.text, fontWeight: '900', flex: 1, textAlign: 'center' }]} numberOfLines={1}>
-          {shortWeekdayRu(dayViewDateKey)} · {dayViewDateKey}
-        </Text>
-        <Pressable
-          onPress={() => {
-            const k = addDays(dayViewDateKey, 1);
-            setDayViewDateKey(k);
-            setWeekAnchorKey(k);
-            setViewYm({ y: Number(k.slice(0, 4)), m: Number(k.slice(5, 7)) });
-          }}
-          style={ghostBtn('transparent', colors, brand)}
-        >
+        <View style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+          <Text
+            style={[
+              typography.title2,
+              {
+                color: isLight ? colors.text : '#F5F3FF',
+                fontWeight: '900',
+                textAlign: 'center',
+                fontSize: isDesktop ? 17 : 15,
+                letterSpacing: -0.2,
+                ...(Platform.OS === 'web' && !isLight && !isV2 ? ({ textShadow: '0 0 22px rgba(157,107,255,0.4)' } as object) : {}),
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {fullDayTitleRu(dayViewDateKey)}
+          </Text>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, fontWeight: '700' }]} numberOfLines={1}>
+            {shortWeekdayRu(dayViewDateKey).toUpperCase()} · {dayViewDateKey}
+          </Text>
+        </View>
+        <Pressable onPress={() => syncDayNav(addDays(dayViewDateKey, 1))} style={ghostBtn('transparent', colors, brand)}>
           <Ionicons name="chevron-forward" size={22} color={fillAccent} />
         </Pressable>
       </View>
-      <Text style={[typography.caption, { marginTop: spacing.md, fontWeight: '800' }]}>СОБЫТИЯ</Text>
-      {eventsOnDay(weekEventsQ.data ?? [], dayViewDateKey).length === 0 ? (
-        <Text style={[typography.body, { color: colors.textMuted, marginTop: 6 }]}>Нет событий</Text>
-      ) : (
-        eventsOnDay(weekEventsQ.data ?? [], dayViewDateKey).map((ev) => (
-          <Pressable
-            key={ev.id}
-            onPress={() => openEventEditor(ev)}
-            {...(webEventTitleProps(ev.title) as object)}
-            style={{
-              marginTop: 10,
-              borderRadius: 16,
-              padding: 14,
-              backgroundColor: `${calendarChipColorForEvent(ev)}20`,
-              borderLeftWidth: 5,
-              borderLeftColor: calendarChipColorForEvent(ev),
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>{ev.title}</Text>
-            {ev.note ? <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6 }]}>{ev.note}</Text> : null}
-          </Pressable>
-        ))
-      )}
-    </ScrollView>
+
+      <View style={{ flexDirection: 'row', gap: 5, marginBottom: spacing.md }}>
+        {dayViewStripKeys.map((dk, di) => {
+          const sel = dk === dayViewDateKey;
+          const isToday = dk === todayKey;
+          return (
+            <Pressable
+              key={dk}
+              onPress={() => syncDayNav(dk)}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                alignItems: 'center',
+                paddingVertical: 10,
+                paddingHorizontal: 2,
+                borderRadius: 12,
+                borderWidth: sel ? 1 : isToday && !sel ? 1 : 0,
+                borderColor: sel
+                  ? isLight
+                    ? fillAccent
+                    : 'rgba(157, 107, 255, 0.55)'
+                  : isToday
+                    ? isLight
+                      ? 'rgba(124,58,237,0.35)'
+                      : 'rgba(157, 107, 255, 0.35)'
+                    : 'transparent',
+                backgroundColor: sel
+                  ? isLight
+                    ? brand.primaryMuted
+                    : 'rgba(123, 92, 255, 0.12)'
+                  : isToday
+                    ? isLight
+                      ? 'rgba(124,58,237,0.08)'
+                      : 'rgba(123, 92, 255, 0.06)'
+                    : isLight
+                      ? 'rgba(15,17,24,0.04)'
+                      : 'rgba(255,255,255,0.04)',
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '800', color: isLight ? colors.textMuted : 'rgba(196,181,253,0.72)' }}>
+                {WEEKDAY_SHORT_RU[di] ?? ''}
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 16,
+                  fontWeight: '900',
+                  color: sel ? (isLight ? colors.text : '#F5F3FF') : isLight ? colors.text : '#EDE9FE',
+                  opacity: sel ? 1 : 0.82,
+                }}
+              >
+                {Number(dk.slice(8, 10))}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <CalendarWeekHourlyBoard
+        dayKeys={[dayViewDateKey]}
+        weekEvents={weekEventsQ.data ?? []}
+        todayKey={todayKey}
+        fullWidthGrid
+        onOpenDay={(dk) => {
+          syncDayNav(dk);
+          setDayModalKey(dk);
+        }}
+        onOpenEvent={openEventEditor}
+      />
+    </View>
   );
 
   const leftColumn = (
