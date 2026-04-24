@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Link, type Href } from 'expo-router';
 import { Fragment, useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
@@ -32,7 +32,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           elevation: Platform.OS === 'web' ? 0 : 24,
         },
         barOuter: {
-          maxWidth: 520,
+          maxWidth: '100%' as const,
           width: '100%',
           borderRadius: 28,
           overflow: 'hidden',
@@ -48,25 +48,27 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               }
             : {}),
         },
-        row: {
+        scrollInner: {
           flexDirection: 'row',
           alignItems: 'flex-end',
-          justifyContent: 'space-between',
           paddingVertical: 10,
-          paddingHorizontal: 6,
+          paddingHorizontal: 8,
+          gap: 4,
         },
         tab: {
-          flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: 48,
+          minWidth: 70,
+          paddingHorizontal: 6,
           paddingVertical: 4,
         },
         label: {
           ...typography.caption,
-          fontSize: 10,
-          marginTop: 4,
+          fontSize: 9,
+          marginTop: 3,
           textAlign: 'center',
+          maxWidth: 76,
         },
       }),
     [colors, isLight, shadows, typography]
@@ -76,9 +78,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     (r): r is (typeof state.routes)[number] => r != null
   );
 
-  const row = (
-    <View style={styles.row}>
-      {visibleRoutes.map((route) => {
+  const tabsRow = visibleRoutes.map((route) => {
         const indexInState = state.routes.findIndex((r) => r.key === route.key);
         const focused = state.index === indexInState;
         const { options } = descriptors[route.key];
@@ -116,7 +116,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             onLongPress={onLongPress}
             style={styles.tab}
           >
-            <Ionicons name={iconName} size={22} color={tint} />
+            <Ionicons name={iconName} size={21} color={tint} />
             <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
               {label}
             </Text>
@@ -132,8 +132,19 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         }
 
         return <Fragment key={route.key}>{normalBtn}</Fragment>;
-      })}
-    </View>
+      });
+
+  const row = (
+    <ScrollView
+      horizontal
+      style={{ width: '100%' }}
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      bounces={Platform.OS !== 'web'}
+      contentContainerStyle={styles.scrollInner}
+    >
+      {tabsRow}
+    </ScrollView>
   );
 
   return (

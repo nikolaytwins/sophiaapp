@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -207,12 +207,14 @@ export function CalendarScreen() {
   const mainShellBorder = isLight ? colors.border : isV2 ? 'transparent' : brand.surfaceBorderStrong;
 
   const todayKey = useMemo(() => localDateKey(), []);
+  const desktopMainBoot = useRef(false);
   const [viewYm, setViewYm] = useState(() => {
     const [y, m] = todayKey.split('-').map(Number);
     return { y, m };
   });
   const [weekAnchorKey, setWeekAnchorKey] = useState(todayKey);
-  const [mainView, setMainView] = useState<CalendarMainView>('week');
+  /** На узком экране месяц = компактная сетка (miniMonth), без большого monthMainBoard. На десктопе веб — по умолчанию неделя. */
+  const [mainView, setMainView] = useState<CalendarMainView>('month');
   const [dayViewDateKey, setDayViewDateKey] = useState(todayKey);
   const [dayModalKey, setDayModalKey] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -274,6 +276,13 @@ export function CalendarScreen() {
     if (!addNoteOpen) return;
     setNewNoteDraft('');
   }, [addNoteOpen]);
+
+  useEffect(() => {
+    if (isDesktop && !desktopMainBoot.current) {
+      desktopMainBoot.current = true;
+      setMainView('week');
+    }
+  }, [isDesktop]);
 
   const enabled = Boolean(supabaseOn && userId);
 
@@ -1134,8 +1143,8 @@ export function CalendarScreen() {
       }}
     >
       {mainHeader}
-      {!isDesktop ? <View style={{ marginBottom: spacing.md }}>{weekNavBar}</View> : null}
-      {mainView === 'month' ? monthMainBoard : null}
+      {!isDesktop && mainView === 'week' ? <View style={{ marginBottom: spacing.md }}>{weekNavBar}</View> : null}
+      {mainView === 'month' && isDesktop ? monthMainBoard : null}
       {mainView === 'week' ? weekMainBoard : null}
       {mainView === 'day' ? dayMainBoard : null}
     </View>
@@ -1177,8 +1186,8 @@ export function CalendarScreen() {
         </View>
       ) : (
         <View>
-          {rightColumn}
-          <View style={{ marginTop: spacing.xl }}>{leftColumn}</View>
+          {leftColumn}
+          <View style={{ marginTop: spacing.xl }}>{rightColumn}</View>
         </View>
       )}
     </ScrollView>
