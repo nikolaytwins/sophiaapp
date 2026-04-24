@@ -14,7 +14,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   const insets = useSafeAreaInsets();
   const { colors, isLight, typography, shadows } = useAppTheme();
   const screenW = Dimensions.get('window').width;
-  const tabMinW = screenW < 340 ? 38 : screenW < 380 ? 46 : screenW < 420 ? 52 : 58;
+  const tabMinW = screenW < 340 ? 42 : screenW < 380 ? 50 : screenW < 420 ? 56 : 62;
   const iconSize = screenW < 340 ? 22 : screenW < 380 ? 24 : 28;
   const labelSize = screenW < 340 ? 9 : screenW < 380 ? 10 : 11;
 
@@ -27,7 +27,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           right: 0,
           bottom: 0,
           alignItems: 'center',
-          paddingHorizontal: 12,
+          paddingHorizontal: 8,
           /**
            * На web экраны root Stack (habit-new и т.д.) должны оставаться выше таббара по z-index.
            * Слишком большой z-index здесь приводил к тому, что таббар перехватывал клики поверх карточных экранов.
@@ -37,7 +37,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         },
         barOuter: {
           alignSelf: 'center',
-          maxWidth: Math.max(screenW - 24, 200),
+          maxWidth: Math.max(screenW - 14, 200),
           borderRadius: 28,
           overflow: 'hidden',
           borderWidth: 1,
@@ -57,8 +57,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           alignItems: 'flex-end',
           justifyContent: 'center',
           paddingVertical: 12,
-          paddingHorizontal: 10,
-          gap: 2,
+          paddingHorizontal: 12,
+          gap: 10,
         },
         tab: {
           alignItems: 'center',

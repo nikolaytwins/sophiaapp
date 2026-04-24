@@ -5,6 +5,7 @@ import { type Href, useRouter } from 'expo-router';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useSupabaseAuthSession } from '@/hooks/useSupabaseAuthSession';
+import { useAppTheme } from '@/theme';
 
 const SIZE = 44;
 
@@ -20,6 +21,11 @@ type Props = {
 export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
   const router = useRouter();
   const { isAuthed, avatarUrl, loading } = useSupabaseAuthSession();
+  const { isLight } = useAppTheme();
+  /** Совпадает с `createBrand` (light #7C3AED, dark #A855F7) */
+  const ringBorder = isLight ? 'rgba(124,58,237,0.62)' : 'rgba(168,85,247,0.62)';
+  const ringFill = isLight ? 'rgba(124,58,237,0.12)' : 'rgba(168,85,247,0.14)';
+  const iconAuthed = isLight ? 'rgba(124,58,237,0.92)' : 'rgba(196,181,253,0.95)';
 
   const onPress = () => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -44,8 +50,8 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
             overflow: 'hidden',
             opacity: pressed ? 0.88 : 1,
             borderWidth: 2,
-            borderColor: isAuthed ? 'rgba(244,114,182,0.65)' : 'rgba(255,255,255,0.18)',
-            backgroundColor: isAuthed ? 'rgba(244,114,182,0.14)' : 'rgba(255,255,255,0.06)',
+            borderColor: isAuthed ? ringBorder : 'rgba(255,255,255,0.18)',
+            backgroundColor: isAuthed ? ringFill : 'rgba(255,255,255,0.06)',
           },
           webPointer,
         ])
@@ -60,7 +66,7 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
           <Ionicons
             name={isAuthed ? 'person' : 'person-outline'}
             size={22}
-            color={isAuthed ? 'rgba(251,207,232,0.95)' : 'rgba(255,255,255,0.38)'}
+            color={isAuthed ? iconAuthed : 'rgba(255,255,255,0.38)'}
           />
         </View>
       )}
