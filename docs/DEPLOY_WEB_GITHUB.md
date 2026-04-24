@@ -36,6 +36,12 @@
 | `SERVER_USER` | да | SSH-пользователь (часто `root`) |
 | `SERVER_SSH_KEY` | да | Приватный ключ (полный PEM), **Deploy key** или **user key** с правом на запись в `/var/www/sophia-os/dist/` |
 | `SERVER_PORT` | нет | SSH-порт; если не задан, используется **22** |
+| `EXPO_PUBLIC_TEAMTRACKER_URL` | нет* | Прод: `https://tt.twinlabs.ru` (без `/pm-board`, если у Teamtracker `TEAM_TRACKER_ROOT_DOMAIN=1`). Нужен для дашборда «доход из TT». |
+| `EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET` | нет* | Тот же секрет, что **`TT_INTEGRATION_SECRET`** на сервере Teamtracker (≥16 символов). |
+
+\*Если secrets не заданы, шаг сборки получит пустые строки — интеграция дохода с TT на вебе будет отключена, остальной Sophia работает.
+
+**Веб-Sophia не в systemd:** на VPS только **nginx + файлы в `/var/www/sophia-os/dist/`**; `EXPO_PUBLIC_*` попадают в бандл **на GitHub при `npm run build:web`**, не из `/etc` на Selectel.
 
 ---
 
