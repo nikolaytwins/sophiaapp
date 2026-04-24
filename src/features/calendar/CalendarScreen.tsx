@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -81,6 +80,10 @@ const SIDEBAR_W = 328;
 const DESKTOP_PAD = 24;
 const DOT_EVENT = '#38BDF8';
 
+/** Сплошной акцент календаря (web, тёмная тема): rail, активный таб, CTA со свечением. */
+const CAL_SOLID_ACCENT = '#7337dd';
+const CAL_SOLID_ACCENT_RGB = '115, 55, 221';
+
 export type CalendarMainView = 'month' | 'week' | 'day';
 export type CalendarVisualVariant = 'default' | 'v2';
 
@@ -124,6 +127,7 @@ function GradientPrimaryButton({
   gradientColors,
   accentRgb,
   enableGlow,
+  solidColor,
   compact,
 }: {
   label: string;
@@ -133,6 +137,8 @@ function GradientPrimaryButton({
   gradientColors?: readonly [string, string, ...string[]];
   accentRgb?: string;
   enableGlow?: boolean;
+  /** Сплошная заливка вместо градиента (тёмная тема). */
+  solidColor?: string;
   /** Без верхнего отступа (кнопка в ряду модалки). */
   compact?: boolean;
 }) {
@@ -147,6 +153,7 @@ function GradientPrimaryButton({
       : webHover
         ? calendarSynaptixGlowWebHover(glowAccent)
         : calendarSynaptixGlowWeb(glowAccent);
+  const useSolid = Boolean(solidColor && !isLight);
   return (
     <Pressable
       onPress={onPress}
@@ -160,13 +167,25 @@ function GradientPrimaryButton({
         overflow: 'hidden',
         ...(glow as object),
         ...(!isLight && Platform.OS !== 'web'
-          ? { shadowColor: '#9D6BFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 12 }
+          ? {
+              shadowColor: useSolid && solidColor ? solidColor : '#9D6BFF',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: useSolid ? 0.55 : 0.45,
+              shadowRadius: useSolid ? 18 : 20,
+              elevation: 12,
+            }
           : {}),
       }}
     >
-      <LinearGradient colors={gradColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingVertical: 14, alignItems: 'center', width: '100%' }}>
-        <Text style={{ color: '#FAFAFF', fontWeight: '800', fontSize: 15, letterSpacing: 0.35 }}>{label}</Text>
-      </LinearGradient>
+      {useSolid ? (
+        <View style={{ backgroundColor: solidColor, paddingVertical: 14, alignItems: 'center', width: '100%' }}>
+          <Text style={{ color: '#FAFAFF', fontWeight: '800', fontSize: 15, letterSpacing: 0.35 }}>{label}</Text>
+        </View>
+      ) : (
+        <LinearGradient colors={gradColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingVertical: 14, alignItems: 'center', width: '100%' }}>
+          <Text style={{ color: '#FAFAFF', fontWeight: '800', fontSize: 15, letterSpacing: 0.35 }}>{label}</Text>
+        </LinearGradient>
+      )}
     </Pressable>
   );
 }
@@ -596,6 +615,22 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
       ).map((opt) => {
         const on = mainView === opt.id;
         if (on && !isLight) {
+          if (isV2) {
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  setMainView(opt.id);
+                  if (opt.id === 'day') setDayViewDateKey(weekAnchorKey);
+                }}
+                style={{ borderRadius: 12, overflow: 'hidden', ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb('160, 106, 240') : {}) }}
+              >
+                <LinearGradient colors={[...ctaGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 9 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent, letterSpacing: 0.4 }}>{opt.label}</Text>
+                </LinearGradient>
+              </Pressable>
+            );
+          }
           return (
             <Pressable
               key={opt.id}
@@ -603,11 +638,24 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
                 setMainView(opt.id);
                 if (opt.id === 'day') setDayViewDateKey(weekAnchorKey);
               }}
-              style={{ borderRadius: 12, overflow: 'hidden', ...(Platform.OS === 'web' && !isV2 ? calendarSynaptixGlowWeb('157, 107, 255') : {}) }}
+              style={{
+                borderRadius: 12,
+                overflow: 'hidden',
+                ...(Platform.OS === 'web' ? calendarSynaptixGlowWeb(CAL_SOLID_ACCENT_RGB) : {}),
+                ...(Platform.OS !== 'web'
+                  ? {
+                      shadowColor: CAL_SOLID_ACCENT,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.45,
+                      shadowRadius: 12,
+                      elevation: 8,
+                    }
+                  : {}),
+              }}
             >
-              <LinearGradient colors={[...ctaGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingHorizontal: 16, paddingVertical: 9 }}>
+              <View style={{ paddingHorizontal: 16, paddingVertical: 9, backgroundColor: CAL_SOLID_ACCENT }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: onAccent, letterSpacing: 0.4 }}>{opt.label}</Text>
-              </LinearGradient>
+              </View>
             </Pressable>
           );
         }
@@ -734,9 +782,10 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
         <GradientPrimaryButton
           label="Добавить событие"
           isLight={isLight}
+          solidColor={!isV2 && !isLight ? CAL_SOLID_ACCENT : undefined}
           gradientColors={ctaGradient}
-          accentRgb={isV2 ? '160, 106, 240' : '157, 107, 255'}
-          enableGlow={!isV2}
+          accentRgb={isV2 ? '160, 106, 240' : !isLight ? CAL_SOLID_ACCENT_RGB : '157, 107, 255'}
+          enableGlow={!isLight && (isV2 ? false : true)}
           onPress={() => setAddEventOpen(true)}
           disabled={createEventMut.isPending}
         />
@@ -1115,12 +1164,7 @@ export function CalendarScreen({ variant = 'default' }: { variant?: CalendarVisu
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
         {Platform.OS === 'web' ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Image source={require('../../../assets/images/sophia-icon-1024.png')} style={{ width: 28, height: 28, borderRadius: 7 }} contentFit="cover" />
-            <Text style={[typography.screenTitle, { color: '#FFFFFF', fontSize: isDesktop ? 26 : 22, fontWeight: '900', letterSpacing: -0.3 }]}>
-              Sophia
-            </Text>
-          </View>
+          <View style={{ flex: 1 }} />
         ) : (
           <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
         )}

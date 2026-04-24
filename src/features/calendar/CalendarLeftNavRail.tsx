@@ -7,13 +7,15 @@ import { Fragment, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { calendarNeonOutlineWeb } from '@/features/calendar/calendarPremiumShell';
 import { HABIT_HERO_SOPHIA_IMAGE } from '@/features/habits/HabitHero';
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
 
 const RAIL_W_EXPANDED = 218;
 const RAIL_W_COLLAPSED = 60;
+
+const RAIL_BG_DEFAULT_DARK = '#06050a';
+const RAIL_ITEM_ACTIVE_SOLID = '#7337dd';
 
 type Props = {
   collapsed: boolean;
@@ -160,7 +162,7 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
   const shell = useMemo(() => {
     if (!isLight) {
       return {
-        backgroundColor: isV2 ? '#1A1535' : '#050308',
+        backgroundColor: isV2 ? '#1A1535' : RAIL_BG_DEFAULT_DARK,
         borderRadius: 0,
         borderWidth: 0,
       };
@@ -194,22 +196,72 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
       ]}
     >
       <View>
-        <Pressable
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onToggleCollapsed();
-          }}
-          hitSlop={10}
-          style={{
-            alignSelf: collapsed ? 'center' : 'flex-end',
-            paddingVertical: 8,
-            paddingHorizontal: 4,
-            marginBottom: 4,
-          }}
-          accessibilityLabel={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-        >
-          <Ionicons name={collapsed ? 'chevron-forward' : 'chevron-back'} size={22} color={colors.textMuted} />
-        </Pressable>
+        {Platform.OS === 'web' ? (
+          !collapsed ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <Image
+                  source={require('../../../assets/images/sophia-icon-1024.png')}
+                  style={{ width: 28, height: 28, borderRadius: 7 }}
+                  contentFit="cover"
+                />
+                <Text
+                  style={[typography.screenTitle, { color: isLight ? colors.text : '#FFFFFF', fontSize: 18, fontWeight: '900', letterSpacing: -0.25, flexShrink: 1 }]}
+                  numberOfLines={1}
+                >
+                  Sophia
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onToggleCollapsed();
+                }}
+                hitSlop={10}
+                style={{ paddingVertical: 8, paddingHorizontal: 4 }}
+                accessibilityLabel="Свернуть меню"
+              >
+                <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', marginBottom: 8 }}>
+              <Image
+                source={require('../../../assets/images/sophia-icon-1024.png')}
+                style={{ width: 28, height: 28, borderRadius: 7 }}
+                contentFit="cover"
+              />
+              <Pressable
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onToggleCollapsed();
+                }}
+                hitSlop={10}
+                style={{ paddingVertical: 8, paddingHorizontal: 4, marginTop: 6 }}
+                accessibilityLabel="Развернуть меню"
+              >
+                <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          )
+        ) : (
+          <Pressable
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onToggleCollapsed();
+            }}
+            hitSlop={10}
+            style={{
+              alignSelf: collapsed ? 'center' : 'flex-end',
+              paddingVertical: 8,
+              paddingHorizontal: 4,
+              marginBottom: 4,
+            }}
+            accessibilityLabel={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+          >
+            <Ionicons name={collapsed ? 'chevron-forward' : 'chevron-back'} size={22} color={colors.textMuted} />
+          </Pressable>
+        )}
 
         <View style={{ gap: 2 }}>
           {TAB_BAR_ROUTE_ORDER.map((routeName) => {
@@ -227,8 +279,8 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
                 : hovered
                   ? isV2
                     ? '#E2CCFF'
-                    : 'rgba(255,255,255,0.85)'
-                  : 'rgba(255,255,255,0.4)';
+                    : 'rgba(255,255,255,0.72)'
+                  : 'rgba(255,255,255,0.38)';
             const iconName = (TAB_ICONS[routeName] ?? 'ellipse-outline') as keyof typeof Ionicons.glyphMap;
             const label = TAB_LABELS[routeName] ?? routeName;
 
@@ -253,19 +305,18 @@ export function CalendarLeftNavRail({ collapsed, onToggleCollapsed, isLight, var
                   paddingHorizontal: collapsed ? 4 : 8,
                   borderRadius: 12,
                   overflow: 'hidden',
-                  backgroundColor: focused ? (isLight ? brand.primaryMuted : isV2 ? '#241C4A' : 'transparent') : 'transparent',
-                  borderWidth: focused && !isLight && !isV2 ? 1 : 0,
-                  borderColor: 'rgba(157, 107, 255, 0.5)',
-                  ...(Platform.OS === 'web' && focused && !isLight && !isV2
-                    ? ({
-                        ...calendarNeonOutlineWeb(),
-                        boxShadow:
-                          '0 0 32px rgba(157,107,255,0.48), 0 0 56px rgba(123,92,255,0.32), 0 10px 24px rgba(0,0,0,0.45)',
-                      } as object)
-                    : {}),
+                  backgroundColor: focused
+                    ? isLight
+                      ? brand.primaryMuted
+                      : isV2
+                        ? 'transparent'
+                        : RAIL_ITEM_ACTIVE_SOLID
+                    : 'transparent',
+                  borderWidth: 0,
+                  borderColor: 'transparent',
                 }}
               >
-                {focused && !isLight && !isV2 ? (
+                {focused && !isLight && isV2 ? (
                   <LinearGradient
                     colors={['#7B5CFF', '#9D6BFF', '#6D28D9']}
                     start={{ x: 0, y: 0 }}
