@@ -43,7 +43,7 @@ import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
 const HABITS_HREF = '/habits' as Href;
-const HABITS_MANAGE_HREF = '/settings?tab=habits' as Href;
+const HABITS_MANAGE_HREF = '/profile?tab=habits' as Href;
 
 const COUNTER_RING_COLORS = ['#A855F7', '#7C3AED', '#38BDF8', '#F472B6'] as const;
 

@@ -17,9 +17,8 @@ import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { repos } from '@/services/repositories';
 import { useSprintStore } from '@/stores/sprint.store';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
+import { SOPHIA_UI_ACCENT } from '@/navigation/navConstants';
 import { useAppTheme } from '@/theme';
-
-const VIOLET = '#A855F7';
 export const HABIT_NEW_HREF = '/habit-new' as Href;
 
 export function habitEditHref(id: string): Href {
@@ -69,20 +68,20 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
               paddingVertical: 10,
               paddingHorizontal: 14,
               borderRadius: radius.md,
-              backgroundColor: 'rgba(168,85,247,0.2)',
+              backgroundColor: 'rgba(115, 55, 221, 0.2)',
               borderWidth: 1,
-              borderColor: 'rgba(168,85,247,0.45)',
+              borderColor: 'rgba(115, 55, 221, 0.45)',
             },
             webCursor,
           ])}
         >
-          <Text style={{ color: VIOLET, fontWeight: '800', fontSize: 14 }}>+ Добавить</Text>
+          <Text style={{ color: SOPHIA_UI_ACCENT, fontWeight: '800', fontSize: 14 }}>+ Добавить</Text>
         </Pressable>
       </View>
 
       {habits.isLoading ? (
         <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-          <ActivityIndicator color={VIOLET} />
+          <ActivityIndicator color={SOPHIA_UI_ACCENT} />
         </View>
       ) : data.length === 0 ? (
         <View
@@ -105,15 +104,15 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
                 marginTop: spacing.md,
                 paddingVertical: 14,
                 borderRadius: radius.md,
-                backgroundColor: 'rgba(168,85,247,0.22)',
+                backgroundColor: 'rgba(115, 55, 221, 0.2)',
                 borderWidth: 1,
-                borderColor: 'rgba(168,85,247,0.45)',
+                borderColor: 'rgba(115, 55, 221, 0.45)',
                 alignItems: 'center',
               },
               webCursor,
             ])}
           >
-            <Text style={{ color: VIOLET, fontWeight: '800' }}>Создать привычку</Text>
+            <Text style={{ color: SOPHIA_UI_ACCENT, fontWeight: '800' }}>Создать привычку</Text>
           </Pressable>
         </View>
       ) : (
@@ -138,13 +137,13 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
                   width: 44,
                   height: 44,
                   borderRadius: 14,
-                  backgroundColor: 'rgba(168,85,247,0.12)',
+                  backgroundColor: 'rgba(115, 55, 221, 0.12)',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginRight: spacing.md,
                 }}
               >
-                <Ionicons name={h.icon as keyof typeof Ionicons.glyphMap} size={22} color={VIOLET} />
+                <Ionicons name={h.icon as keyof typeof Ionicons.glyphMap} size={22} color={SOPHIA_UI_ACCENT} />
               </View>
               <View style={{ flex: 1, minWidth: 0, marginRight: spacing.sm }}>
                 <Text style={[typography.title2, { color: colors.text }]} numberOfLines={2}>
@@ -176,12 +175,12 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
                 }
               >
                 {setRequired.isPending && setRequired.variables?.id === h.id ? (
-                  <ActivityIndicator color={VIOLET} size="small" />
+                  <ActivityIndicator color={SOPHIA_UI_ACCENT} size="small" />
                 ) : (
                   <Ionicons
                     name={h.required ? 'star' : 'star-outline'}
                     size={22}
-                    color={h.required ? VIOLET : 'rgba(255,255,255,0.28)'}
+                    color={h.required ? SOPHIA_UI_ACCENT : 'rgba(255,255,255,0.28)'}
                   />
                 )}
               </Pressable>
@@ -198,7 +197,7 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
                   ])
                 }
               >
-                <Ionicons name="create-outline" size={22} color={VIOLET} />
+                <Ionicons name="create-outline" size={22} color={SOPHIA_UI_ACCENT} />
               </Pressable>
               <Pressable
                 onPress={() =>
@@ -238,15 +237,15 @@ export function HabitsManagePanel({ paddingBottom = 24 }: Props) {
             marginTop: spacing.xl,
             paddingVertical: 16,
             borderRadius: radius.lg,
-            backgroundColor: 'rgba(168,85,247,0.18)',
+            backgroundColor: 'rgba(115, 55, 221, 0.18)',
             borderWidth: 1,
-            borderColor: 'rgba(168,85,247,0.4)',
+            borderColor: 'rgba(115, 55, 221, 0.42)',
             alignItems: 'center',
           },
           webCursor,
         ])}
       >
-        <Text style={{ color: VIOLET, fontWeight: '800', fontSize: 16 }}>+ Новая привычка</Text>
+        <Text style={{ color: SOPHIA_UI_ACCENT, fontWeight: '800', fontSize: 16 }}>+ Новая привычка</Text>
       </Pressable>
     </View>
   );

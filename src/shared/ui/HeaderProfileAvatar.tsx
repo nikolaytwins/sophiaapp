@@ -15,7 +15,7 @@ type Props = {
 
 /**
  * Аватар в шапке таб-экранов: гость / авторизован (фото из metadata.avatar_url).
- * Тап → /settings
+ * Тап → /profile
  */
 export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
   const router = useRouter();
@@ -23,7 +23,7 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
 
   const onPress = () => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
-    router.push('/settings' as Href);
+    router.push('/profile' as Href);
   };
 
   const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
@@ -32,7 +32,7 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={isAuthed ? 'Настройки и профиль' : 'Настройки · войти'}
+      accessibilityLabel={isAuthed ? 'Профиль' : 'Профиль · войти'}
       hitSlop={8}
       style={({ pressed }) =>
         StyleSheet.flatten([

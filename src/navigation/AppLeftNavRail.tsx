@@ -8,6 +8,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HABIT_HERO_SOPHIA_IMAGE } from '@/features/habits/HabitHero';
+import { SOPHIA_UI_ACCENT } from '@/navigation/navConstants';
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
 
@@ -17,7 +18,7 @@ const RAIL_W_COLLAPSED = 60;
 /** Фон бокового меню: плоский тёмный, без «стекла» и без свечения по краям. */
 export const APP_NAV_RAIL_BG_DARK = '#05040b';
 
-const RAIL_ITEM_ACTIVE_SOLID = '#7337dd';
+const RAIL_ITEM_ACTIVE_SOLID = SOPHIA_UI_ACCENT;
 
 function routeNameFromPathname(pathname: string): string | null {
   const p = pathname.split('?')[0] ?? '';

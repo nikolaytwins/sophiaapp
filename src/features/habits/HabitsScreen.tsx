@@ -1043,7 +1043,7 @@ export function HabitsScreen() {
             </Text>
             <View style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
               {supabaseOn ? (
-                <Link href={'/settings' as Href} asChild>
+                <Link href={'/profile?tab=settings' as Href} asChild>
                   <Pressable accessibilityRole="button" accessibilityLabel="Настройки и аккаунт" style={{ paddingVertical: 4 }}>
                     <Text style={{ color: ACCENT, fontSize: 13, fontWeight: '600' }}>
                       {accountEmail ? `Настройки · ${accountEmail}` : 'Настройки · войти в аккаунт'}
@@ -1051,7 +1051,7 @@ export function HabitsScreen() {
                   </Pressable>
                 </Link>
               ) : null}
-              <Link href={'/settings?tab=habits' as Href} asChild>
+              <Link href={'/profile?tab=habits' as Href} asChild>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Управление привычками"

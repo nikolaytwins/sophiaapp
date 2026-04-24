@@ -119,7 +119,7 @@ export function AnnualGoalsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {supabaseOn ? (
-          <Link href={'/settings' as Href} asChild>
+          <Link href={'/profile?tab=settings' as Href} asChild>
             <Pressable
               style={{
                 marginBottom: spacing.lg,

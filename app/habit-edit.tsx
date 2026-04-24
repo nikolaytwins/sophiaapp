@@ -26,7 +26,7 @@ import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { useAppTheme } from '@/theme';
 
 const VIOLET = '#A855F7';
-const SETTINGS_HABITS = '/settings?tab=habits' as Href;
+const SETTINGS_HABITS = '/profile?tab=habits' as Href;
 
 const ICON_OPTIONS = [
   'sparkles-outline',
