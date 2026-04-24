@@ -1,5 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +17,7 @@ import { HabitsManagePanel } from '@/features/habits/HabitsManagePanel';
 import { ProfileAboutTab } from '@/features/profile/ProfileAboutTab';
 import { SettingsAccountPanel } from '@/features/profile/SettingsAccountPanel';
 import { SOPHIA_UI_ACCENT } from '@/navigation/navConstants';
+import { TAB_HREF } from '@/navigation/tabBarCatalog';
 import { useAppTheme } from '@/theme';
 
 type TabId = 'about' | 'settings' | 'habits';
@@ -39,6 +42,11 @@ export function ProfileScreen() {
 
   const webPtr = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
 
+  const goMain = useCallback(() => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    router.replace(TAB_HREF.day as Href);
+  }, [router]);
+
   const setRouteTab = (id: TabId) => {
     setTab(id);
     if (id === 'about') {
@@ -55,8 +63,32 @@ export function ProfileScreen() {
       headerBackTitle: 'Назад',
       headerStyle: { backgroundColor: colors.bg },
       headerTintColor: colors.text,
+      headerLeft: () => (
+        <Pressable
+          onPress={goMain}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Главная, экран День"
+          style={({ pressed }) =>
+            StyleSheet.flatten([
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginLeft: Platform.OS === 'ios' ? 6 : 12,
+                paddingVertical: 8,
+                paddingRight: 10,
+                opacity: pressed ? 0.75 : 1,
+              },
+              Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {},
+            ])
+          }
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '600', marginLeft: 2 }}>Главная</Text>
+        </Pressable>
+      ),
     }),
-    [colors.bg, colors.text]
+    [colors.bg, colors.text, goMain]
   );
 
   const tabs: { id: TabId; label: string }[] = [

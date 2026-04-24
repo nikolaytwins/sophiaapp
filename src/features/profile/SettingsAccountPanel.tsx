@@ -35,20 +35,44 @@ export function SettingsAccountPanel() {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const router = useRouter();
   const supabaseOn = useSupabaseConfigured;
-  const { user, isAuthed, email, loading: authLoading, refresh } = useSupabaseAuthSession();
+  const { user, isAuthed, displayName, email, loading: authLoading, refresh } = useSupabaseAuthSession();
 
+  const [nameDraft, setNameDraft] = useState('');
   const [emailDraft, setEmailDraft] = useState('');
   const [passNew, setPassNew] = useState('');
   const [passConfirm, setPassConfirm] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingPass, setSavingPass] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    setNameDraft(displayName);
     setEmailDraft(user?.email ?? '');
-  }, [user]);
+  }, [user, displayName]);
 
   const webPtr = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
+
+  const onSaveName = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb || !user) return;
+    setSavingName(true);
+    try {
+      const { error } = await sb.auth.updateUser({
+        data: {
+          full_name: nameDraft.trim() || null,
+        },
+      });
+      if (error) {
+        alertInfo('Профиль', error.message);
+        return;
+      }
+      await refresh();
+      alertInfo('Профиль', 'Имя сохранено');
+    } finally {
+      setSavingName(false);
+    }
+  }, [nameDraft, refresh, user]);
 
   const onSaveEmail = useCallback(async () => {
     const sb = getSupabase();
@@ -139,7 +163,7 @@ export function SettingsAccountPanel() {
     return (
       <View>
         <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md }]}>
-          Войди в аккаунт — настройки почты и пароля станут доступны.
+          Войди в аккаунт — имя, почта и пароль станут доступны.
         </Text>
         <Pressable
           onPress={() => router.push('/cloud' as Href)}
@@ -167,6 +191,41 @@ export function SettingsAccountPanel() {
 
   return (
     <View>
+      <Text style={[typography.title2, { color: colors.text, marginBottom: spacing.sm }]}>Имя в приложении</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm }]}>
+        Как показываем в шапках и профиле (сейчас: {displayName || '—'})
+      </Text>
+      <TextInput
+        value={nameDraft}
+        onChangeText={setNameDraft}
+        placeholder="Как к тебе обращаться"
+        placeholderTextColor={ph}
+        style={[inp, { marginBottom: spacing.md }]}
+      />
+      <Pressable
+        onPress={() => void onSaveName()}
+        disabled={savingName}
+        style={StyleSheet.flatten([
+          {
+            paddingVertical: 14,
+            borderRadius: radius.lg,
+            backgroundColor: 'rgba(115, 55, 221, 0.18)',
+            borderWidth: 1,
+            borderColor: 'rgba(115, 55, 221, 0.42)',
+            alignItems: 'center',
+            marginBottom: spacing.xl,
+            opacity: savingName ? 0.7 : 1,
+          },
+          webPtr,
+        ])}
+      >
+        {savingName ? (
+          <ActivityIndicator color={SOPHIA_UI_ACCENT} />
+        ) : (
+          <Text style={{ color: SOPHIA_UI_ACCENT, fontWeight: '800' }}>Сохранить имя</Text>
+        )}
+      </Pressable>
+
       <Text style={[typography.title2, { color: colors.text, marginBottom: spacing.sm }]}>Почта</Text>
       <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>Сейчас: {email ?? '—'}</Text>
       <TextInput

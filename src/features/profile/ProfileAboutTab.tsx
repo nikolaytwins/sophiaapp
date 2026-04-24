@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -20,6 +19,13 @@ import {
   PROFILE_ROOM_CARDS,
   PROFILE_ROOM_SECTION_TITLE,
 } from '@/features/profile/profileAboutCopy';
+import {
+  PROFILE_CARD_BG_DARK,
+  PROFILE_CARD_STRIPE,
+  PROFILE_LIST_ICON,
+  profileCardBorder,
+  profileSectionEyebrow,
+} from '@/features/profile/profileVisualTokens';
 import { uploadUserAvatarToStorage } from '@/features/profile/uploadUserAvatar';
 import { useSupabaseConfigured } from '@/config/env';
 import { useSupabaseAuthSession } from '@/hooks/useSupabaseAuthSession';
@@ -36,8 +42,6 @@ export function ProfileAboutTab() {
   const supabaseOn = useSupabaseConfigured;
   const { user, isAuthed, displayName, avatarUrl, email, loading: authLoading, refresh } = useSupabaseAuthSession();
 
-  const [nameDraft, setNameDraft] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const owner = isProfileOwnerEmail(email);
@@ -46,32 +50,7 @@ export function ProfileAboutTab() {
   const colGap = 10;
   const colW = twoCol ? (innerW - colGap) / 2 : innerW;
 
-  useEffect(() => {
-    setNameDraft(displayName);
-  }, [displayName]);
-
   const webPtr = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
-
-  const onSaveName = useCallback(async () => {
-    const sb = getSupabase();
-    if (!sb || !user) return;
-    setSavingProfile(true);
-    try {
-      const { error } = await sb.auth.updateUser({
-        data: {
-          full_name: nameDraft.trim() || null,
-        },
-      });
-      if (error) {
-        alertInfo('Профиль', error.message);
-        return;
-      }
-      await refresh();
-      alertInfo('Профиль', 'Имя сохранено');
-    } finally {
-      setSavingProfile(false);
-    }
-  }, [nameDraft, refresh, user]);
 
   const onPickAvatar = useCallback(async () => {
     const sb = getSupabase();
@@ -113,14 +92,9 @@ export function ProfileAboutTab() {
     }
   }, [refresh, user]);
 
-  const cardBg = isLight ? colors.surface2 : '#16101f';
-  const cardBorder = isLight ? colors.border : 'rgba(157, 107, 255, 0.22)';
-  const serifTitle =
-    Platform.OS === 'web'
-      ? ({ fontFamily: 'Georgia, "Times New Roman", serif' } as const)
-      : Platform.OS === 'ios'
-        ? ({ fontFamily: 'Georgia' } as const)
-        : ({} as const);
+  const cardBg = isLight ? colors.surface2 : PROFILE_CARD_BG_DARK;
+  const borderCol = profileCardBorder(isLight);
+  const eyebrow = profileSectionEyebrow(isLight, colors.textMuted);
 
   if (!supabaseOn) {
     return (
@@ -158,9 +132,9 @@ export function ProfileAboutTab() {
               height: AVATAR,
               borderRadius: AVATAR / 2,
               overflow: 'hidden',
-              borderWidth: 3,
-              borderColor: isAuthed ? 'rgba(250,204,21,0.5)' : 'rgba(255,255,255,0.18)',
-              backgroundColor: isLight ? colors.surface2 : 'rgba(115, 55, 221, 0.12)',
+              borderWidth: 2,
+              borderColor: isLight ? colors.borderStrong : 'rgba(115, 55, 221, 0.5)',
+              backgroundColor: isLight ? colors.surface2 : 'rgba(115, 55, 221, 0.1)',
             },
             webPtr,
           ])}
@@ -198,52 +172,6 @@ export function ProfileAboutTab() {
         </Text>
 
         <Text style={[typography.caption, { marginTop: spacing.xs, color: colors.textMuted }]}>{email}</Text>
-
-        <Text style={[typography.caption, { marginTop: spacing.md, alignSelf: 'stretch', color: colors.textMuted }]}>
-          Имя (как показываем в приложении)
-        </Text>
-        <TextInput
-          value={nameDraft}
-          onChangeText={setNameDraft}
-          placeholder="Как к тебе обращаться"
-          placeholderTextColor={isLight ? 'rgba(15,17,24,0.35)' : 'rgba(255,255,255,0.35)'}
-          style={{
-            alignSelf: 'stretch',
-            marginTop: spacing.sm,
-            borderWidth: 1,
-            borderRadius: 14,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            fontSize: 16,
-            color: colors.text,
-            borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(157, 107, 255, 0.28)',
-            backgroundColor: cardBg,
-          }}
-        />
-        <Pressable
-          onPress={() => void onSaveName()}
-          disabled={savingProfile}
-          style={StyleSheet.flatten([
-            {
-              alignSelf: 'stretch',
-              marginTop: spacing.md,
-              paddingVertical: 14,
-              borderRadius: radius.lg,
-              backgroundColor: 'rgba(115, 55, 221, 0.18)',
-              borderWidth: 1,
-              borderColor: 'rgba(115, 55, 221, 0.42)',
-              alignItems: 'center',
-              opacity: savingProfile ? 0.7 : 1,
-            },
-            webPtr,
-          ])}
-        >
-          {savingProfile ? (
-            <ActivityIndicator color={SOPHIA_UI_ACCENT} />
-          ) : (
-            <Text style={{ color: SOPHIA_UI_ACCENT, fontWeight: '800' }}>Сохранить имя</Text>
-          )}
-        </Pressable>
       </View>
 
       {!owner ? (
@@ -252,30 +180,18 @@ export function ProfileAboutTab() {
             padding: spacing.lg,
             borderRadius: radius.lg,
             borderWidth: 1,
-            borderColor: cardBorder,
+            borderColor: borderCol,
             backgroundColor: cardBg,
           }}
         >
           <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
-            Раздел «Обо мне» с расшифровкой оформлен для владельца аккаунта. У тебя всё равно есть имя, фото и вход в
-            настройках.
+            Раздел «Обо мне» с расшифровкой оформлен для владельца аккаунта. Имя и почту можно изменить во вкладке
+            «Настройки».
           </Text>
         </View>
       ) : (
         <>
-          <Text
-            style={[
-              typography.body,
-              {
-                marginBottom: spacing.lg,
-                fontSize: 17,
-                lineHeight: 24,
-                fontWeight: '600',
-                color: isLight ? colors.text : colors.accent,
-                ...serifTitle,
-              },
-            ]}
-          >
+          <Text style={[typography.title2, { color: colors.text, fontWeight: '800', marginBottom: spacing.lg, lineHeight: 24 }]}>
             {PROFILE_ROOM_SECTION_TITLE}
           </Text>
 
@@ -294,25 +210,15 @@ export function ProfileAboutTab() {
                   width: colW,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: cardBorder,
+                  borderColor: borderCol,
                   backgroundColor: cardBg,
                   overflow: 'hidden',
                   flexDirection: 'row',
                 }}
               >
-                <View style={{ width: 4, backgroundColor: c.accent }} />
+                <View style={{ width: 3, backgroundColor: PROFILE_CARD_STRIPE, opacity: 0.85 }} />
                 <View style={{ flex: 1, padding: spacing.md }}>
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: '800',
-                      letterSpacing: 1.1,
-                      color: colors.textMuted,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {c.label}
-                  </Text>
+                  <Text style={[eyebrow, { marginBottom: 6 }]}>{c.label}</Text>
                   <Text style={[typography.title2, { color: colors.text, fontWeight: '800', marginBottom: 8 }]}>
                     {c.title}
                   </Text>
@@ -323,16 +229,14 @@ export function ProfileAboutTab() {
           </View>
 
           <Text
-            style={[
-              typography.caption,
-              {
-                marginBottom: spacing.md,
-                fontSize: 11,
-                letterSpacing: 1.2,
-                fontWeight: '800',
-                color: colors.textMuted,
-              },
-            ]}
+            style={{
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: 0.85,
+              color: colors.textMuted,
+              marginBottom: spacing.md,
+              lineHeight: 16,
+            }}
           >
             {PROFILE_LOVE_SECTION_TITLE}
           </Text>
@@ -344,7 +248,7 @@ export function ProfileAboutTab() {
                 style={{
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: cardBorder,
+                  borderColor: borderCol,
                   backgroundColor: cardBg,
                   padding: spacing.md,
                   flexDirection: 'row',
@@ -352,7 +256,12 @@ export function ProfileAboutTab() {
                   gap: 12,
                 }}
               >
-                <Ionicons name="arrow-forward" size={20} color={isLight ? colors.accent : '#D4A574'} style={{ marginTop: 2 }} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={isLight ? 'rgba(91, 75, 255, 0.65)' : PROFILE_LIST_ICON}
+                  style={{ marginTop: 3 }}
+                />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[typography.title2, { color: colors.text, fontWeight: '800', marginBottom: 8 }]}>
                     {c.title}
