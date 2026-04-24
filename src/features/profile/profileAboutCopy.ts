@@ -1,8 +1,24 @@
-/** Аккаунт, для которого показывается развёрнутый блок «Обо мне» (тексты со скринов). */
-export const PROFILE_OWNER_EMAIL = 'nikolaywins@gmail.com';
+/**
+ * Аккаунты, для которых показывается развёрнутый блок «Обо мне» (тексты со скринов).
+ * В запросе изначально был nikolaywins@…; реальный логин чаще nikolaytwins@… — учитываем оба.
+ */
+export const PROFILE_OWNER_EMAILS = ['nikolaywins@gmail.com', 'nikolaytwins@gmail.com'] as const;
+
+/** @deprecated используй PROFILE_OWNER_EMAILS */
+export const PROFILE_OWNER_EMAIL = PROFILE_OWNER_EMAILS[0];
+
+function ownerEmailsFromEnv(): string[] {
+  if (typeof process === 'undefined' || !process.env.EXPO_PUBLIC_PROFILE_OWNER_EMAILS) return [];
+  return process.env.EXPO_PUBLIC_PROFILE_OWNER_EMAILS.split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.includes('@'));
+}
 
 export function isProfileOwnerEmail(email: string | null | undefined): boolean {
-  return (email ?? '').trim().toLowerCase() === PROFILE_OWNER_EMAIL;
+  const n = (email ?? '').trim().toLowerCase();
+  if (!n) return false;
+  if (PROFILE_OWNER_EMAILS.some((e) => e === n)) return true;
+  return ownerEmailsFromEnv().includes(n);
 }
 
 export type RoomCardCopy = {
