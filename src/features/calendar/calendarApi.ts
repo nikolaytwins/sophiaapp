@@ -25,12 +25,20 @@ async function requireUserId(): Promise<string> {
 }
 
 function normalizeEvent(row: PlannerCalendarEventRow): PlannerCalendarEventRow {
+  let starts_at = row.starts_at ?? null;
+  let ends_at = row.ends_at ?? null;
+  const hasS = starts_at != null && String(starts_at).trim() !== '';
+  const hasE = ends_at != null && String(ends_at).trim() !== '';
+  if (hasS !== hasE) {
+    starts_at = null;
+    ends_at = null;
+  }
   return {
     ...row,
     event_date: row.event_date ?? null,
     note: row.note ?? null,
-    starts_at: row.starts_at ?? null,
-    ends_at: row.ends_at ?? null,
+    starts_at,
+    ends_at,
     event_kind: normalizeEventKind(row.event_kind),
   };
 }
@@ -135,8 +143,14 @@ export async function createPlannerCalendarEvent(input: {
   if (!title) throw new Error('Введи название события');
   let eventDate =
     input.event_date != null && input.event_date !== '' ? input.event_date.trim() : null;
-  const startsAt = input.starts_at && input.starts_at.trim() !== '' ? input.starts_at : null;
-  const endsAt = input.ends_at && input.ends_at.trim() !== '' ? input.ends_at : null;
+  let startsAt = input.starts_at && input.starts_at.trim() !== '' ? input.starts_at : null;
+  let endsAt = input.ends_at && input.ends_at.trim() !== '' ? input.ends_at : null;
+  const insS = startsAt != null && String(startsAt).trim() !== '';
+  const insE = endsAt != null && String(endsAt).trim() !== '';
+  if (insS !== insE) {
+    startsAt = null;
+    endsAt = null;
+  }
   if (startsAt && !eventDate) {
     eventDate = isoToLocalDateKey(startsAt);
   }
@@ -184,8 +198,14 @@ export async function updatePlannerCalendarEvent(
   if (e0) throw e0;
   const curRow = normalizeEvent(cur as PlannerCalendarEventRow);
 
-  const nextStarts = patch.starts_at !== undefined ? patch.starts_at : curRow.starts_at;
-  const nextEnds = patch.ends_at !== undefined ? patch.ends_at : curRow.ends_at;
+  let nextStarts = patch.starts_at !== undefined ? patch.starts_at : curRow.starts_at;
+  let nextEnds = patch.ends_at !== undefined ? patch.ends_at : curRow.ends_at;
+  const hasS = nextStarts != null && String(nextStarts).trim() !== '';
+  const hasE = nextEnds != null && String(nextEnds).trim() !== '';
+  if (hasS !== hasE) {
+    nextStarts = null;
+    nextEnds = null;
+  }
 
   let nextDate =
     patch.event_date !== undefined
@@ -194,7 +214,7 @@ export async function updatePlannerCalendarEvent(
         : patch.event_date.trim()
       : curRow.event_date;
 
-  if (nextStarts) {
+  if (nextStarts && nextEnds) {
     nextDate = isoToLocalDateKey(nextStarts);
   }
 

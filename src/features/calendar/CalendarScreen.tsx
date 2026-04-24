@@ -650,11 +650,15 @@ export function CalendarScreen() {
     };
     const ts = evEditStart.trim();
     const te = evEditEnd.trim();
-    if (!evAllDay && ((ts && !te) || (!ts && te))) {
-      Alert.alert('Время', 'Укажи оба поля времени или оставь оба пустыми');
-      return;
-    }
-    if (hasDate && !evAllDay && ts && te) {
+
+    if (evAllDay) {
+      patch.starts_at = null;
+      patch.ends_at = null;
+    } else if (hasDate) {
+      if (!ts || !te) {
+        Alert.alert('Время', 'Укажи начало и конец (HH:mm) или включи «Целый день».');
+        return;
+      }
       const s = localDateAndHmToIso(d, ts);
       const e = localDateAndHmToIso(d, te);
       if (new Date(e) <= new Date(s)) {
@@ -663,9 +667,6 @@ export function CalendarScreen() {
       }
       patch.starts_at = s;
       patch.ends_at = e;
-    } else {
-      patch.starts_at = null;
-      patch.ends_at = null;
     }
     updateEventMut.mutate({ id: editingEvent.id, patch });
   };
@@ -1615,7 +1616,20 @@ export function CalendarScreen() {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md }}>
                 <Text style={[typography.body, { color: colors.text, fontWeight: '700' }]}>Целый день</Text>
-                <Switch value={evAllDay} onValueChange={setEvAllDay} trackColor={{ false: colors.border, true: fillAccent }} />
+                <Switch
+                  value={evAllDay}
+                  onValueChange={(next) => {
+                    setEvAllDay(next);
+                    if (next) {
+                      setEvEditStart('');
+                      setEvEditEnd('');
+                    } else {
+                      setEvEditStart((s) => (s.trim() ? s : '09:00'));
+                      setEvEditEnd((e) => (e.trim() ? e : '10:00'));
+                    }
+                  }}
+                  trackColor={{ false: colors.border, true: fillAccent }}
+                />
               </View>
               {!evAllDay ? (
                 <>

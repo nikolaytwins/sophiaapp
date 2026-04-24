@@ -2,27 +2,40 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { createElement, useEffect, useState } from 'react';
+import React, { createElement, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 
 import { CAL_PRIMARY_GRADIENT } from '@/features/calendar/calendarPremiumShell';
-import { createFinanceTransaction } from '@/features/finance/financeApi';
+import { FinanceCsvImportModal } from '@/features/finance/FinanceCsvImportModal';
+import {
+  createFinanceTransaction,
+  deleteFinanceTransaction,
+  expenseCategorySelectOptions,
+  updateFinanceTransaction,
+  type UpdateFinanceTransactionPatch,
+} from '@/features/finance/financeApi';
 import type { FinanceOverview, FinanceTransaction } from '@/features/finance/finance.types';
 import { useAppTheme } from '@/theme';
 
-type TxKind = 'expense' | 'income';
-
 function localYmd(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function isoToLocalYmd(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return localYmd();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -46,15 +59,17 @@ function fmtMoney(n: number, fractionDigits = 0) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: fractionDigits }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
-/** Одинаковые ширины колонок для строки ввода и строк данных. */
+/** Ширины колонок: дата шире, чтобы год в поле не обрезался. */
 const COL = {
-  date: 104,
-  amount: 92,
-  category: 132,
-  type: 100,
-  /** Ширина колонки с кнопкой сохранения + подпись «Действия». */
-  actions: 68,
+  date: 128,
+  amount: 96,
+  category: 136,
+  actions: 52,
 } as const;
+
+/** Чуть больше «воздуха» в строках таблицы. */
+const TX_ROW_PAD_V = 14;
+const TX_INPUT_PAD_V = 10;
 
 const sans =
   Platform.OS === 'web'
@@ -97,66 +112,318 @@ function tableShellOuter(isLight: boolean): object {
   };
 }
 
-function TransactionDataRow({ t }: { t: FinanceTransaction }) {
-  const { colors, isLight } = useAppTheme();
-  const d = new Date(t.date);
-  const dateLabel = Number.isFinite(d.getTime())
-    ? d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : t.date.slice(0, 10);
+function EditableTransactionRow({
+  t,
+  overview,
+  userId,
+  onSaved,
+}: {
+  t: FinanceTransaction;
+  overview: FinanceOverview;
+  userId: string;
+  onSaved: () => void;
+}) {
+  const { colors, isLight, brand } = useAppTheme();
+  const [dateYmd, setDateYmd] = useState(() => isoToLocalYmd(t.date));
+  const [amountDraft, setAmountDraft] = useState(() => {
+    const a = t.amount;
+    return Number.isInteger(a) ? String(a) : String(a).replace('.', ',');
+  });
+  const [categoryName, setCategoryName] = useState(() => t.category?.trim() ?? '');
+  const [description, setDescription] = useState(() => t.description?.trim() ?? '');
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDateYmd(isoToLocalYmd(t.date));
+    setAmountDraft(
+      Number.isInteger(t.amount) ? String(t.amount) : String(t.amount).replace('.', ',')
+    );
+    setCategoryName(t.category?.trim() ?? '');
+    setDescription(t.description?.trim() ?? '');
+    setSaveErr(null);
+  }, [t.id, t.date, t.amount, t.category, t.description]);
+
   const isIncome = t.type === 'income';
-  const isExpense = t.type === 'expense';
-  const sign = isIncome ? '+' : isExpense ? '−' : '';
-  const amountColor = isIncome ? '#4ADE80' : isExpense ? '#FB7185' : colors.text;
-  const typeLabel = isIncome ? 'Доход' : isExpense ? 'Расход' : t.type;
+  const amountColor = isIncome ? '#4ADE80' : '#FB7185';
+
+  const underline = (key: string) => ({
+    borderBottomWidth: focusKey === key ? 1 : StyleSheet.hairlineWidth,
+    borderBottomColor:
+      focusKey === key
+        ? isLight
+          ? brand.primary
+          : 'rgba(157, 107, 255, 0.85)'
+        : isLight
+          ? 'rgba(15,17,24,0.12)'
+          : 'rgba(255,255,255,0.08)',
+    backgroundColor: focusKey === key ? (isLight ? 'rgba(124,58,237,0.06)' : 'rgba(255,255,255,0.05)') : 'transparent',
+  });
+
+  const inputTextColor = colors.text;
+  const placeholderColor = colors.textMuted;
+
+  const webUnderline = (key: string): React.CSSProperties => {
+    const on = focusKey === key;
+    return {
+      borderBottom: on
+        ? `1px solid ${isLight ? brand.primary : 'rgba(157, 107, 255, 0.85)'}`
+        : `1px solid ${isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.08)'}`,
+      backgroundColor: on ? (isLight ? 'rgba(124,58,237,0.06)' : 'rgba(255,255,255,0.05)') : 'transparent',
+    };
+  };
+
+  const webSelectStyle = (key: string): React.CSSProperties => ({
+    width: '100%',
+    minHeight: 40,
+    padding: '8px 4px',
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+    color: inputTextColor,
+    fontSize: 13,
+    fontWeight: 600,
+    boxSizing: 'border-box',
+    ...webUnderline(key),
+    ...sans,
+  });
+
+  const saveMut = useMutation({
+    mutationFn: async (patch: UpdateFinanceTransactionPatch) => {
+      await updateFinanceTransaction(userId, t.id, patch);
+    },
+    onSuccess: () => {
+      setSaveErr(null);
+      onSaved();
+    },
+    onError: (e: Error) => setSaveErr(e.message),
+  });
+
+  const delMut = useMutation({
+    mutationFn: async () => {
+      await deleteFinanceTransaction(userId, t.id);
+    },
+    onSuccess: () => {
+      onSaved();
+    },
+    onError: (e: Error) => Alert.alert('Ошибка', e.message),
+  });
+
+  const persistPatch = (patch: UpdateFinanceTransactionPatch) => {
+    if (Object.keys(patch).length === 0) return;
+    saveMut.mutate(patch);
+  };
+
+  const onBlurDate = () => {
+    setFocusKey((k) => (k === 'date' ? null : k));
+    try {
+      if (isoToLocalYmd(t.date) === dateYmd.trim()) return;
+      persistPatch({ dateISO: ymdToNoonIso(dateYmd) });
+    } catch {
+      setDateYmd(isoToLocalYmd(t.date));
+    }
+  };
+
+  const onBlurAmount = () => {
+    setFocusKey((k) => (k === 'amount' ? null : k));
+    const amt = Number(amountDraft.replace(/\s/g, '').replace(',', '.'));
+    if (!Number.isFinite(amt) || amt <= 0) {
+      const a = t.amount;
+      setAmountDraft(Number.isInteger(a) ? String(a) : String(a).replace('.', ','));
+      return;
+    }
+    if (Math.abs(amt - t.amount) > 0.0001) persistPatch({ amount: amt });
+  };
+
+  const onBlurCategory = () => {
+    setFocusKey((k) => (k === 'cat' ? null : k));
+    const cat = categoryName.trim();
+    const prev = (t.category ?? '').trim();
+    if (cat !== prev) persistPatch({ category: cat || null });
+  };
+
+  const onWebCategoryChange = (value: string) => {
+    setCategoryName(value);
+    const cat = value.trim();
+    const prev = (t.category ?? '').trim();
+    if (cat !== prev) persistPatch({ category: cat || null });
+  };
+
+  const onBlurDescription = () => {
+    setFocusKey((k) => (k === 'desc' ? null : k));
+    const desc = description.trim();
+    const prev = (t.description ?? '').trim();
+    if (desc !== prev) persistPatch({ description: desc || null });
+  };
+
+  const confirmDelete = () => {
+    Alert.alert('Удалить операцию?', t.description || t.category || fmtMoney(t.amount, 0), [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Удалить',
+        style: 'destructive',
+        onPress: () => delMut.mutate(),
+      },
+    ]);
+  };
+
   const border = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.06)';
 
   return (
+    <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }}>
     <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: TX_ROW_PAD_V,
         paddingHorizontal: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: border,
       }}
     >
       <View style={{ width: COL.date, paddingRight: 6 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, ...sans }} numberOfLines={1}>
-          {dateLabel}
-        </Text>
+        {Platform.OS === 'web' ? (
+          createElement('input', {
+            type: 'date',
+            className: 'finance-web-date',
+            value: dateYmd,
+            onFocus: () => setFocusKey('date'),
+            onBlur: onBlurDate,
+            onChange: (e: { target: { value: string } }) => setDateYmd(e.target.value),
+            style: {
+              ...webSelectStyle('date'),
+              minWidth: COL.date,
+              fontVariantNumeric: 'tabular-nums',
+              cursor: 'text',
+              colorScheme: isLight ? undefined : ('dark' as const),
+            } as React.CSSProperties,
+          })
+        ) : (
+          <TextInput
+            value={dateYmd}
+            onChangeText={setDateYmd}
+            onFocus={() => setFocusKey('date')}
+            onBlur={onBlurDate}
+            autoCapitalize="none"
+            style={[
+              {
+                color: inputTextColor,
+                fontSize: 13,
+                fontWeight: '600',
+                paddingVertical: TX_INPUT_PAD_V,
+                paddingHorizontal: 2,
+                ...sans,
+              },
+              underline('date'),
+            ]}
+          />
+        )}
       </View>
       <View style={{ width: COL.amount, paddingRight: 6 }}>
-        <Text
-          style={{
-            fontSize: 14,
-            fontWeight: '800',
-            color: amountColor,
-            fontVariant: ['tabular-nums'],
-            ...sans,
-          }}
-          numberOfLines={1}
-        >
-          {sign}
-          {fmtMoney(t.amount, 0)}
-        </Text>
+        <TextInput
+          value={amountDraft}
+          onChangeText={setAmountDraft}
+          keyboardType="decimal-pad"
+          onFocus={() => setFocusKey('amount')}
+          onBlur={onBlurAmount}
+          style={[
+            {
+              color: amountColor,
+              fontSize: 14,
+              fontWeight: '800',
+              fontVariant: ['tabular-nums'],
+              paddingVertical: TX_INPUT_PAD_V,
+              paddingHorizontal: 2,
+              ...sans,
+            },
+            underline('amount'),
+          ]}
+        />
       </View>
       <View style={{ width: COL.category, paddingRight: 6 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text, ...sans }} numberOfLines={1}>
-          {t.category?.trim() ? t.category : '—'}
-        </Text>
+        {Platform.OS === 'web' && overview.expenseCategories.length > 0 ? (
+          createElement(
+            'select',
+            {
+              value: categoryName,
+              onFocus: () => setFocusKey('cat'),
+              onBlur: () => setFocusKey((k) => (k === 'cat' ? null : k)),
+              onChange: (e: { target: { value: string } }) => onWebCategoryChange(e.target.value),
+              style: webSelectStyle('cat'),
+            },
+            createElement('option', { value: '' }, '—'),
+            ...expenseCategorySelectOptions(overview.expenseCategories).map((o) =>
+              createElement('option', { key: o.value, value: o.value }, o.label)
+            )
+          )
+        ) : (
+          <TextInput
+            value={categoryName}
+            onChangeText={setCategoryName}
+            placeholder="—"
+            placeholderTextColor={placeholderColor}
+            onFocus={() => setFocusKey('cat')}
+            onBlur={onBlurCategory}
+            style={[
+              {
+                color: inputTextColor,
+                fontSize: 13,
+                fontWeight: '600',
+                paddingVertical: TX_INPUT_PAD_V,
+                paddingHorizontal: 2,
+                ...sans,
+              },
+              underline('cat'),
+            ]}
+          />
+        )}
       </View>
-      <View style={{ flex: 1, minWidth: 120, paddingRight: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textMuted, ...sans }} numberOfLines={2}>
-          {t.description?.trim() ? t.description : '—'}
-        </Text>
+      <View style={{ flex: 1, minWidth: 100, paddingRight: 8 }}>
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          placeholder="—"
+          placeholderTextColor={placeholderColor}
+          onFocus={() => setFocusKey('desc')}
+          onBlur={onBlurDescription}
+          style={[
+            {
+              color: inputTextColor,
+              fontSize: 13,
+              fontWeight: '500',
+              paddingVertical: TX_INPUT_PAD_V,
+              paddingHorizontal: 2,
+              ...sans,
+            },
+            underline('desc'),
+          ]}
+        />
       </View>
-      <View style={{ width: COL.type, paddingRight: 6 }}>
-        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, ...sans }} numberOfLines={1}>
-          {typeLabel}
-        </Text>
+      <View style={{ width: COL.actions, alignItems: 'flex-end', justifyContent: 'center' }}>
+        {saveMut.isPending || delMut.isPending ? (
+          <ActivityIndicator size="small" color={brand.primary} />
+        ) : (
+          <Pressable
+            onPress={confirmDelete}
+            hitSlop={8}
+            accessibilityLabel="Удалить транзакцию"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(251,113,133,0.12)',
+            }}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FB7185" />
+          </Pressable>
+        )}
       </View>
-      <View style={{ width: COL.actions }} />
+    </View>
+    {saveErr ? (
+      <Text style={{ fontSize: 11, color: colors.danger, paddingHorizontal: 12, paddingBottom: 6 }} numberOfLines={2}>
+        {saveErr}
+      </Text>
+    ) : null}
     </View>
   );
 }
@@ -173,7 +440,6 @@ function AddTransactionRow({
   prefillCategoryName?: string | null;
 }) {
   const { colors, isLight, brand } = useAppTheme();
-  const [kind, setKind] = useState<TxKind>('expense');
   const [dateYmd, setDateYmd] = useState(localYmd);
   const [amountDraft, setAmountDraft] = useState('');
   const [categoryName, setCategoryName] = useState('');
@@ -184,7 +450,6 @@ function AddTransactionRow({
   useEffect(() => {
     if (prefillCategoryName != null && prefillCategoryName.trim()) {
       setCategoryName(prefillCategoryName.trim());
-      setKind('expense');
     }
   }, [prefillCategoryName]);
 
@@ -216,8 +481,8 @@ function AddTransactionRow({
 
   const webSelectStyle = (key: string): React.CSSProperties => ({
     width: '100%',
-    minHeight: 36,
-    padding: '6px 2px',
+    minHeight: 40,
+    padding: '8px 4px',
     border: 'none',
     outline: 'none',
     backgroundColor: 'transparent',
@@ -237,11 +502,11 @@ function AddTransactionRow({
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Введи сумму');
       const dateISO = ymdToNoonIso(dateYmd);
       const cat = categoryName.trim();
-      if (kind === 'expense' && overview.budgetLines.length > 0 && !cat) {
+      if (overview.expenseCategories.length > 0 && !cat) {
         throw new Error('Выбери категорию');
       }
       await createFinanceTransaction(userId, {
-        type: kind,
+        type: 'expense',
         amount: amt,
         dateISO,
         category: cat || null,
@@ -267,19 +532,22 @@ function AddTransactionRow({
         borderBottomColor: isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.08)',
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: TX_ROW_PAD_V, paddingHorizontal: 12 }}>
         <View style={{ width: COL.date, paddingRight: 6 }}>
           {Platform.OS === 'web' ? (
             createElement('input', {
               type: 'date',
+              className: 'finance-web-date',
               value: dateYmd,
               onFocus: () => setFocusKey('date'),
               onBlur: () => setFocusKey((k) => (k === 'date' ? null : k)),
               onChange: (e: { target: { value: string } }) => setDateYmd(e.target.value),
               style: {
                 ...webSelectStyle('date'),
+                minWidth: COL.date,
                 fontVariantNumeric: 'tabular-nums',
                 cursor: 'text',
+                colorScheme: isLight ? undefined : ('dark' as const),
               } as React.CSSProperties,
             })
           ) : (
@@ -292,7 +560,14 @@ function AddTransactionRow({
               onBlur={() => setFocusKey((k) => (k === 'date' ? null : k))}
               autoCapitalize="none"
               style={[
-                { color: inputTextColor, fontSize: 13, fontWeight: '600', paddingVertical: 8, paddingHorizontal: 2, ...sans },
+                {
+                  color: inputTextColor,
+                  fontSize: 13,
+                  fontWeight: '600',
+                  paddingVertical: TX_INPUT_PAD_V,
+                  paddingHorizontal: 2,
+                  ...sans,
+                },
                 underline('date'),
               ]}
             />
@@ -314,7 +589,7 @@ function AddTransactionRow({
                 fontSize: 14,
                 fontWeight: '800',
                 fontVariant: ['tabular-nums'],
-                paddingVertical: 8,
+                paddingVertical: TX_INPUT_PAD_V,
                 paddingHorizontal: 2,
                 ...sans,
               },
@@ -324,7 +599,7 @@ function AddTransactionRow({
         </View>
 
         <View style={{ width: COL.category, paddingRight: 6 }}>
-          {Platform.OS === 'web' && kind === 'expense' && overview.budgetLines.length > 0 ? (
+          {Platform.OS === 'web' && overview.expenseCategories.length > 0 ? (
             createElement(
               'select',
               {
@@ -335,8 +610,8 @@ function AddTransactionRow({
                 style: webSelectStyle('cat'),
               },
               createElement('option', { value: '' }, '—'),
-              ...overview.budgetLines.map((line) =>
-                createElement('option', { key: line.id, value: line.title }, line.title)
+              ...expenseCategorySelectOptions(overview.expenseCategories).map((o) =>
+                createElement('option', { key: o.value, value: o.value }, o.label)
               )
             )
           ) : (
@@ -348,14 +623,21 @@ function AddTransactionRow({
               onFocus={() => setFocusKey('cat')}
               onBlur={() => setFocusKey((k) => (k === 'cat' ? null : k))}
               style={[
-                { color: inputTextColor, fontSize: 13, fontWeight: '600', paddingVertical: 8, paddingHorizontal: 2, ...sans },
+                {
+                  color: inputTextColor,
+                  fontSize: 13,
+                  fontWeight: '600',
+                  paddingVertical: TX_INPUT_PAD_V,
+                  paddingHorizontal: 2,
+                  ...sans,
+                },
                 underline('cat'),
               ]}
             />
           )}
         </View>
 
-        <View style={{ flex: 1, minWidth: 120, paddingRight: 8 }}>
+        <View style={{ flex: 1, minWidth: 100, paddingRight: 8 }}>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -364,49 +646,17 @@ function AddTransactionRow({
             onFocus={() => setFocusKey('desc')}
             onBlur={() => setFocusKey((k) => (k === 'desc' ? null : k))}
             style={[
-              { color: inputTextColor, fontSize: 13, fontWeight: '500', paddingVertical: 8, paddingHorizontal: 2, ...sans },
+              {
+                color: inputTextColor,
+                fontSize: 13,
+                fontWeight: '500',
+                paddingVertical: TX_INPUT_PAD_V,
+                paddingHorizontal: 2,
+                ...sans,
+              },
               underline('desc'),
             ]}
           />
-        </View>
-
-        <View style={{ width: COL.type, paddingRight: 6 }}>
-          {Platform.OS === 'web' ? (
-            createElement(
-              'select',
-              {
-                value: kind,
-                onFocus: () => setFocusKey('kind'),
-                onBlur: () => setFocusKey((k) => (k === 'kind' ? null : k)),
-                onChange: (e: { target: { value: string } }) => setKind(e.target.value as TxKind),
-                style: webSelectStyle('kind'),
-              },
-              createElement('option', { value: 'expense' }, 'Расход'),
-              createElement('option', { value: 'income' }, 'Доход')
-            )
-          ) : (
-            <View style={[{ flexDirection: 'row', borderRadius: 10, overflow: 'hidden' }, underline('kind')]}>
-              {(['expense', 'income'] as const).map((k) => {
-                const on = kind === k;
-                return (
-                  <Pressable
-                    key={k}
-                    onPress={() => setKind(k)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 6,
-                      alignItems: 'center',
-                      backgroundColor: on ? 'rgba(168,85,247,0.22)' : 'transparent',
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: on ? '#EDE9FE' : colors.textMuted }}>
-                      {k === 'expense' ? 'Расх.' : 'Дох.'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
         </View>
 
         <View style={{ width: COL.actions, alignItems: 'flex-end' }}>
@@ -453,9 +703,7 @@ type Props = {
   overview: FinanceOverview;
   transactions: FinanceTransaction[];
   onSaved: () => void;
-  /** Синхронизация с модалкой «быстрый расход из категории». */
   prefillCategoryName?: string | null;
-  onOpenFullForm?: () => void;
 };
 
 export function FinanceTransactionTable({
@@ -464,11 +712,64 @@ export function FinanceTransactionTable({
   transactions,
   onSaved,
   prefillCategoryName,
-  onOpenFullForm,
 }: Props) {
-  const { colors, typography, isLight } = useAppTheme();
-  const { width: winW } = useWindowDimensions();
-  const tableMinW = Math.max(560, Math.min(920, winW - 40));
+  const { colors, typography, isLight, brand } = useAppTheme();
+  const webCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const [csvImportText, setCsvImportText] = useState<string | null>(null);
+
+  const openCsvPicker = () => {
+    if (Platform.OS === 'web') {
+      webCsvInputRef.current?.click();
+      return;
+    }
+    Alert.alert(
+      'Импорт CSV',
+      'Выбор файла CSV сейчас доступен в веб-версии Sophia. Открой приложение в браузере на компьютере и вкладку «Транзакции».'
+    );
+  };
+
+  const webCsvFileInput =
+    Platform.OS === 'web'
+      ? createElement('input', {
+          type: 'file',
+          accept: '.csv,text/csv',
+          style: { display: 'none' },
+          ref: (el: HTMLInputElement | null) => {
+            webCsvInputRef.current = el;
+          },
+          onChange: (e: { target: HTMLInputElement }) => {
+            const input = e.target;
+            const file = input.files?.[0];
+            input.value = '';
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              const text = typeof reader.result === 'string' ? reader.result : '';
+              setCsvImportText(text);
+            };
+            reader.readAsText(file, 'UTF-8');
+          },
+        })
+      : null;
+
+  const webDatePickerStyles =
+    Platform.OS === 'web' && !isLight
+      ? createElement('style', {
+          dangerouslySetInnerHTML: {
+            __html: `
+input.finance-web-date { color-scheme: dark; }
+input.finance-web-date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.92;
+  cursor: pointer;
+}
+input.finance-web-date::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+`.trim(),
+          },
+        })
+      : null;
 
   const headerBorder = isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.1)';
 
@@ -477,7 +778,7 @@ export function FinanceTransactionTable({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 12,
         paddingHorizontal: 12,
         borderBottomWidth: 1,
         borderBottomColor: headerBorder,
@@ -489,17 +790,12 @@ export function FinanceTransactionTable({
           ['СУММА', COL.amount],
           ['КАТЕГОРИЯ', COL.category],
           ['ОПИСАНИЕ', undefined],
-          ['ТИП', COL.type],
           ['ДЕЙСТВИЯ', COL.actions],
         ] as const
       ).map(([label, w], i) => (
         <View
           key={`h-${i}`}
-          style={
-            w != null
-              ? { width: w, paddingRight: 6 }
-              : { flex: 1, minWidth: 120, paddingRight: 8 }
-          }
+          style={w != null ? { width: w, paddingRight: 6 } : { flex: 1, minWidth: 100, paddingRight: 8 }}
         >
           {label ? (
             <Text
@@ -529,7 +825,7 @@ export function FinanceTransactionTable({
         prefillCategoryName={prefillCategoryName}
       />
       {transactions.map((t) => (
-        <TransactionDataRow key={t.id} t={t} />
+        <EditableTransactionRow key={t.id} t={t} overview={overview} userId={userId} onSaved={onSaved} />
       ))}
       {transactions.length === 0 ? (
         <Text
@@ -551,32 +847,38 @@ export function FinanceTransactionTable({
     </>
   );
 
+  const tableShell = (
+    <View style={[{ width: '100%', maxWidth: '100%', paddingBottom: 4 }, tableShellOuter(isLight)]}>
+      {body}
+    </View>
+  );
+
   return (
-    <View style={{ marginTop: 4 }}>
+    <View style={{ marginTop: 4, width: '100%', alignSelf: 'stretch' }}>
+      {webDatePickerStyles}
+      {webCsvFileInput}
+      <FinanceCsvImportModal
+        visible={csvImportText != null}
+        csvText={csvImportText}
+        userId={userId}
+        overview={overview}
+        onClose={() => setCsvImportText(null)}
+        onImported={onSaved}
+      />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
         <Text style={[typography.caption, { color: colors.textMuted, flex: 1, letterSpacing: 0.4 }]}>Операции</Text>
-        {onOpenFullForm ? (
-          <Pressable onPress={onOpenFullForm} hitSlop={8}>
-            <Text style={{ fontWeight: '800', color: colors.textMuted, fontSize: 13 }}>Расширенная форма</Text>
-          </Pressable>
-        ) : null}
+        <Pressable onPress={openCsvPicker} hitSlop={8}>
+          <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Импорт CSV</Text>
+        </Pressable>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {Platform.OS === 'web' ? (
-          <View style={[{ minWidth: tableMinW, alignSelf: 'flex-start', paddingBottom: 4 }, tableShellOuter(isLight)]}>
-            {body}
-          </View>
-        ) : (
-          <BlurView
-            intensity={isLight ? 52 : 40}
-            tint={isLight ? 'light' : 'dark'}
-            style={[{ minWidth: tableMinW, alignSelf: 'flex-start', paddingBottom: 4 }, tableShellOuter(isLight)]}
-          >
-            {body}
-          </BlurView>
-        )}
-      </ScrollView>
+      {Platform.OS === 'web' ? (
+        tableShell
+      ) : (
+        <BlurView intensity={isLight ? 52 : 40} tint={isLight ? 'light' : 'dark'} style={[{ width: '100%' }, tableShellOuter(isLight)]}>
+          {body}
+        </BlurView>
+      )}
     </View>
   );
 }

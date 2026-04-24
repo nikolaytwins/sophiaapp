@@ -27,6 +27,7 @@ import {
   loadFinanceOverview,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
+import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
 import { FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
@@ -61,6 +62,76 @@ const GREEN_BAR = '#4ADE80';
 const RED_EXPENSE = '#FB7185';
 
 const CLOUD_HREF = '/cloud' as Href;
+
+/** Голубое диффузное свечение снизу (как атмосфера календаря), слой под контентом — плашки таблицы выше. */
+function FinancePageGlow({ isLight }: { isLight: boolean }) {
+  if (isLight) {
+    return (
+      <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(56, 189, 248, 0.07)', 'rgba(124, 58, 237, 0.05)']}
+          locations={[0, 0.62, 1]}
+          start={{ x: 0.45, y: 0 }}
+          end={{ x: 0.55, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  }
+  if (Platform.OS === 'web') {
+    const blur = { filter: 'blur(92px)', WebkitFilter: 'blur(92px)' } as const;
+    return (
+      <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
+        <View
+          style={{
+            position: 'absolute',
+            width: 620,
+            height: 460,
+            borderRadius: 310,
+            bottom: '-14%',
+            left: '-8%',
+            backgroundColor: 'rgba(56, 189, 248, 0.28)',
+            opacity: 0.72,
+            ...blur,
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            width: 440,
+            height: 440,
+            borderRadius: 220,
+            bottom: '0%',
+            right: '-20%',
+            backgroundColor: 'rgba(123, 92, 255, 0.18)',
+            opacity: 0.58,
+            ...blur,
+          }}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(56, 189, 248, 0.04)', 'transparent']}
+          start={{ x: 0.5, y: 0.35 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  }
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['transparent', 'rgba(56, 189, 248, 0.09)', 'rgba(56, 189, 248, 0.04)']}
+        locations={[0, 0.72, 1]}
+        start={{ x: 0.35, y: 0.2 }}
+        end={{ x: 0.55, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+}
 
 function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
@@ -107,25 +178,29 @@ function BudgetCard({
   const iconBg = line.kind === 'personal' ? brand.primaryMuted : 'rgba(167,139,250,0.2)';
   const iconName = line.kind === 'personal' ? 'cash-outline' : 'briefcase-outline';
 
+  const over = Boolean(line.overLimit);
   const shell = isLight
     ? {
         backgroundColor: colors.surface,
-        borderColor: brand.surfaceBorderStrong,
+        borderColor: over ? 'rgba(251,113,133,0.55)' : brand.surfaceBorderStrong,
         ...shadows.card,
       }
     : {
         backgroundColor: colors.surface,
-        borderColor: brand.surfaceBorderStrong,
+        borderColor: over ? 'rgba(251,113,133,0.45)' : brand.surfaceBorderStrong,
       };
 
   return (
     <View
       style={{
         borderRadius: radius.xl,
-        borderWidth: 1,
+        borderWidth: over ? 2 : 1,
         padding: 18,
         marginBottom: 14,
         ...shell,
+        ...(over && !isLight
+          ? ({ boxShadow: '0 0 0 1px rgba(251,113,133,0.35), 0 8px 28px rgba(251,113,133,0.12)' } as object)
+          : {}),
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -152,8 +227,18 @@ function BudgetCard({
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 8 }}>
-          <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
+          <Text
+            style={{
+              fontSize: 17,
+              fontWeight: '800',
+              color: over ? colors.danger : colors.text,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
             {fmtMoney(line.spent)}
+            {line.expectedMonthly > 0 ? (
+              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>{` / ${fmtMoney(line.expectedMonthly)}`}</Text>
+            ) : null}
           </Text>
           {editable && onEdit && onDelete ? (
             <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -216,10 +301,10 @@ function BudgetCard({
       >
         <View
           style={{
-            width: `${Math.round(Math.min(1, line.progress01) * 100)}%`,
+            width: `${Math.round(Math.min(100, line.progress01 * 100))}%`,
             height: '100%',
             borderRadius: 8,
-            backgroundColor: barColor,
+            backgroundColor: over ? colors.danger : barColor,
           }}
         />
       </View>
@@ -306,29 +391,32 @@ export function FinanceScreen() {
   const delCatMut = useMutation({
     mutationFn: (id: string) => deleteFinanceExpenseCategory(userId!, id),
     onSuccess: invalidateFinance,
+    onError: (e: Error) => Alert.alert('Ошибка', e.message ?? 'Не удалось удалить категорию'),
   });
 
-  const openCategoryEdit = useCallback((line: FinanceBudgetLine) => {
-    setCatModal({
-      id: line.id,
-      initial: {
-        name: line.title,
-        type: line.kind === 'business' ? 'business' : 'personal',
-        expectedMonthly: line.expectedMonthly,
-      },
-    });
-  }, []);
+  const openCategoryEdit = useCallback(
+    (line: FinanceBudgetLine) => {
+      const cat = overview?.expenseCategories.find((c) => c.id === line.id);
+      setCatModal({
+        id: line.id,
+        initial: {
+          name: line.title,
+          type: line.kind === 'business' ? 'business' : 'personal',
+          expectedMonthly: line.expectedMonthly,
+          parentId: cat?.parentId ?? null,
+        },
+      });
+    },
+    [overview]
+  );
 
   const confirmDeleteCategory = useCallback(
     (line: FinanceBudgetLine) => {
-      Alert.alert('Удалить категорию?', `«${line.title}». Транзакции потеряют эту метку категории.`, [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: () => delCatMut.mutate(line.id),
-        },
-      ]);
+      confirmFinanceDestructive(
+        'Удалить категорию?',
+        `«${line.title}». Транзакции потеряют эту метку категории (включая подкатегории, если есть).`,
+        () => delCatMut.mutate(line.id)
+      );
     },
     [delCatMut]
   );
@@ -345,15 +433,17 @@ export function FinanceScreen() {
 
   return (
     <ScreenCanvas>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: insets.top + spacing.lg,
-          paddingHorizontal: padH,
-          paddingBottom: insets.bottom + 120,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <FinancePageGlow isLight={isLight} />
+        <ScrollView
+          style={{ flex: 1, zIndex: 1 }}
+          contentContainerStyle={{
+            paddingTop: insets.top + spacing.lg,
+            paddingHorizontal: padH,
+            paddingBottom: insets.bottom + 120,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, paddingRight: spacing.md }}>
             <Text
@@ -373,6 +463,7 @@ export function FinanceScreen() {
           <SegmentedControl<MainTab>
             value={mainTab}
             onChange={setMainTab}
+            activeVariant="brandGlow"
             options={[
               { value: 'overview', label: 'Обзор' },
               { value: 'transactions', label: 'Транзакции' },
@@ -799,14 +890,13 @@ export function FinanceScreen() {
             ) : null}
 
             {mainTab === 'transactions' ? (
-              <View style={{ marginTop: spacing.md }}>
+              <View style={{ marginTop: spacing.md, position: 'relative', zIndex: 2 }}>
                 <FinanceTransactionTable
                   userId={userId}
                   overview={overview}
                   transactions={overview.transactionsRecent}
                   onSaved={invalidateFinance}
                   prefillCategoryName={addTxPrefill}
-                  onOpenFullForm={() => openAddTransaction(null)}
                 />
               </View>
             ) : null}
@@ -838,7 +928,7 @@ export function FinanceScreen() {
                 ) : expenseAnalyticsQ.data ? (
                   <FinanceCategoryMonthMatrix
                     analytics={expenseAnalyticsQ.data}
-                    budgetCategoryTitles={overview.budgetLines.map((l) => l.title)}
+                    budgetCategoryTitles={overview.expenseCategories.map((c) => c.name)}
                   />
                 ) : null}
                 {overview.budgetLines.length === 0 ? (
@@ -875,6 +965,7 @@ export function FinanceScreen() {
                       <SegmentedControl<MonthHistoryViewMode>
                         value={historyViewMode}
                         onChange={setHistoryViewMode}
+                        activeVariant="brandGlow"
                         options={[
                           { value: 'table', label: 'Таблица' },
                           { value: 'cards', label: 'Карточки' },
@@ -892,7 +983,8 @@ export function FinanceScreen() {
             ) : null}
           </>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       <FinanceCategoryFormModal
         visible={catModal != null}
@@ -901,6 +993,7 @@ export function FinanceScreen() {
         mode="edit"
         categoryId={catModal?.id}
         initial={catModal?.initial}
+        allCategories={overview?.expenseCategories}
       />
 
       {overview && userId ? (

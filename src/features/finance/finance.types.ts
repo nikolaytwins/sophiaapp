@@ -26,6 +26,8 @@ export type FinanceExpenseCategory = {
   name: string;
   type: string;
   expectedMonthly: number;
+  /** Родительская категория (подкатегория расходов). */
+  parentId: string | null;
 };
 
 export type FinanceExpenseSettings = {
@@ -64,6 +66,8 @@ export type FinanceBudgetLine = {
   expectedMonthly: number;
   progress01: number;
   kind: 'personal' | 'business';
+  /** Превышен месячный лимит (для подсветки на дашборде). */
+  overLimit: boolean;
 };
 
 /** Группа счёта в UI (как в Twinworks: доступно / заморозка / резервы). */
@@ -80,6 +84,9 @@ export type FinanceOverview = {
   /** Упрощённый прогноз: баланс − неоплаченные разовые − дневной лимит × дней до конца месяца. */
   forecastEndOfMonth: number;
   dailyExpenseLimit: number;
+  /** Все категории расходов (включая подкатегории) — для выбора в транзакциях. */
+  expenseCategories: FinanceExpenseCategory[];
+  /** Только верхний уровень: лимит родителя, потрачено с учётом подкатегорий. */
   budgetLines: FinanceBudgetLine[];
   accounts: FinanceAccount[];
   transactionsThisMonth: FinanceTransaction[];

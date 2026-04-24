@@ -101,6 +101,7 @@ function mapCategory(row: Record<string, unknown>): FinanceExpenseCategory {
     name: String(row.name),
     type: String(row.type),
     expectedMonthly: num(row.expected_monthly),
+    parentId: row.parent_id != null && String(row.parent_id).trim() !== '' ? String(row.parent_id) : null,
   };
 }
 
@@ -127,6 +128,21 @@ function mapSnapshot(row: Record<string, unknown>): FinanceMonthSnapshot {
     totalRevenue: row.total_revenue != null ? num(row.total_revenue) : null,
     projectProfit: row.project_profit != null ? num(row.project_profit) : null,
   };
+}
+
+/** Имена категорий для полей выбора (включая подкатегории). */
+export function expenseCategorySelectOptions(categories: FinanceExpenseCategory[]): { value: string; label: string }[] {
+  return [...categories]
+    .sort((a, b) => {
+      const rootA = !a.parentId;
+      const rootB = !b.parentId;
+      if (rootA !== rootB) return rootA ? -1 : 1;
+      return a.name.localeCompare(b.name, 'ru');
+    })
+    .map((c) => ({
+      value: c.name,
+      label: c.parentId ? `· ${c.name}` : c.name,
+    }));
 }
 
 export async function loadFinanceOverview(userId: string): Promise<FinanceOverview> {
@@ -219,21 +235,48 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
   const burnReserve = expenseSettings.dailyExpenseLimit * daysLeft;
   const forecastEndOfMonth = totalBalance - oneTimeUnpaidTotal - burnReserve;
 
-  const budgetLines: FinanceBudgetLine[] = categories.map((c) => {
-    const spent = spendByCategory.get(c.name) ?? 0;
+  const childrenByParent = new Map<string, FinanceExpenseCategory[]>();
+  for (const c of categories) {
+    if (c.parentId) {
+      const arr = childrenByParent.get(c.parentId) ?? [];
+      arr.push(c);
+      childrenByParent.set(c.parentId, arr);
+    }
+  }
+
+  const rollupSpentFor = (cat: FinanceExpenseCategory): number => {
+    let s = spendByCategory.get(cat.name) ?? 0;
+    for (const ch of childrenByParent.get(cat.id) ?? []) {
+      s += spendByCategory.get(ch.name) ?? 0;
+    }
+    return s;
+  };
+
+  const fmtR0 = (n: number) => Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g, ' ') + ' ₽';
+
+  const rootCategories = categories.filter((c) => !c.parentId);
+  const budgetLines: FinanceBudgetLine[] = rootCategories.map((c) => {
+    const spent = rollupSpentFor(c);
     const exp = c.expectedMonthly;
     const progress01 = exp > 0 ? Math.min(1, spent / exp) : spent > 0 ? 1 : 0;
+    const overLimit = exp > 0 && spent > exp;
+    const kids = childrenByParent.get(c.id) ?? [];
+    const subHint =
+      kids.length > 0
+        ? ` · ${kids.map((k) => k.name).join(', ')}`
+        : '';
     return {
       id: c.id,
       title: c.name,
       subtitle:
         exp > 0
-          ? `План ${Math.round(exp).toLocaleString('ru-RU')} ₽ · потрачено ${Math.round(spent).toLocaleString('ru-RU')} ₽`
-          : `Потрачено ${Math.round(spent).toLocaleString('ru-RU')} ₽`,
+          ? `${fmtR0(spent)} из ${fmtR0(exp)}${subHint}`
+          : `Потрачено ${fmtR0(spent)}${subHint}`,
       spent,
       expectedMonthly: exp,
       progress01,
       kind: c.type === 'business' ? 'business' : 'personal',
+      overLimit,
     };
   });
 
@@ -246,6 +289,7 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
     monthExpense,
     forecastEndOfMonth,
     dailyExpenseLimit: expenseSettings.dailyExpenseLimit,
+    expenseCategories: categories,
     budgetLines,
     accounts,
     transactionsThisMonth,
@@ -259,6 +303,8 @@ export type FinanceCategoryInput = {
   name: string;
   type: 'personal' | 'business';
   expectedMonthly: number;
+  /** null — верхний уровень; иначе id родительской категории. */
+  parentId?: string | null;
 };
 
 function nowIso() {
@@ -272,12 +318,26 @@ export async function createFinanceExpenseCategory(userId: string, input: Financ
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const parentId =
+    input.parentId != null && String(input.parentId).trim() !== '' ? String(input.parentId).trim() : null;
+  if (parentId) {
+    const { data: par, error: pe } = await sb
+      .from('finance_expense_categories')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('id', parentId)
+      .maybeSingle();
+    if (pe) throw pe;
+    if (!par) throw new Error('Родительская категория не найдена');
+  }
+
   const { error } = await sb.from('finance_expense_categories').insert({
     id,
     user_id: userId,
     name: input.name.trim(),
     type: input.type,
     expected_monthly: input.expectedMonthly,
+    parent_id: parentId,
     created_at: nowIso(),
     updated_at: nowIso(),
   });
@@ -316,6 +376,21 @@ export async function updateFinanceExpenseCategory(
   if (patch.name != null) row.name = patch.name.trim();
   if (patch.type != null) row.type = patch.type;
   if (patch.expectedMonthly != null) row.expected_monthly = patch.expectedMonthly;
+  if (patch.parentId !== undefined) {
+    const pid = patch.parentId != null && String(patch.parentId).trim() !== '' ? String(patch.parentId).trim() : null;
+    if (pid === categoryId) throw new Error('Категория не может быть родителем самой себя');
+    if (pid) {
+      const { data: par, error: pe } = await sb
+        .from('finance_expense_categories')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('id', pid)
+        .maybeSingle();
+      if (pe) throw pe;
+      if (!par) throw new Error('Родительская категория не найдена');
+    }
+    row.parent_id = pid;
+  }
 
   const { error } = await sb
     .from('finance_expense_categories')
@@ -328,15 +403,14 @@ export async function updateFinanceExpenseCategory(
 export async function deleteFinanceExpenseCategory(userId: string, categoryId: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
-  const { data: prev, error: selErr } = await sb
+  const { data: rel, error: selErr } = await sb
     .from('finance_expense_categories')
     .select('name')
-    .eq('id', categoryId)
     .eq('user_id', userId)
-    .maybeSingle();
+    .or(`id.eq.${categoryId},parent_id.eq.${categoryId}`);
   if (selErr) throw selErr;
-  const nm = prev && typeof (prev as { name?: string }).name === 'string' ? (prev as { name: string }).name : '';
-  if (nm) {
+  const names = [...new Set((rel ?? []).map((r) => String((r as { name?: string }).name ?? '').trim()).filter(Boolean))];
+  for (const nm of names) {
     const { error: txErr } = await sb
       .from('finance_transactions')
       .update({ category: null, updated_at: nowIso() })
@@ -420,6 +494,78 @@ export async function createFinanceTransaction(
   if (insErr) throw insErr;
 
   return id;
+}
+
+export type UpdateFinanceTransactionPatch = {
+  dateISO?: string;
+  amount?: number;
+  category?: string | null;
+  description?: string | null;
+};
+
+export async function updateFinanceTransaction(
+  userId: string,
+  transactionId: string,
+  patch: UpdateFinanceTransactionPatch
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const row: Record<string, unknown> = { updated_at: nowIso() };
+  if (patch.dateISO != null) row.date = patch.dateISO;
+  if (patch.amount != null) row.amount = patch.amount;
+  if (patch.category !== undefined) row.category = patch.category;
+  if (patch.description !== undefined) row.description = patch.description;
+  const { error } = await sb.from('finance_transactions').update(row).eq('id', transactionId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function deleteFinanceTransaction(userId: string, transactionId: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const { error } = await sb.from('finance_transactions').delete().eq('id', transactionId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+export type FinanceBulkExpenseRow = {
+  dateISO: string;
+  amount: number;
+  description: string | null;
+  category: string | null;
+};
+
+/** Массовая вставка расходов (импорт CSV и т.п.). Балансы счетов не меняются. */
+export async function bulkInsertFinanceExpenseTransactions(
+  userId: string,
+  items: FinanceBulkExpenseRow[]
+): Promise<void> {
+  if (items.length === 0) return;
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const ts = nowIso();
+  const rows = items.map((r) => {
+    const id = newFinanceTransactionId();
+    const amount = r.amount;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Каждая сумма должна быть больше нуля');
+    }
+    return {
+      id,
+      user_id: userId,
+      date: r.dateISO,
+      type: 'expense' as const,
+      amount,
+      currency: 'RUB',
+      category: r.category != null && String(r.category).trim() ? String(r.category).trim() : null,
+      description:
+        r.description != null && String(r.description).trim() ? String(r.description).trim() : null,
+      from_account_id: null,
+      to_account_id: null,
+      created_at: ts,
+      updated_at: ts,
+    };
+  });
+  const { error } = await sb.from('finance_transactions').insert(rows);
+  if (error) throw error;
 }
 
 const EXPENSE_ANALYTICS_MONTHS = 12;

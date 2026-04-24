@@ -17,6 +17,7 @@ import {
   updateFinanceExpenseCategory,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
+import type { FinanceExpenseCategory } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { useAppTheme } from '@/theme';
 
@@ -27,16 +28,30 @@ type Props = {
   mode: 'create' | 'edit';
   categoryId?: string;
   initial?: FinanceCategoryInput;
+  /** Для выбора родителя (только верхний уровень). */
+  allCategories?: FinanceExpenseCategory[] | null;
 };
 
-export function FinanceCategoryFormModal({ visible, onClose, userId, mode, categoryId, initial }: Props) {
+export function FinanceCategoryFormModal({
+  visible,
+  onClose,
+  userId,
+  mode,
+  categoryId,
+  initial,
+  allCategories,
+}: Props) {
   const { colors, radius, typography, brand } = useAppTheme();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [amountDraft, setAmountDraft] = useState('');
   const [kind, setKind] = useState<'personal' | 'business'>('personal');
+  const [parentId, setParentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const parentOptions =
+    (allCategories ?? []).filter((c) => !c.parentId && (mode === 'create' || c.id !== categoryId)) ?? [];
 
   useEffect(() => {
     if (!visible) return;
@@ -45,10 +60,12 @@ export function FinanceCategoryFormModal({ visible, onClose, userId, mode, categ
       setName(initial.name);
       setAmountDraft(String(Math.round(initial.expectedMonthly)));
       setKind(initial.type);
+      setParentId(initial.parentId ?? null);
     } else {
       setName('');
       setAmountDraft('0');
       setKind('personal');
+      setParentId(null);
     }
   }, [visible, mode, initial]);
 
@@ -62,7 +79,12 @@ export function FinanceCategoryFormModal({ visible, onClose, userId, mode, categ
       if (!n) throw new Error('Введи название');
       const exp = Number(amountDraft.replace(/\s/g, '').replace(',', '.'));
       if (!Number.isFinite(exp) || exp < 0) throw new Error('Некорректная сумма лимита');
-      const payload: FinanceCategoryInput = { name: n, type: kind, expectedMonthly: exp };
+      const payload: FinanceCategoryInput = {
+        name: n,
+        type: kind,
+        expectedMonthly: exp,
+        parentId: parentId ?? null,
+      };
       if (mode === 'create') {
         await createFinanceExpenseCategory(userId, payload);
       } else {
@@ -130,6 +152,50 @@ export function FinanceCategoryFormModal({ visible, onClose, userId, mode, categ
             keyboardType="decimal-pad"
             style={[inputStyle, { marginBottom: 14 }]}
           />
+
+          {parentOptions.length > 0 ? (
+            <>
+              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>Родитель (подкатегория)</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                <Pressable
+                  onPress={() => setParentId(null)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: radius.lg,
+                    borderWidth: 1,
+                    borderColor: parentId == null ? brand.primary : colors.border,
+                    backgroundColor: parentId == null ? 'rgba(168,85,247,0.12)' : colors.surface,
+                  }}
+                >
+                  <Text style={{ fontWeight: '700', color: parentId == null ? brand.primary : colors.textMuted, fontSize: 13 }}>
+                    Верхний уровень
+                  </Text>
+                </Pressable>
+                {parentOptions.map((p) => {
+                  const on = parentId === p.id;
+                  return (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => setParentId(p.id)}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: radius.lg,
+                        borderWidth: 1,
+                        borderColor: on ? brand.primary : colors.border,
+                        backgroundColor: on ? 'rgba(168,85,247,0.12)' : colors.surface,
+                      }}
+                    >
+                      <Text style={{ fontWeight: '700', color: on ? brand.primary : colors.text, fontSize: 13 }} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
 
           <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>Тип</Text>
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>

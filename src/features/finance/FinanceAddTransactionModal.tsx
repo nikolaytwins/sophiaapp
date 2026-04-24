@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { createFinanceTransaction } from '@/features/finance/financeApi';
+import { createFinanceTransaction, expenseCategorySelectOptions } from '@/features/finance/financeApi';
 import type { FinanceOverview } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
@@ -91,7 +91,7 @@ export function FinanceAddTransactionModal({
 
       if (kind === 'expense') {
         const cat = categoryName.trim();
-        if (!cat && overview.budgetLines.length > 0) {
+        if (!cat && overview.expenseCategories.length > 0) {
           throw new Error('Выбери категорию расхода');
         }
         await createFinanceTransaction(userId, {
@@ -182,7 +182,7 @@ export function FinanceAddTransactionModal({
               />
             </View>
 
-            {kind === 'expense' && overview.budgetLines.length > 0 ? (
+            {kind === 'expense' && overview.expenseCategories.length > 0 ? (
               <>
                 <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>Категория</Text>
                 {Platform.OS === 'web' ? (
@@ -195,8 +195,8 @@ export function FinanceAddTransactionModal({
                         style: webSelectStyle,
                       },
                       createElement('option', { value: '' }, '—'),
-                      ...overview.budgetLines.map((line) =>
-                        createElement('option', { key: line.id, value: line.title }, line.title)
+                      ...expenseCategorySelectOptions(overview.expenseCategories).map((o) =>
+                        createElement('option', { key: o.value, value: o.value }, o.label)
                       )
                     )}
                   </View>

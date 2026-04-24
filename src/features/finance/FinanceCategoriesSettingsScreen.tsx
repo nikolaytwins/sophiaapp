@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,7 +18,8 @@ import {
   loadFinanceOverview,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
-import type { FinanceBudgetLine } from '@/features/finance/finance.types';
+import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
+import type { FinanceOverview } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { useSupabaseConfigured } from '@/config/env';
 import { getSupabase } from '@/lib/supabase';
@@ -27,6 +28,52 @@ import { useAppTheme } from '@/theme';
 
 function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
+}
+
+type CatRow = {
+  id: string;
+  name: string;
+  depth: 0 | 1;
+  kind: 'personal' | 'business';
+  expectedMonthly: number;
+  parentId: string | null;
+  spentMonth: number;
+};
+
+function buildCategoryRows(overview: FinanceOverview): CatRow[] {
+  const oc = overview.expenseCategories;
+  const spendMap = new Map<string, number>();
+  for (const t of overview.transactionsThisMonth) {
+    if (t.type !== 'expense') continue;
+    const k = (t.category ?? '').trim();
+    if (!k) continue;
+    spendMap.set(k, (spendMap.get(k) ?? 0) + t.amount);
+  }
+  const roots = oc.filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const out: CatRow[] = [];
+  for (const r of roots) {
+    out.push({
+      id: r.id,
+      name: r.name,
+      depth: 0,
+      kind: r.type === 'business' ? 'business' : 'personal',
+      expectedMonthly: r.expectedMonthly,
+      parentId: null,
+      spentMonth: spendMap.get(r.name) ?? 0,
+    });
+    for (const ch of oc.filter((c) => c.parentId === r.id).sort((a, b) => a.name.localeCompare(b.name, 'ru'))) {
+      out.push({
+        id: ch.id,
+        name: ch.name,
+        depth: 1,
+        kind: ch.type === 'business' ? 'business' : 'personal',
+        expectedMonthly: ch.expectedMonthly,
+        parentId: ch.parentId,
+        spentMonth: spendMap.get(ch.name) ?? 0,
+      });
+    }
+  }
+  return out;
 }
 
 export function FinanceCategoriesSettingsScreen() {
@@ -62,7 +109,8 @@ export function FinanceCategoriesSettingsScreen() {
     enabled: Boolean(supabaseOn && userId),
   });
 
-  const lines = q.data?.budgetLines ?? [];
+  const overview = q.data;
+  const sortedRows = useMemo(() => (overview ? buildCategoryRows(overview) : []), [overview]);
 
   const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
@@ -71,6 +119,7 @@ export function FinanceCategoriesSettingsScreen() {
   const delMut = useMutation({
     mutationFn: (id: string) => deleteFinanceExpenseCategory(userId!, id),
     onSuccess: invalidate,
+    onError: (e: Error) => Alert.alert('Ошибка', e.message ?? 'Не удалось удалить категорию'),
   });
 
   const openCreate = () => {
@@ -80,26 +129,24 @@ export function FinanceCategoriesSettingsScreen() {
     setFormOpen(true);
   };
 
-  const openEdit = (line: FinanceBudgetLine) => {
+  const openEdit = (row: CatRow) => {
     setFormMode('edit');
-    setEditId(line.id);
+    setEditId(row.id);
     setEditInitial({
-      name: line.title,
-      type: line.kind === 'business' ? 'business' : 'personal',
-      expectedMonthly: line.expectedMonthly,
+      name: row.name,
+      type: row.kind,
+      expectedMonthly: row.expectedMonthly,
+      parentId: row.parentId,
     });
     setFormOpen(true);
   };
 
-  const confirmDelete = (line: FinanceBudgetLine) => {
-    Alert.alert('Удалить категорию?', `«${line.title}». Транзакции потеряют привязку к этой категории.`, [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: () => delMut.mutate(line.id),
-      },
-    ]);
+  const confirmDelete = (row: CatRow) => {
+    confirmFinanceDestructive(
+      'Удалить категорию?',
+      `«${row.name}». Транзакции потеряют привязку к этой категории (подкатегории при удалении родителя тоже удаляются).`,
+      () => delMut.mutate(row.id)
+    );
   };
 
   return (
@@ -136,20 +183,21 @@ export function FinanceCategoriesSettingsScreen() {
           ) : (
             <>
               <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 }]}>
-                Создавай и переименовывай категории здесь. Лимит — план на месяц; факт тянется из транзакций по названию
-                категории.
+                Лимит — план на месяц; факт за текущий месяц из транзакций. Подкатегория привязана к родителю; в
+                транзакциях по-прежнему выбирается точное имя категории.
               </Text>
-              {lines.length === 0 ? (
+              {sortedRows.length === 0 ? (
                 <Text style={{ color: colors.textMuted }}>Пока нет категорий — нажми «Добавить».</Text>
               ) : (
-                lines.map((line) => (
+                sortedRows.map((row) => (
                   <View
-                    key={line.id}
+                    key={row.id}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       paddingVertical: 14,
                       paddingHorizontal: 14,
+                      paddingLeft: 14 + row.depth * 18,
                       borderRadius: radius.lg,
                       borderWidth: 1,
                       borderColor: colors.border,
@@ -159,14 +207,15 @@ export function FinanceCategoriesSettingsScreen() {
                   >
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[typography.body, { fontWeight: '800', color: colors.text }]} numberOfLines={2}>
-                        {line.title}
+                        {row.depth ? `· ${row.name}` : row.name}
                       </Text>
                       <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                        Лимит {fmtMoney(line.expectedMonthly)} · {line.kind === 'business' ? 'Бизнес' : 'Личное'}
+                        Лимит {fmtMoney(row.expectedMonthly)} · месяц {fmtMoney(row.spentMonth)} ·{' '}
+                        {row.kind === 'business' ? 'Бизнес' : 'Личное'}
                       </Text>
                     </View>
                     <Pressable
-                      onPress={() => openEdit(line)}
+                      onPress={() => openEdit(row)}
                       hitSlop={8}
                       style={{
                         width: 40,
@@ -181,7 +230,7 @@ export function FinanceCategoriesSettingsScreen() {
                       <Ionicons name="pencil" size={18} color={brand.primary} />
                     </Pressable>
                     <Pressable
-                      onPress={() => confirmDelete(line)}
+                      onPress={() => confirmDelete(row)}
                       hitSlop={8}
                       style={{
                         width: 40,
@@ -230,6 +279,7 @@ export function FinanceCategoriesSettingsScreen() {
           mode={formMode}
           categoryId={editId}
           initial={editInitial}
+          allCategories={overview?.expenseCategories}
         />
       </ScreenCanvas>
     </>
