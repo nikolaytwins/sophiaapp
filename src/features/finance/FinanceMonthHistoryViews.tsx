@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
-import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Line, Polyline } from 'react-native-svg';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
 import type { FinanceMonthSnapshot } from '@/features/finance/finance.types';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
@@ -32,6 +32,15 @@ function fmtSignedRub(n: number) {
   return sign + v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
+/** Короткая подпись для оси Y (масштаб в рублях). */
+function fmtYAxisTick(n: number): string {
+  const sign = n < 0 ? '−' : '';
+  const v = Math.abs(n);
+  if (v >= 1_000_000) return `${sign}${(v / 1_000_000).toFixed(1).replace('.', ',')} млн`;
+  if (v >= 1000) return `${sign}${Math.round(v / 1000)} тыс.`;
+  return `${sign}${Math.round(v)}`;
+}
+
 function monthLabel(s: FinanceMonthSnapshot) {
   return new Date(s.year, s.month - 1, 1).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
 }
@@ -46,10 +55,22 @@ function signedColor(n: number | null | undefined): string | undefined {
   return undefined;
 }
 
-/** График «всего на счетах» по месяцам: слева более ранние периоды. */
-function MonthHistoryCapitalLineChart({ rows, width }: { rows: EnrichedMonthRow[]; width: number }) {
+const CHART_MIN_POINT_GAP = 56;
+const CHART_PAD_L = 46;
+const CHART_PAD_R = 12;
+const CHART_PAD_T = 18;
+const CHART_PAD_B = 40;
+const CHART_HEIGHT = 248;
+
+type ChartPoint = { x: number; y: number; v: number };
+
+/** График «всего на счетах»: хронология слева направо; ширина растёт с числом месяцев, скролл — смотреть прошлое; справа — последний снимок. */
+function MonthHistoryCapitalLineChart({ rows, width: viewportW }: { rows: EnrichedMonthRow[]; width: number }) {
   const { colors, brand, isLight } = useAppTheme();
-  const { values, labels } = useMemo(() => {
+  const scrollRef = useRef<ScrollView>(null);
+  const [hover, setHover] = useState<number | null>(null);
+
+  const { values, labels, monthTitles } = useMemo(() => {
     const chrono = [...rows].reverse();
     return {
       values: chrono.map((r) => r.snapshot.totalBalance),
@@ -59,70 +80,254 @@ function MonthHistoryCapitalLineChart({ rows, width }: { rows: EnrichedMonthRow[
           year: '2-digit',
         })
       ),
+      monthTitles: chrono.map((r) => monthLabel(r.snapshot)),
     };
   }, [rows]);
 
-  const padL = 4;
-  const padR = 8;
-  const padT = 14;
-  const padB = 30;
-  const height = 232;
-  const innerW = Math.max(1, width - padL - padR);
+  const padL = CHART_PAD_L;
+  const padR = CHART_PAD_R;
+  const padT = CHART_PAD_T;
+  const padB = CHART_PAD_B;
+  const height = CHART_HEIGHT;
   const innerH = Math.max(1, height - padT - padB);
+
   const minV = values.length ? Math.min(...values) : 0;
   const maxV = values.length ? Math.max(...values) : 1;
   const span = Math.max(maxV - minV, 1);
   const n = values.length;
-  const step = n <= 1 ? innerW : innerW / (n - 1);
-  const pts = values
-    .map((v, i) => {
-      const x = padL + i * step;
+
+  const plotInnerW = useMemo(() => {
+    if (n <= 0) return 120;
+    if (n === 1) return Math.max(120, viewportW - padL - padR);
+    return (n - 1) * CHART_MIN_POINT_GAP;
+  }, [n, viewportW]);
+
+  const contentWidth = Math.max(viewportW, padL + padR + plotInnerW);
+  const innerW = Math.max(1, contentWidth - padL - padR);
+  const step = n <= 1 ? 0 : innerW / (n - 1);
+
+  const points: ChartPoint[] = useMemo(() => {
+    return values.map((v, i) => {
+      const x = n === 1 ? padL + innerW / 2 : padL + i * step;
       const t = (v - minV) / span;
       const y = padT + innerH - t * innerH;
-      return `${x},${y}`;
-    })
-    .join(' ');
+      return { x, y, v };
+    });
+  }, [values, n, padL, innerW, step, minV, span, innerH, padT]);
 
-  const gridColor = isLight ? 'rgba(15,17,24,0.12)' : 'rgba(255,255,255,0.12)';
-  const labelColor = isLight ? 'rgba(15,17,24,0.45)' : 'rgba(255,255,255,0.45)';
+  const polylinePoints = useMemo(() => points.map((p) => `${p.x},${p.y}`).join(' '), [points]);
+
+  const gridColor = isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.06)';
+  const axisMuted = isLight ? 'rgba(15,17,24,0.5)' : 'rgba(196,181,253,0.5)';
+  const labelColor = isLight ? 'rgba(15,17,24,0.5)' : 'rgba(255,255,255,0.5)';
   const baselineY = padT + innerH;
 
-  if (width < 40 || values.length === 0) return null;
+  useLayoutEffect(() => {
+    if (viewportW < 40 || n === 0) return;
+    const x = Math.max(0, contentWidth - viewportW);
+    scrollRef.current?.scrollTo({ x, animated: false });
+  }, [contentWidth, viewportW, n]);
 
-  return (
-    <View style={{ width, marginTop: 10 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, paddingHorizontal: 2 }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>мин. {fmtMoneyPlain(minV)}</Text>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>макс. {fmtMoneyPlain(maxV)}</Text>
-      </View>
-      <Svg width={width} height={height}>
-        <Line x1={padL} y1={baselineY} x2={width - padR} y2={baselineY} stroke={gridColor} strokeWidth={1} />
-        <Polyline
-          points={pts}
-          fill="none"
-          stroke={brand.primary}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </Svg>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+  if (viewportW < 40 || values.length === 0) return null;
+
+  const tooltip =
+    hover != null &&
+    points[hover] != null &&
+    labels[hover] != null && (
+      <View
+        pointerEvents="none"
         style={{
           position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 2,
-          maxHeight: 26,
+          left: Math.min(
+            contentWidth - 156,
+            Math.max(padL, points[hover]!.x - 78)
+          ),
+          top: Math.max(6, points[hover]!.y - 58),
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: isLight ? 'rgba(15,17,24,0.12)' : 'rgba(157,107,255,0.45)',
+          backgroundColor: isLight ? 'rgba(255,255,255,0.98)' : 'rgba(12,8,22,0.94)',
+          ...(Platform.OS === 'web'
+            ? ({
+                boxShadow: '0 12px 40px rgba(0,0,0,0.35), 0 0 32px rgba(123,92,255,0.2)',
+              } as object)
+            : {}),
         }}
-        contentContainerStyle={{ paddingHorizontal: padL, gap: 10, alignItems: 'center' }}
       >
-        {labels.map((lab, i) => (
-          <Text key={`${lab}-${i}`} style={{ fontSize: 9, fontWeight: '700', color: labelColor }} numberOfLines={1}>
-            {lab}
+        <Text style={{ fontSize: 10, fontWeight: '800', color: axisMuted, letterSpacing: 0.4 }}>{monthTitles[hover]!}</Text>
+        <Text
+          style={{ fontSize: 15, fontWeight: '900', color: isLight ? '#0F1118' : '#F5F3FF', marginTop: 2 }}
+          numberOfLines={1}
+        >
+          {fmtMoneyPlain(values[hover]!)}
+        </Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: axisMuted, marginTop: 2 }}>всего на счетах, ₽</Text>
+      </View>
+    );
+
+  return (
+    <View style={{ width: viewportW, marginTop: 10 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          marginBottom: 6,
+          paddingLeft: padL - 4,
+          gap: 8,
+        }}
+      >
+        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>ось: сумма, ₽</Text>
+        {contentWidth > viewportW ? (
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted, flexShrink: 1, textAlign: 'right' }}>
+            листайте влево — прошлые месяцы
           </Text>
-        ))}
+        ) : null}
+      </View>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator
+        nestedScrollEnabled
+        style={{ width: viewportW }}
+        contentContainerStyle={{ width: contentWidth }}
+      >
+        <View style={{ width: contentWidth, height, position: 'relative' }}>
+          <Svg width={contentWidth} height={height}>
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+              const y = padT + innerH * (1 - t);
+              return (
+                <Line key={t} x1={padL} y1={y} x2={contentWidth - padR} y2={y} stroke={gridColor} strokeWidth={1} />
+              );
+            })}
+            <Line
+              x1={padL}
+              y1={baselineY}
+              x2={contentWidth - padR}
+              y2={baselineY}
+              stroke={gridColor}
+              strokeWidth={1.2}
+            />
+            <Polyline
+              points={polylinePoints}
+              fill="none"
+              stroke={brand.primary}
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            {points.map((p, i) => (
+              <Circle
+                key={`c-${i}`}
+                cx={p.x}
+                cy={p.y}
+                r={hover === i ? 6 : 4}
+                fill={brand.primary}
+                stroke={isLight ? '#fff' : '#0c0a12'}
+                strokeWidth={hover === i ? 2 : 1}
+              />
+            ))}
+          </Svg>
+
+          {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+            const y = padT + innerH * (1 - t);
+            const val = minV + span * t;
+            return (
+              <Text
+                key={`yt-${t}`}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 2,
+                  top: y - 8,
+                  width: padL - 8,
+                  textAlign: 'right',
+                  fontSize: 9,
+                  fontWeight: '700',
+                  color: axisMuted,
+                }}
+                numberOfLines={1}
+              >
+                {fmtYAxisTick(val)}
+              </Text>
+            );
+          })}
+          <Text
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 2,
+              top: padT - 14,
+              width: padL - 6,
+              textAlign: 'right',
+              fontSize: 9,
+              fontWeight: '800',
+              color: axisMuted,
+            }}
+          >
+            ₽
+          </Text>
+
+          {labels.map((lab, i) => {
+            const px = points[i]?.x ?? padL;
+            return (
+              <Text
+                key={`${lab}-${i}`}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: px - 28,
+                  top: padT + innerH + 6,
+                  width: 56,
+                  textAlign: 'center',
+                  fontSize: 9,
+                  fontWeight: hover === i ? '900' : '700',
+                  color: hover === i ? brand.primary : labelColor,
+                }}
+                numberOfLines={2}
+              >
+                {lab}
+              </Text>
+            );
+          })}
+
+          {Platform.OS === 'web'
+            ? points.map((p, i) => (
+                <View
+                  key={`hit-${i}`}
+                  style={
+                    {
+                      position: 'absolute',
+                      left: p.x - 22,
+                      top: p.y - 22,
+                      width: 44,
+                      height: 44,
+                      zIndex: 4,
+                      ...(Platform.OS === 'web' ? ({ cursor: 'crosshair' } as object) : {}),
+                    } as object
+                  }
+                  onPointerEnter={() => setHover(i)}
+                  onPointerLeave={() => setHover(null)}
+                />
+              ))
+            : points.map((p, i) => (
+                <Pressable
+                  key={`hit-${i}`}
+                  style={{
+                    position: 'absolute',
+                    left: p.x - 22,
+                    top: p.y - 22,
+                    width: 44,
+                    height: 44,
+                    zIndex: 4,
+                  }}
+                  onPressIn={() => setHover(i)}
+                  onPressOut={() => setHover(null)}
+                />
+              ))}
+          {tooltip}
+        </View>
       </ScrollView>
     </View>
   );
@@ -459,8 +664,8 @@ export function FinanceMonthHistorySection({
         Динамика капитала
       </Text>
       <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6, lineHeight: 18 }]}>
-        «Всего на счетах» по месяцам: слева более ранние периоды, справа новее. В таблице ниже новые месяцы по-прежнему
-        сверху.
+        «Всего на счетах» по месяцам: на графике слева — прошлое, справа — последний снимок в базе; при появлении нового
+        месяца линия продлевается. В таблице ниже новые месяцы по-прежнему сверху.
       </Text>
       <MonthHistoryCapitalLineChart rows={rows} width={chartWidth} />
 

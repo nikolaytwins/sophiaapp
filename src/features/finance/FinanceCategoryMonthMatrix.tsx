@@ -26,7 +26,12 @@ function addAmounts(a: number[], b: number[]): number[] {
 }
 
 function getSeriesAmounts(seriesByName: Map<string, FinanceCategoryMonthSeries>, name: string, len: number): number[] {
-  return seriesByName.get(name)?.amounts ?? zeroAmounts(len);
+  const raw = seriesByName.get(name)?.amounts;
+  if (!raw || raw.length === 0) return zeroAmounts(len);
+  if (raw.length === len) return [...raw];
+  const out = zeroAmounts(len);
+  for (let i = 0; i < Math.min(len, raw.length); i++) out[i] = raw[i] ?? 0;
+  return out;
 }
 
 function seriesTotal(amounts: number[]): number {
@@ -56,36 +61,42 @@ export function buildMatrixModels(
   const managed = new Set<string>();
   const roots: RootRowModel[] = [];
 
-  const subtreeSpend = (catId: string): number[] => {
+  const subtreeSpend = (catId: string, stack: Set<string>): number[] => {
+    if (stack.has(catId)) return zeroAmounts(len);
+    stack.add(catId);
     const self = expenseCategories.find((c) => c.id === catId);
     let a = self ? getSeriesAmounts(seriesByName, self.name, len) : zeroAmounts(len);
     for (const ch of expenseCategories.filter((c) => c.parentId === catId)) {
-      a = addAmounts(a, subtreeSpend(ch.id));
+      a = addAmounts(a, subtreeSpend(ch.id, stack));
     }
+    stack.delete(catId);
     return a;
   };
 
-  const markManagedSubtree = (catId: string) => {
+  const markManagedSubtree = (catId: string, stack: Set<string>) => {
+    if (stack.has(catId)) return;
+    stack.add(catId);
     const self = expenseCategories.find((c) => c.id === catId);
     if (self) managed.add(self.name);
-    for (const ch of expenseCategories.filter((c) => c.parentId === catId)) markManagedSubtree(ch.id);
+    for (const ch of expenseCategories.filter((c) => c.parentId === catId)) markManagedSubtree(ch.id, stack);
+    stack.delete(catId);
   };
 
   for (const title of budgetRootTitles) {
     const cat = expenseCategories.find((c) => !c.parentId && c.name === title);
     if (!cat) continue;
     const children = expenseCategories.filter((c) => c.parentId === cat.id).sort(compareExpenseCategories);
-    const amounts = subtreeSpend(cat.id);
+    const amounts = subtreeSpend(cat.id, new Set());
     const childSeries: FinanceCategoryMonthSeries[] = [];
     for (const ch of children) {
-      const chAmt = subtreeSpend(ch.id);
+      const chAmt = subtreeSpend(ch.id, new Set());
       childSeries.push({
         category: ch.name,
         amounts: chAmt,
         total: seriesTotal(chAmt),
       });
     }
-    markManagedSubtree(cat.id);
+    markManagedSubtree(cat.id, new Set());
     roots.push({
       kind: 'root',
       name: cat.name,
@@ -108,19 +119,25 @@ export function buildMatrixModels(
 }
 
 function computeColumnWidths(containerWidth: number | undefined, monthCount: number) {
+  const mc = Math.max(1, monthCount);
   if (!containerWidth || containerWidth < 280) {
-    return { catW: FALLBACK_CAT_COL, monthW: FALLBACK_MONTH_COL, tableMinW: FALLBACK_CAT_COL + monthCount * FALLBACK_MONTH_COL, useScroll: true };
+    return {
+      catW: FALLBACK_CAT_COL,
+      monthW: FALLBACK_MONTH_COL,
+      tableMinW: FALLBACK_CAT_COL + mc * FALLBACK_MONTH_COL,
+      useScroll: true,
+    };
   }
   const minMonth = 38;
   const minCat = 112;
   const maxCat = Math.min(220, Math.round(containerWidth * 0.34));
   let catW = maxCat;
-  let monthW = (containerWidth - catW) / monthCount;
+  let monthW = (containerWidth - catW) / mc;
   if (monthW < minMonth) {
     monthW = minMonth;
-    catW = Math.max(minCat, containerWidth - monthW * monthCount);
+    catW = Math.max(minCat, containerWidth - monthW * mc);
   }
-  const tableMinW = catW + monthW * monthCount;
+  const tableMinW = catW + monthW * mc;
   const useScroll = tableMinW > containerWidth + 0.5;
   return {
     catW: Math.round(catW),

@@ -196,7 +196,13 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
     sb.from('finance_expense_categories').select('*').eq('user_id', userId),
     sb.from('finance_expense_settings').select('*').eq('user_id', userId).maybeSingle(),
     sb.from('finance_one_time_expenses').select('*').eq('user_id', userId).eq('year', y).eq('month', m),
-    sb.from('finance_month_snapshots').select('*').eq('user_id', userId).limit(120),
+    sb
+      .from('finance_month_snapshots')
+      .select('*')
+      .eq('user_id', userId)
+      .order('year', { ascending: false })
+      .order('month', { ascending: false })
+      .limit(240),
     sb
       .from('finance_transactions')
       .select('*')

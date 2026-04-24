@@ -213,8 +213,7 @@ export function FinanceCategoriesSettingsScreen() {
       const kids = childrenByParentId.get(row.id) ?? [];
       const hasKids = kids.length > 0;
       const collapsed = collapsedRootIds.has(row.id);
-      return (
-        <ScaleDecorator>
+      const block = (
           <View style={{ marginBottom: 12, opacity: isActive ? 0.92 : 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: 36, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 }}>
@@ -378,8 +377,9 @@ export function FinanceCategoriesSettingsScreen() {
                 ))
               : null}
           </View>
-        </ScaleDecorator>
       );
+      if (Platform.OS === 'web') return block;
+      return <ScaleDecorator>{block}</ScaleDecorator>;
     },
     [
       childrenByParentId,
@@ -450,6 +450,30 @@ export function FinanceCategoriesSettingsScreen() {
             >
               {listHeader}
               <Text style={{ color: colors.textMuted }}>Пока нет категорий — нажми «Добавить».</Text>
+            </ScrollView>
+          ) : Platform.OS === 'web' ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingHorizontal: spacing.lg,
+                paddingTop: spacing.lg,
+                paddingBottom: listPaddingBottom,
+              }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {listHeader}
+              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md }]}>
+                На вебе перетаскивание порядка отключено; порядок можно менять в приложении или позже добавим кнопки.
+              </Text>
+              {rootRows.map((row, index) =>
+                renderRootItem({
+                  item: row,
+                  index,
+                  getIndex: () => index,
+                  drag: () => {},
+                  isActive: false,
+                } as RenderItemParams<CatRow>)
+              )}
             </ScrollView>
           ) : (
             <DraggableFlatList
