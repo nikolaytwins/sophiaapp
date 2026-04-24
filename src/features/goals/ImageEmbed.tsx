@@ -9,11 +9,14 @@ export function ImageEmbed({
   height,
   placeholder,
   alignLeft,
+  contentFit = 'contain',
 }: {
   uri: string | null;
   height: number;
   placeholder: ReactNode;
   alignLeft?: boolean;
+  /** `contain` — без обрезки, исходные пропорции внутри блока; `cover` — заполнение по высоте. */
+  contentFit?: 'cover' | 'contain';
 }) {
   return (
     <View
@@ -29,7 +32,7 @@ export function ImageEmbed({
       }}
     >
       {uri ? (
-        <Image source={{ uri }} style={{ width: '100%', height }} contentFit="cover" />
+        <Image source={{ uri }} style={{ width: '100%', height }} contentFit={contentFit} />
       ) : (
         <View style={{ height, alignItems: 'center', justifyContent: 'center' }}>{placeholder}</View>
       )}

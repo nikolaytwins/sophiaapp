@@ -101,7 +101,7 @@ export function DayDateCalendarModal({
               {
                 padding: spacing.lg + (Platform.OS === 'web' ? 4 : 0),
                 borderRadius: radius.xl,
-                backgroundColor: isLight ? '#F7F4FA' : '#12121a',
+                backgroundColor: isLight ? '#F7F4FA' : '#14121A',
                 borderWidth: 1,
                 borderColor: isLight ? colors.border : 'rgba(255,255,255,0.12)',
               },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   dim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
   },
   sheet: {
     maxWidth: 420,

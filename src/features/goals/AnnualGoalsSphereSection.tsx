@@ -5,6 +5,7 @@ import { Alert, Platform, Pressable, Text, TouchableOpacity, View } from 'react-
 
 import type { AnnualGoalCard, AnnualSphere } from '@/features/goals/annualGoals.types';
 import { ImageEmbed } from '@/features/goals/ImageEmbed';
+import { GoalImageLightbox } from '@/features/goals/GoalImageLightbox';
 import {
   GOALS_ACCENT,
   GOALS_ACCENT_SOFT,
@@ -47,6 +48,7 @@ export function AnnualGoalsSphereSection({ sphere, onOpenAddGoal, onOpenEditGoal
   const removeCard = useAnnualGoalsStore((s) => s.removeCard);
 
   const [problematicaOpen, setProblematicaOpen] = useState(false);
+  const [imagePreviewUri, setImagePreviewUri] = useState<string | null>(null);
 
   const onVisionChange = useCallback(
     (t: string) => {
@@ -152,11 +154,27 @@ export function AnnualGoalsSphereSection({ sphere, onOpenAddGoal, onOpenEditGoal
       ) : (
         <>
           <View style={{ width: '100%', maxWidth: GOALS_EMBED_MAX_W + 40, alignSelf: 'flex-start' }}>
-            <ImageEmbed
-              uri={card.imageUri ?? null}
-              height={168}
-              alignLeft
-              placeholder={<Ionicons name="image-outline" size={36} color="rgba(255,255,255,0.2)" />}
+            {card.imageUri ? (
+              <Pressable onPress={() => setImagePreviewUri(card.imageUri!)} accessibilityRole="button" accessibilityLabel="Открыть изображение">
+                <ImageEmbed
+                  uri={card.imageUri}
+                  height={168}
+                  alignLeft
+                  placeholder={<Ionicons name="image-outline" size={36} color="rgba(255,255,255,0.2)" />}
+                />
+              </Pressable>
+            ) : (
+              <ImageEmbed
+                uri={null}
+                height={168}
+                alignLeft
+                placeholder={<Ionicons name="image-outline" size={36} color="rgba(255,255,255,0.2)" />}
+              />
+            )}
+            <GoalImageLightbox
+              uri={imagePreviewUri}
+              visible={imagePreviewUri != null}
+              onClose={() => setImagePreviewUri(null)}
             />
             <View
               style={{

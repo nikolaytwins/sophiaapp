@@ -7,3 +7,7 @@ export function financeExpenseAnalyticsKey(userId: string | null | undefined) {
 export function financeTransactionsMonthKey(userId: string | null | undefined, year: number, month: number) {
   return [...FINANCE_QUERY_KEY, 'transactions-month', userId ?? '', year, month] as const;
 }
+
+export function teamtrackerAgencyProfitKey(year: number, month: number) {
+  return [...FINANCE_QUERY_KEY, 'teamtracker-agency-profit', year, month] as const;
+}

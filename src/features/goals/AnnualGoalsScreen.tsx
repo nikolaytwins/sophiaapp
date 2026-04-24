@@ -1,6 +1,6 @@
 import { type Href, Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useState } from 'react';
+import { createElement, useCallback, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -18,6 +18,7 @@ import { AnnualGoalsSphereSection } from '@/features/goals/AnnualGoalsSphereSect
 import { AnnualSprintsSection } from '@/features/goals/AnnualSprintsSection';
 import type { AnnualGoalCard, AnnualSphere } from '@/features/goals/annualGoals.types';
 import { ImageEmbed } from '@/features/goals/ImageEmbed';
+import { GoalImageLightbox } from '@/features/goals/GoalImageLightbox';
 import {
   GOALS_ACCENT,
   GOALS_ACCENT_SOFT,
@@ -43,6 +44,7 @@ export function AnnualGoalsScreen() {
   const updateCard = useAnnualGoalsStore((s) => s.updateCard);
 
   const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [modalImagePreviewUri, setModalImagePreviewUri] = useState<string | null>(null);
   const [goalModalMode, setGoalModalMode] = useState<'add' | 'edit'>('add');
   const [modalSphere, setModalSphere] = useState<AnnualSphere>('relationships');
   const [goalDraft, setGoalDraft] = useState<GoalDraft>(emptyDraft());
@@ -67,13 +69,17 @@ export function AnnualGoalsScreen() {
   }, []);
 
   const closeGoalModal = () => {
+    setModalImagePreviewUri(null);
     setGoalModalOpen(false);
   };
 
   const pickImageForModal = async () => {
     const uri = await pickGoalCoverImageUri();
     if (uri) {
-      setGoalDraft((d) => ({ ...d, localUri: uri, url: '' }));
+      setGoalDraft((d) => {
+        if (d.localUri?.startsWith('blob:')) URL.revokeObjectURL(d.localUri);
+        return { ...d, localUri: uri, url: '' };
+      });
     }
   };
 
@@ -221,11 +227,60 @@ export function AnnualGoalsScreen() {
               />
 
               <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>Обложка</Text>
-              <ImageEmbed
-                uri={goalDraft.url.trim() || goalDraft.localUri}
-                height={132}
-                alignLeft
-                placeholder={<Text style={{ color: 'rgba(255,255,255,0.32)', fontSize: 13 }}>Без изображения</Text>}
+              {Platform.OS === 'web'
+                ? createElement(
+                    'div',
+                    {
+                      style: {
+                        border: '1px dashed rgba(255,255,255,0.22)',
+                        borderRadius: 12,
+                        padding: '10px 12px',
+                        marginBottom: 10,
+                        color: 'rgba(255,255,255,0.48)',
+                        fontSize: 13,
+                        fontFamily: 'system-ui, -apple-system, sans-serif',
+                      },
+                      onDragOver: (e: DragEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      },
+                      onDrop: (e: DragEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const f = e.dataTransfer?.files?.[0];
+                        if (f?.type?.startsWith('image/')) {
+                          const uri = URL.createObjectURL(f);
+                          setGoalDraft((d) => {
+                            if (d.localUri?.startsWith('blob:')) URL.revokeObjectURL(d.localUri);
+                            return { ...d, localUri: uri, url: '' };
+                          });
+                        }
+                      },
+                    },
+                    'Перетащите изображение сюда или выберите в галерее'
+                  )
+                : null}
+              {(goalDraft.url.trim() || goalDraft.localUri) ? (
+                <Pressable onPress={() => setModalImagePreviewUri(goalDraft.url.trim() || goalDraft.localUri || null)}>
+                  <ImageEmbed
+                    uri={goalDraft.url.trim() || goalDraft.localUri}
+                    height={132}
+                    alignLeft
+                    placeholder={<Text style={{ color: 'rgba(255,255,255,0.32)', fontSize: 13 }}>Без изображения</Text>}
+                  />
+                </Pressable>
+              ) : (
+                <ImageEmbed
+                  uri={null}
+                  height={132}
+                  alignLeft
+                  placeholder={<Text style={{ color: 'rgba(255,255,255,0.32)', fontSize: 13 }}>Без изображения</Text>}
+                />
+              )}
+              <GoalImageLightbox
+                uri={modalImagePreviewUri}
+                visible={modalImagePreviewUri != null}
+                onClose={() => setModalImagePreviewUri(null)}
               />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12, marginBottom: 8 }}>
                 <Pressable
@@ -245,7 +300,12 @@ export function AnnualGoalsScreen() {
               <Text style={[typography.caption, { color: 'rgba(255,255,255,0.38)', marginBottom: 6 }]}>Ссылка на изображение (лучше для синхронизации)</Text>
               <TextInput
                 value={goalDraft.url}
-                onChangeText={(t) => setGoalDraft((d) => ({ ...d, url: t, localUri: t.trim() ? null : d.localUri }))}
+                onChangeText={(t) =>
+                  setGoalDraft((d) => {
+                    if (t.trim() && d.localUri?.startsWith('blob:')) URL.revokeObjectURL(d.localUri);
+                    return { ...d, url: t, localUri: t.trim() ? null : d.localUri };
+                  })
+                }
                 placeholder="https://…"
                 placeholderTextColor="rgba(255,255,255,0.28)"
                 autoCapitalize="none"

@@ -44,8 +44,8 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
             overflow: 'hidden',
             opacity: pressed ? 0.88 : 1,
             borderWidth: 2,
-            borderColor: isAuthed ? 'rgba(250,204,21,0.45)' : 'rgba(255,255,255,0.18)',
-            backgroundColor: isAuthed ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.06)',
+            borderColor: isAuthed ? 'rgba(244,114,182,0.65)' : 'rgba(255,255,255,0.18)',
+            backgroundColor: isAuthed ? 'rgba(244,114,182,0.14)' : 'rgba(255,255,255,0.06)',
           },
           webPointer,
         ])
@@ -60,7 +60,7 @@ export function HeaderProfileAvatar({ marginTop = 2 }: Props) {
           <Ionicons
             name={isAuthed ? 'person' : 'person-outline'}
             size={22}
-            color={isAuthed ? 'rgba(233,213,255,0.9)' : 'rgba(255,255,255,0.38)'}
+            color={isAuthed ? 'rgba(251,207,232,0.95)' : 'rgba(255,255,255,0.38)'}
           />
         </View>
       )}

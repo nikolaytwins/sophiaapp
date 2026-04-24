@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link, useRouter } from 'expo-router';
@@ -9,8 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -28,18 +25,19 @@ import {
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
 import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
-import { FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
+import { FinanceCategoryExpenseTableBlock } from '@/features/finance/FinanceCategoryExpenseTableBlock';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
+import { FinanceDashboardBento } from '@/features/finance/FinanceDashboardBento';
 import { FinanceMonthTransactionsBlock } from '@/features/finance/FinanceMonthTransactionsBlock';
 import {
   enrichMonthSnapshots,
-  MonthHistoryCards,
-  MonthHistoryTableTwin,
+  FinanceMonthHistorySection,
   type MonthHistoryViewMode,
 } from '@/features/finance/FinanceMonthHistoryViews';
 import { FINANCE_QUERY_KEY, financeExpenseAnalyticsKey } from '@/features/finance/queryKeys';
-import type { FinanceBudgetLine } from '@/features/finance/finance.types';
+import { buildSpendByCategoryName, categoryToBudgetLine, childrenForRoot } from '@/features/finance/financeBudgetTree';
+import type { FinanceBudgetLine, FinanceExpenseCategory, FinanceTransaction } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
@@ -52,19 +50,6 @@ type FinanceCategoryModalState =
   | null
   | { mode: 'create' }
   | { mode: 'edit'; id: string; initial: FinanceCategoryInput };
-
-const FINANCE_HERO_IMAGE = require('../../assets/images/finance-hero-sophia.png');
-
-/** Кроп маскота: справа в кадре, как на референсе «Финансы». */
-const FINANCE_HERO_IMG_POS = { top: '10%', right: '6%' } as const;
-const FINANCE_HERO_IMG_POS_STACK = { top: '6%', right: '4%' } as const;
-
-const HERO_BASE_GRADIENT = ['#141018', '#0a090f', '#06060a'] as const;
-const HERO_GLOW_A = ['rgba(76,29,149,0.45)', 'rgba(20,16,28,0.25)', 'transparent'] as const;
-const HERO_GLOW_B = ['transparent', 'rgba(109,40,217,0.14)', 'rgba(167,139,250,0.22)'] as const;
-
-const GREEN_BAR = '#4ADE80';
-const RED_EXPENSE = '#FB7185';
 
 const CLOUD_HREF = '/cloud' as Href;
 
@@ -142,27 +127,7 @@ function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
-type MainTab = 'overview' | 'transactions' | 'categories' | 'history';
-
-function PaginationDots({ count, active, isLight }: { count: number; active: number; isLight: boolean }) {
-  const activeC = isLight ? 'rgba(15,17,24,0.85)' : 'rgba(255,255,255,0.95)';
-  const idleC = isLight ? 'rgba(15,17,24,0.22)' : 'rgba(255,255,255,0.28)';
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 }}>
-      {Array.from({ length: count }, (_, i) => (
-        <View
-          key={i}
-          style={{
-            width: i === active ? 8 : 6,
-            height: i === active ? 8 : 6,
-            borderRadius: 4,
-            backgroundColor: i === active ? activeC : idleC,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
+type MainTab = 'dashboard' | 'transactions' | 'categories' | 'history';
 
 function BudgetCard({
   line,
@@ -170,6 +135,7 @@ function BudgetCard({
   onEdit,
   onDelete,
   onQuickExpense,
+  nested,
 }: {
   line: FinanceBudgetLine;
   editable?: boolean;
@@ -177,6 +143,10 @@ function BudgetCard({
   onDelete?: () => void;
   /** Быстрый расход в этой категории (Twinworks). */
   onQuickExpense?: () => void;
+  /** Подкатегория внутри аккордеона — компактнее и с отступом. */
+  nested?: boolean;
+  /** Внутри списка-аккордеона — без нижнего внешнего отступа карточки. */
+  embedded?: boolean;
 }) {
   const { colors, radius, isLight, brand, shadows } = useAppTheme();
   const barColor = line.kind === 'personal' ? brand.primary : brand.primarySoft;
@@ -195,13 +165,19 @@ function BudgetCard({
         borderColor: over ? 'rgba(251,113,133,0.45)' : brand.surfaceBorderStrong,
       };
 
+  const pad = nested ? 14 : 18;
+  const iconBox = nested ? 40 : 48;
+  const iconRadius = nested ? 12 : 14;
+  const titleSize = nested ? 15 : 17;
+  const ionSize = nested ? 22 : 26;
+
   return (
     <View
       style={{
         borderRadius: radius.xl,
         borderWidth: over ? 2 : 1,
-        padding: 18,
-        marginBottom: 14,
+        padding: pad,
+        marginBottom: nested || embedded ? 0 : 14,
         ...shell,
         ...(over && !isLight
           ? ({ boxShadow: '0 0 0 1px rgba(251,113,133,0.35), 0 8px 28px rgba(251,113,133,0.12)' } as object)
@@ -212,21 +188,21 @@ function BudgetCard({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, paddingRight: 12 }}>
           <View
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
+              width: iconBox,
+              height: iconBox,
+              borderRadius: iconRadius,
               backgroundColor: iconBg,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Ionicons name={iconName as keyof typeof Ionicons.glyphMap} size={26} color={barColor} />
+            <Ionicons name={iconName as keyof typeof Ionicons.glyphMap} size={ionSize} color={barColor} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3 }}>
+            <Text style={{ fontSize: titleSize, fontWeight: '800', color: colors.text, letterSpacing: -0.3 }}>
               {line.title}
             </Text>
-            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={3}>
+            <Text style={{ fontSize: nested ? 12 : 13, color: colors.textMuted, marginTop: 4 }} numberOfLines={3}>
               {line.subtitle}
             </Text>
           </View>
@@ -234,7 +210,7 @@ function BudgetCard({
         <View style={{ alignItems: 'flex-end', gap: 8 }}>
           <Text
             style={{
-              fontSize: 17,
+              fontSize: nested ? 15 : 17,
               fontWeight: '800',
               color: over ? colors.danger : colors.text,
               fontVariant: ['tabular-nums'],
@@ -242,7 +218,7 @@ function BudgetCard({
           >
             {fmtMoney(line.spent)}
             {line.expectedMonthly > 0 ? (
-              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>{` / ${fmtMoney(line.expectedMonthly)}`}</Text>
+              <Text style={{ fontSize: nested ? 12 : 13, fontWeight: '700', color: colors.textMuted }}>{` / ${fmtMoney(line.expectedMonthly)}`}</Text>
             ) : null}
           </Text>
           {editable && onEdit && onDelete ? (
@@ -252,44 +228,44 @@ function BudgetCard({
                   onPress={onQuickExpense}
                   hitSlop={6}
                   style={{
-                    width: 36,
-                    height: 36,
+                    width: nested ? 32 : 36,
+                    height: nested ? 32 : 36,
                     borderRadius: 12,
                     backgroundColor: brand.primaryMuted,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Ionicons name="add" size={20} color={brand.primary} />
+                  <Ionicons name="add" size={nested ? 18 : 20} color={brand.primary} />
                 </Pressable>
               ) : null}
               <Pressable
                 onPress={onEdit}
                 hitSlop={6}
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: nested ? 32 : 36,
+                  height: nested ? 32 : 36,
                   borderRadius: 12,
                   backgroundColor: 'rgba(168,85,247,0.14)',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Ionicons name="pencil" size={17} color={brand.primary} />
+                <Ionicons name="pencil" size={nested ? 16 : 17} color={brand.primary} />
               </Pressable>
               <Pressable
                 onPress={onDelete}
                 hitSlop={6}
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: nested ? 32 : 36,
+                  height: nested ? 32 : 36,
                   borderRadius: 12,
                   backgroundColor: 'rgba(251,113,133,0.14)',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                <Ionicons name="trash-outline" size={nested ? 16 : 17} color={colors.danger} />
               </Pressable>
             </View>
           ) : null}
@@ -297,8 +273,8 @@ function BudgetCard({
       </View>
       <View
         style={{
-          marginTop: 16,
-          height: 8,
+          marginTop: nested ? 12 : 16,
+          height: nested ? 6 : 8,
           borderRadius: 8,
           backgroundColor: isLight ? brand.callout : 'rgba(255,255,255,0.08)',
           overflow: 'hidden',
@@ -317,6 +293,109 @@ function BudgetCard({
   );
 }
 
+type FinanceBudgetAccordionListProps = {
+  budgetLines: FinanceBudgetLine[];
+  expenseCategories: FinanceExpenseCategory[];
+  transactionsThisMonth: FinanceTransaction[];
+  editable?: boolean;
+  onEdit: (line: FinanceBudgetLine) => void;
+  onDelete: (line: FinanceBudgetLine) => void;
+  onQuickExpense: (categoryTitle: string) => void;
+};
+
+/** Корневые категории + подкатегории с раскрытием; лимиты и действия — на любом уровне. */
+function FinanceBudgetAccordionList({
+  budgetLines,
+  expenseCategories,
+  transactionsThisMonth,
+  editable,
+  onEdit,
+  onDelete,
+  onQuickExpense,
+}: FinanceBudgetAccordionListProps) {
+  const { colors } = useAppTheme();
+  const spendMap = useMemo(() => buildSpendByCategoryName(transactionsThisMonth), [transactionsThisMonth]);
+  const [collapsedRootIds, setCollapsedRootIds] = useState<Set<string>>(() => new Set());
+
+  const toggleRoot = useCallback((rootId: string) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setCollapsedRootIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rootId)) next.delete(rootId);
+      else next.add(rootId);
+      return next;
+    });
+  }, []);
+
+  return (
+    <>
+      {budgetLines.map((line) => {
+        const kids = childrenForRoot(expenseCategories, line.id);
+        const hasKids = kids.length > 0;
+        const collapsed = collapsedRootIds.has(line.id);
+        return (
+          <View key={line.id} style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              <View style={{ width: 32, paddingTop: 20, alignItems: 'center' }}>
+                {hasKids ? (
+                  <Pressable
+                    onPress={() => toggleRoot(line.id)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={collapsed ? 'Показать подкатегории' : 'Скрыть подкатегории'}
+                  >
+                    <Ionicons
+                      name={collapsed ? 'chevron-forward' : 'chevron-down'}
+                      size={22}
+                      color={colors.textMuted}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <BudgetCard
+                  embedded
+                  line={line}
+                  editable={editable}
+                  onEdit={() => onEdit(line)}
+                  onDelete={() => onDelete(line)}
+                  onQuickExpense={editable ? () => onQuickExpense(line.title) : undefined}
+                />
+              </View>
+            </View>
+            {hasKids && !collapsed
+              ? kids.map((ch) => {
+                  const childLine = categoryToBudgetLine(ch, spendMap);
+                  return (
+                    <View
+                      key={ch.id}
+                      style={{
+                        marginLeft: 32,
+                        marginTop: 10,
+                        paddingLeft: 10,
+                        borderLeftWidth: 2,
+                        borderLeftColor: 'rgba(168,85,247,0.35)',
+                      }}
+                    >
+                      <BudgetCard
+                        nested
+                        line={childLine}
+                        editable={editable}
+                        onEdit={() => onEdit(childLine)}
+                        onDelete={() => onDelete(childLine)}
+                        onQuickExpense={editable ? () => onQuickExpense(ch.name) : undefined}
+                      />
+                    </View>
+                  );
+                })
+              : null}
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
 export function FinanceScreen() {
   const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -324,18 +403,13 @@ export function FinanceScreen() {
   const qc = useQueryClient();
   const supabaseOn = useSupabaseConfigured;
   const [userId, setUserId] = useState<string | null>(null);
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [mainTab, setMainTab] = useState<MainTab>('overview');
+  const [mainTab, setMainTab] = useState<MainTab>('dashboard');
   const [catModal, setCatModal] = useState<FinanceCategoryModalState>(null);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [addTxPrefill, setAddTxPrefill] = useState<string | null>(null);
   const [historyViewMode, setHistoryViewMode] = useState<MonthHistoryViewMode>('table');
 
   const padH = spacing.xl;
-  const heroPageW = SCREEN_W - padH * 2;
-  const stackFinanceHero = heroPageW < 430;
-  const balanceHeroFont = Math.min(38, Math.max(24, Math.round(heroPageW * 0.09)));
-
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) {
@@ -360,7 +434,7 @@ export function FinanceScreen() {
   const expenseAnalyticsQ = useQuery({
     queryKey: financeExpenseAnalyticsKey(userId),
     queryFn: () => loadFinanceExpenseAnalytics(userId!),
-    enabled: Boolean(supabaseOn && userId && mainTab === 'categories'),
+    enabled: Boolean(supabaseOn && userId && (mainTab === 'categories' || mainTab === 'dashboard')),
   });
 
   const overview = q.data;
@@ -369,25 +443,6 @@ export function FinanceScreen() {
     () => (overview ? enrichMonthSnapshots(overview.snapshots) : []),
     [overview?.snapshots]
   );
-
-  const onHeroScrollEnd = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const x = e.nativeEvent.contentOffset.x;
-      const idx = Math.round(x / heroPageW);
-      setHeroIndex(Math.max(0, Math.min(1, idx)));
-    },
-    [heroPageW]
-  );
-
-  const monthLabel = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-  }, []);
-
-  const openDetail = useCallback(() => {
-    if (Platform.OS !== 'web') void Haptics.selectionAsync();
-    router.push('/finance-detail' as Href);
-  }, [router]);
 
   const invalidateFinance = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
@@ -463,7 +518,7 @@ export function FinanceScreen() {
                 { color: colors.textMuted, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 6 },
               ]}
             >
-              Обзор
+              Дашборд
             </Text>
             <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Финансы</Text>
           </View>
@@ -476,7 +531,7 @@ export function FinanceScreen() {
             onChange={setMainTab}
             activeVariant="brandGlow"
             options={[
-              { value: 'overview', label: 'Обзор' },
+              { value: 'dashboard', label: 'Дашборд' },
               { value: 'transactions', label: 'Транзакции' },
               { value: 'categories', label: 'Категории' },
               { value: 'history', label: 'История' },
@@ -522,383 +577,17 @@ export function FinanceScreen() {
           </Text>
         ) : overview ? (
           <>
-            {mainTab === 'overview' ? (
-              <>
-                <View style={{ marginTop: spacing.md, width: heroPageW, alignSelf: 'center' }}>
-                  <ScrollView
-                    horizontal
-                    pagingEnabled
-                    nestedScrollEnabled
-                    showsHorizontalScrollIndicator={false}
-                    onMomentumScrollEnd={onHeroScrollEnd}
-                    decelerationRate="fast"
-                    style={{ width: heroPageW }}
-                  >
-                    {/* Слайд 1: баланс */}
-                    <View
-                      style={{
-                        width: heroPageW,
-                        borderRadius: 26,
-                        overflow: 'hidden',
-                        position: 'relative',
-                        borderWidth: 1,
-                        borderColor: 'rgba(139,92,246,0.35)',
-                      }}
-                    >
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_BASE_GRADIENT]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0.9, y: 1 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_GLOW_A]}
-                        start={{ x: 0, y: 0.4 }}
-                        end={{ x: 0.65, y: 0.6 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_GLOW_B]}
-                        start={{ x: 0.4, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <View style={{ paddingVertical: 18, paddingHorizontal: 16, position: 'relative', zIndex: 1 }}>
-                        <View
-                          style={{
-                            flexDirection: stackFinanceHero ? 'column' : 'row',
-                            alignItems: 'stretch',
-                            gap: stackFinanceHero ? 12 : 6,
-                            minHeight: stackFinanceHero ? undefined : 236,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flex: stackFinanceHero ? undefined : 1,
-                              minWidth: 0,
-                              justifyContent: 'center',
-                              paddingRight: stackFinanceHero ? 0 : 6,
-                              alignItems: stackFinanceHero ? 'center' : 'flex-start',
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: '800',
-                                letterSpacing: 2,
-                                color: 'rgba(255,255,255,0.82)',
-                                textAlign: stackFinanceHero ? 'center' : 'left',
-                              }}
-                            >
-                              ТВОЙ БАЛАНС
-                            </Text>
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: stackFinanceHero ? 'center' : 'flex-start',
-                                gap: 10,
-                                marginTop: 10,
-                                flexWrap: 'wrap',
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: balanceHeroFont,
-                                  fontWeight: '800',
-                                  color: '#FAFAFC',
-                                  letterSpacing: -1,
-                                  fontVariant: ['tabular-nums'],
-                                }}
-                              >
-                                {fmtMoney(overview.totalBalance)}
-                              </Text>
-                              <Pressable
-                                onPress={openDetail}
-                                hitSlop={10}
-                                accessibilityRole="button"
-                                accessibilityLabel="Редактировать структуру счетов"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 18,
-                                  backgroundColor: 'rgba(255,255,255,0.12)',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.9)" />
-                              </Pressable>
-                            </View>
-                            <Text
-                              style={{
-                                textAlign: stackFinanceHero ? 'center' : 'left',
-                                marginTop: 8,
-                                fontSize: 12,
-                                color: 'rgba(255,255,255,0.55)',
-                              }}
-                            >
-                              {monthLabel}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={{
-                              width: stackFinanceHero ? '100%' : Math.min(Math.round(heroPageW * 0.42), 220),
-                              minHeight: stackFinanceHero ? 200 : 236,
-                              alignSelf: 'stretch',
-                              position: 'relative',
-                              overflow: 'hidden',
-                              borderRadius: stackFinanceHero ? 18 : 14,
-                            }}
-                          >
-                            <View style={StyleSheet.absoluteFillObject}>
-                              <Image
-                                source={FINANCE_HERO_IMAGE}
-                                style={StyleSheet.absoluteFillObject}
-                                contentFit="cover"
-                                contentPosition={stackFinanceHero ? FINANCE_HERO_IMG_POS_STACK : FINANCE_HERO_IMG_POS}
-                                accessibilityIgnoresInvertColors
-                              />
-                            </View>
-                            <LinearGradient
-                              pointerEvents="none"
-                              colors={['rgba(8,8,14,0.88)', 'rgba(10,10,18,0.35)', 'rgba(14,12,22,0.08)', 'transparent']}
-                              locations={[0, 0.35, 0.65, 1]}
-                              start={{ x: 0, y: 0.5 }}
-                              end={{ x: 1, y: 0.5 }}
-                              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '72%', zIndex: 2 }}
-                            />
-                            <LinearGradient
-                              pointerEvents="none"
-                              colors={['rgba(6,6,10,0.2)', 'transparent']}
-                              start={{ x: 0.5, y: 0 }}
-                              end={{ x: 0.5, y: 0.4 }}
-                              style={[StyleSheet.absoluteFillObject, { zIndex: 2 }]}
-                            />
-                            <LinearGradient
-                              pointerEvents="none"
-                              colors={['transparent', 'rgba(6,6,10,0.45)', 'rgba(5,5,8,0.7)']}
-                              locations={[0, 0.55, 1]}
-                              start={{ x: 0, y: 0.5 }}
-                              end={{ x: 1, y: 0.5 }}
-                              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '38%', zIndex: 2 }}
-                            />
-                            <LinearGradient
-                              pointerEvents="none"
-                              colors={['transparent', 'rgba(55,20,90,0.18)']}
-                              start={{ x: 0.12, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={[StyleSheet.absoluteFillObject, { zIndex: 1 }]}
-                            />
-                          </View>
-                        </View>
-
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            marginTop: 22,
-                            paddingTop: 18,
-                            borderTopWidth: StyleSheet.hairlineWidth,
-                            borderTopColor: 'rgba(255,255,255,0.18)',
-                          }}
-                        >
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View
-                              style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 12,
-                                backgroundColor: 'rgba(255,255,255,0.1)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Ionicons name="trending-up" size={22} color={GREEN_BAR} />
-                            </View>
-                            <View>
-                              <Text
-                                style={{
-                                  fontSize: 18,
-                                  fontWeight: '800',
-                                  color: '#FAFAFC',
-                                  fontVariant: ['tabular-nums'],
-                                }}
-                              >
-                                {fmtMoney(overview.monthIncome)}
-                              </Text>
-                              <Text
-                                style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.68)', marginTop: 2 }}
-                              >
-                                Доход (мес.)
-                              </Text>
-                            </View>
-                          </View>
-                          <View
-                            style={{
-                              width: StyleSheet.hairlineWidth,
-                              backgroundColor: 'rgba(255,255,255,0.22)',
-                              marginHorizontal: 8,
-                            }}
-                          />
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View
-                              style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 12,
-                                backgroundColor: 'rgba(255,255,255,0.1)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Ionicons name="trending-down" size={22} color={RED_EXPENSE} />
-                            </View>
-                            <View>
-                              <Text
-                                style={{
-                                  fontSize: 18,
-                                  fontWeight: '800',
-                                  color: '#FAFAFC',
-                                  fontVariant: ['tabular-nums'],
-                                }}
-                              >
-                                {fmtMoney(overview.monthExpense)}
-                              </Text>
-                              <Text
-                                style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.68)', marginTop: 2 }}
-                              >
-                                Траты (мес.)
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Слайд 2: прогноз */}
-                    <View
-                      style={{
-                        width: heroPageW,
-                        borderRadius: 26,
-                        overflow: 'hidden',
-                        position: 'relative',
-                        borderWidth: 1,
-                        borderColor: 'rgba(139,92,246,0.35)',
-                      }}
-                    >
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_BASE_GRADIENT]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0.9, y: 1 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_GLOW_A]}
-                        start={{ x: 0, y: 0.4 }}
-                        end={{ x: 0.65, y: 0.6 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[...HERO_GLOW_B]}
-                        start={{ x: 0.4, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 26 }]}
-                      />
-                      <View style={{ paddingVertical: 22, paddingHorizontal: 22, position: 'relative', zIndex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: '800',
-                            letterSpacing: 2,
-                            color: 'rgba(255,255,255,0.82)',
-                            textAlign: 'center',
-                          }}
-                        >
-                          ПРОГНОЗ НА КОНЕЦ МЕСЯЦА
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 36,
-                            fontWeight: '800',
-                            color: '#FAFAFC',
-                            letterSpacing: -1,
-                            textAlign: 'center',
-                            marginTop: 12,
-                          }}
-                        >
-                          {fmtMoney(overview.forecastEndOfMonth)}
-                        </Text>
-                        <Text
-                          style={{
-                            marginTop: 14,
-                            fontSize: 12,
-                            lineHeight: 18,
-                            color: 'rgba(255,255,255,0.62)',
-                            textAlign: 'center',
-                          }}
-                        >
-                          Упрощённая модель: текущий баланс минус неоплаченные разовые расходы за месяц и ориентир{' '}
-                          {fmtMoney(overview.dailyExpenseLimit)} × дней до конца месяца (лимит из настроек Twinworks).
-                        </Text>
-                      </View>
-                    </View>
-                  </ScrollView>
-                  <PaginationDots count={2} active={heroIndex} isLight={isLight} />
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginTop: spacing.xl + 4,
-                    marginBottom: spacing.md,
-                    gap: 12,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 20,
-                      fontWeight: '800',
-                      color: colors.text,
-                      letterSpacing: -0.4,
-                      flex: 1,
-                    }}
-                  >
-                    Месячный бюджет
-                  </Text>
-                  <Pressable onPress={openCategorySettings} hitSlop={8}>
-                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 14 }}>Все категории</Text>
-                  </Pressable>
-                </View>
-
-                {overview.budgetLines.length === 0 ? (
-                  <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
-                    Категории расходов не загружены. Импортируй таблицу{' '}
-                    <Text style={{ fontWeight: '700' }}>expense_categories</Text> в{' '}
-                    <Text style={{ fontWeight: '700' }}>finance_expense_categories</Text> (см. scripts/FINANCE_IMPORT.md).
-                  </Text>
-                ) : (
-                  overview.budgetLines.map((line) => (
-                    <BudgetCard
-                      key={line.id}
-                      line={line}
-                      editable
-                      onEdit={() => openCategoryEdit(line)}
-                      onDelete={() => confirmDeleteCategory(line)}
-                      onQuickExpense={() => openAddTransaction(line.title)}
-                    />
-                  ))
-                )}
-              </>
+            {mainTab === 'dashboard' ? (
+              <FinanceDashboardBento
+                overview={overview}
+                userId={userId}
+                monthHistoryRows={monthHistoryRows}
+                expenseAnalytics={expenseAnalyticsQ.data}
+                expenseAnalyticsLoading={expenseAnalyticsQ.isLoading}
+                onRefresh={invalidateFinance}
+              />
             ) : null}
+
 
             {mainTab === 'transactions' ? (
               <FinanceMonthTransactionsBlock
@@ -911,40 +600,34 @@ export function FinanceScreen() {
 
             {mainTab === 'categories' ? (
               <View style={{ marginTop: spacing.md }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: spacing.sm,
-                    gap: 12,
-                  }}
-                >
-                  <Text style={[typography.caption, { color: colors.textMuted, flex: 1, lineHeight: 20 }]}>
-                    Расходы по категориям за текущий месяц (к плану). Карандаш — лимит и название, корзина — удалить.
+                <FinanceCategoryExpenseTableBlock
+                  overview={overview}
+                  analytics={expenseAnalyticsQ.data}
+                  loading={expenseAnalyticsQ.isLoading}
+                  error={expenseAnalyticsQ.isError}
+                  onOpenSettings={openCategorySettings}
+                />
+
+                {overview.budgetLines.length === 0 ? (
+                  <Text style={{ color: colors.textMuted, lineHeight: 22, marginTop: spacing.sm, marginBottom: spacing.sm }}>
+                    Пока нет категорий в бюджете. Импорт: scripts/FINANCE_IMPORT.md.
                   </Text>
-                  <Pressable onPress={openCategorySettings} hitSlop={8}>
-                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Настройки</Text>
-                  </Pressable>
-                </View>
-                {expenseAnalyticsQ.isLoading ? (
-                  <ActivityIndicator color={brand.primary} style={{ marginBottom: spacing.lg }} />
-                ) : expenseAnalyticsQ.isError ? (
-                  <Text style={{ color: colors.danger, marginBottom: spacing.lg }}>
-                    Не удалось загрузить сравнение по месяцам.
-                  </Text>
-                ) : expenseAnalyticsQ.data ? (
-                  <FinanceCategoryMonthMatrix
-                    analytics={expenseAnalyticsQ.data}
-                    budgetRootTitles={overview.budgetLines.map((l) => l.title)}
+                ) : (
+                  <FinanceBudgetAccordionList
+                    budgetLines={overview.budgetLines}
                     expenseCategories={overview.expenseCategories}
+                    transactionsThisMonth={overview.transactionsThisMonth}
+                    editable
+                    onEdit={openCategoryEdit}
+                    onDelete={confirmDeleteCategory}
+                    onQuickExpense={openAddTransaction}
                   />
-                ) : null}
+                )}
 
                 <Pressable
                   onPress={openAddCategory}
                   style={{
-                    marginTop: spacing.md,
+                    marginTop: spacing.lg,
                     marginBottom: spacing.md,
                     paddingVertical: 16,
                     paddingHorizontal: 20,
@@ -972,56 +655,22 @@ export function FinanceScreen() {
                     Добавить категорию
                   </Text>
                 </Pressable>
-
-                {overview.budgetLines.length === 0 ? (
-                  <Text style={{ color: colors.textMuted, lineHeight: 22, marginBottom: spacing.sm }}>
-                    Пока нет категорий в бюджете. Импорт: scripts/FINANCE_IMPORT.md.
-                  </Text>
-                ) : (
-                  overview.budgetLines.map((line) => (
-                    <BudgetCard
-                      key={`cat-${line.id}`}
-                      line={line}
-                      editable
-                      onEdit={() => openCategoryEdit(line)}
-                      onDelete={() => confirmDeleteCategory(line)}
-                      onQuickExpense={() => openAddTransaction(line.title)}
-                    />
-                  ))
-                )}
               </View>
             ) : null}
 
             {mainTab === 'history' ? (
               <View style={{ marginTop: spacing.md }}>
-                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 20 }]}>
-                  История по месяцам (новые сверху). Динамика капитала — изменение баланса к предыдущему месяцу в списке.
-                  Выручка и прибыль — если есть в Twinworks: миграция 010_finance_snapshot_revenue.sql в Supabase и при
-                  необходимости повторный импорт.
-                </Text>
                 {overview.snapshots.length === 0 ? (
                   <Text style={{ color: colors.textMuted, lineHeight: 22 }}>
                     Снимков нет. После импорта таблицы finance_month_snapshots здесь появится история.
                   </Text>
                 ) : (
-                  <>
-                    <View style={{ marginBottom: spacing.md }}>
-                      <SegmentedControl<MonthHistoryViewMode>
-                        value={historyViewMode}
-                        onChange={setHistoryViewMode}
-                        activeVariant="brandGlow"
-                        options={[
-                          { value: 'table', label: 'Таблица' },
-                          { value: 'cards', label: 'Карточки' },
-                        ]}
-                      />
-                    </View>
-                    {historyViewMode === 'table' ? (
-                      <MonthHistoryTableTwin rows={monthHistoryRows} screenInnerWidth={SCREEN_W - padH * 2} />
-                    ) : (
-                      <MonthHistoryCards rows={monthHistoryRows} />
-                    )}
-                  </>
+                  <FinanceMonthHistorySection
+                    rows={monthHistoryRows}
+                    screenInnerWidth={SCREEN_W - padH * 2}
+                    viewMode={historyViewMode}
+                    onViewModeChange={setHistoryViewMode}
+                  />
                 )}
               </View>
             ) : null}

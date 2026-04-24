@@ -28,6 +28,8 @@ export type FinanceExpenseCategory = {
   expectedMonthly: number;
   /** Родительская категория (подкатегория расходов). */
   parentId: string | null;
+  /** Порядок среди соседей (одинаковый parent_id). */
+  sortOrder: number;
 };
 
 export type FinanceExpenseSettings = {

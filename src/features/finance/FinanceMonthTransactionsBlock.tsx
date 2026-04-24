@@ -228,8 +228,9 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
       >
         <View style={cardShell()}>
           <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', marginBottom: 6 }]}>Всего за месяц</Text>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>{fmtMoneyBig(stats.totalExpense)}</Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 4 }}>₽ · все траты</Text>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>
+            {fmtMoneyBig(stats.totalExpense)} ₽
+          </Text>
         </View>
 
         <View style={cardShell()}>
@@ -244,8 +245,9 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
           <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', marginBottom: 6, paddingRight: 22 }]}>
             На жизнь
           </Text>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>{fmtMoneyBig(stats.lifeExpense)}</Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 4 }}>₽</Text>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>
+            {fmtMoneyBig(stats.lifeExpense)} ₽
+          </Text>
         </View>
 
         <View style={cardShell()}>
@@ -260,8 +262,9 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
           <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', marginBottom: 6, paddingRight: 22 }]}>
             На работу
           </Text>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>{fmtMoneyBig(stats.workExpense)}</Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 4 }}>₽</Text>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.8 }}>
+            {fmtMoneyBig(stats.workExpense)} ₽
+          </Text>
         </View>
 
         <View
@@ -273,9 +276,8 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
           <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', marginBottom: 6 }]}>Дельта</Text>
           <Text style={{ fontSize: 28, fontWeight: '900', color: deltaColor, letterSpacing: -0.8 }}>
             {stats.delta >= 0 ? '+' : ''}
-            {fmtMoneyBig(stats.delta)}
+            {fmtMoneyBig(stats.delta)} ₽
           </Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 4 }}>₽ · доход − траты</Text>
         </View>
       </ScrollView>
 

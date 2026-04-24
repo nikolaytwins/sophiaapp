@@ -1,21 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Stack, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from 'react-native';
+import DraggableFlatList, { type RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
 import {
+  compareExpenseCategories,
   deleteFinanceExpenseCategory,
   loadFinanceOverview,
+  reorderFinanceExpenseCategories,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
 import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
@@ -49,7 +54,7 @@ function buildCategoryRows(overview: FinanceOverview): CatRow[] {
     if (!k) continue;
     spendMap.set(k, (spendMap.get(k) ?? 0) + t.amount);
   }
-  const roots = oc.filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const roots = oc.filter((c) => !c.parentId).sort(compareExpenseCategories);
   const out: CatRow[] = [];
   for (const r of roots) {
     out.push({
@@ -61,7 +66,7 @@ function buildCategoryRows(overview: FinanceOverview): CatRow[] {
       parentId: null,
       spentMonth: spendMap.get(r.name) ?? 0,
     });
-    for (const ch of oc.filter((c) => c.parentId === r.id).sort((a, b) => a.name.localeCompare(b.name, 'ru'))) {
+    for (const ch of oc.filter((c) => c.parentId === r.id).sort(compareExpenseCategories)) {
       out.push({
         id: ch.id,
         name: ch.name,
@@ -111,6 +116,28 @@ export function FinanceCategoriesSettingsScreen() {
 
   const overview = q.data;
   const sortedRows = useMemo(() => (overview ? buildCategoryRows(overview) : []), [overview]);
+  const rootRows = useMemo(() => sortedRows.filter((r) => r.depth === 0), [sortedRows]);
+  const childrenByParentId = useMemo(() => {
+    const m = new Map<string, CatRow[]>();
+    for (const r of sortedRows) {
+      if (r.depth !== 1 || !r.parentId) continue;
+      const arr = m.get(r.parentId) ?? [];
+      arr.push(r);
+      m.set(r.parentId, arr);
+    }
+    return m;
+  }, [sortedRows]);
+  const [collapsedRootIds, setCollapsedRootIds] = useState<Set<string>>(() => new Set());
+
+  const toggleRoot = useCallback((id: string) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    setCollapsedRootIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
@@ -122,6 +149,32 @@ export function FinanceCategoriesSettingsScreen() {
     onError: (e: Error) => Alert.alert('Ошибка', e.message ?? 'Не удалось удалить категорию'),
   });
 
+  const reorderRootsMut = useMutation({
+    mutationFn: (ids: string[]) => reorderFinanceExpenseCategories(userId!, null, ids),
+    onSuccess: invalidate,
+    onError: (e: Error) => Alert.alert('Ошибка', e.message ?? 'Не удалось сохранить порядок'),
+  });
+
+  const reorderChildrenMut = useMutation({
+    mutationFn: ({ parentId, ids }: { parentId: string; ids: string[] }) =>
+      reorderFinanceExpenseCategories(userId!, parentId, ids),
+    onSuccess: invalidate,
+    onError: (e: Error) => Alert.alert('Ошибка', e.message ?? 'Не удалось сохранить порядок'),
+  });
+
+  const moveChild = useCallback(
+    (parentId: string, kids: CatRow[], index: number, delta: -1 | 1) => {
+      const j = index + delta;
+      if (j < 0 || j >= kids.length) return;
+      const next = [...kids];
+      const t = next[index]!;
+      next[index] = next[j]!;
+      next[j] = t;
+      reorderChildrenMut.mutate({ parentId, ids: next.map((k) => k.id) });
+    },
+    [reorderChildrenMut]
+  );
+
   const openCreate = () => {
     setFormMode('create');
     setEditId(undefined);
@@ -129,7 +182,7 @@ export function FinanceCategoriesSettingsScreen() {
     setFormOpen(true);
   };
 
-  const openEdit = (row: CatRow) => {
+  const openEdit = useCallback((row: CatRow) => {
     setFormMode('edit');
     setEditId(row.id);
     setEditInitial({
@@ -139,15 +192,219 @@ export function FinanceCategoriesSettingsScreen() {
       parentId: row.parentId,
     });
     setFormOpen(true);
-  };
+  }, []);
 
-  const confirmDelete = (row: CatRow) => {
-    confirmFinanceDestructive(
-      'Удалить категорию?',
-      `«${row.name}». Транзакции потеряют привязку к этой категории (подкатегории при удалении родителя тоже удаляются).`,
-      () => delMut.mutate(row.id)
-    );
-  };
+  const confirmDelete = useCallback(
+    (row: CatRow) => {
+      confirmFinanceDestructive(
+        'Удалить категорию?',
+        `«${row.name}». Транзакции потеряют привязку к этой категории (подкатегории при удалении родителя тоже удаляются).`,
+        () => delMut.mutate(row.id)
+      );
+    },
+    [delMut]
+  );
+
+  const listPaddingBottom = insets.bottom + 100;
+
+  const renderRootItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<CatRow>) => {
+      const row = item;
+      const kids = childrenByParentId.get(row.id) ?? [];
+      const hasKids = kids.length > 0;
+      const collapsed = collapsedRootIds.has(row.id);
+      return (
+        <ScaleDecorator>
+          <View style={{ marginBottom: 12, opacity: isActive ? 0.92 : 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 36, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 }}>
+                {hasKids ? (
+                  <Pressable
+                    onPress={() => toggleRoot(row.id)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={collapsed ? 'Показать подкатегории' : 'Скрыть подкатегории'}
+                  >
+                    <Ionicons
+                      name={collapsed ? 'chevron-forward' : 'chevron-down'}
+                      size={22}
+                      color={colors.textMuted}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
+              <Pressable
+                onLongPress={drag}
+                delayLongPress={220}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Перетащить категорию"
+                style={{ width: 40, justifyContent: 'center', alignItems: 'center', paddingVertical: 10 }}
+              >
+                <Ionicons name="reorder-three" size={28} color={colors.textMuted} />
+              </Pressable>
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
+                  borderRadius: radius.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[typography.body, { fontWeight: '800', color: colors.text }]} numberOfLines={2}>
+                    {row.name}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
+                    Лимит {fmtMoney(row.expectedMonthly)} · месяц {fmtMoney(row.spentMonth)} ·{' '}
+                    {row.kind === 'business' ? 'Бизнес' : 'Личное'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => openEdit(row)}
+                  hitSlop={8}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(168,85,247,0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 8,
+                  }}
+                >
+                  <Ionicons name="pencil" size={18} color={brand.primary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => confirmDelete(row)}
+                  hitSlop={8}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(251,113,133,0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                </Pressable>
+              </View>
+            </View>
+            {hasKids && !collapsed
+              ? kids.map((ch, idx) => (
+                  <View
+                    key={ch.id}
+                    style={{
+                      marginLeft: 76,
+                      marginTop: 8,
+                      paddingLeft: 12,
+                      borderLeftWidth: 2,
+                      borderLeftColor: 'rgba(168,85,247,0.35)',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 10,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: 6 }}>
+                      <Pressable
+                        onPress={() => moveChild(row.id, kids, idx, -1)}
+                        disabled={idx === 0 || reorderChildrenMut.isPending}
+                        hitSlop={6}
+                        style={{ padding: 4, opacity: idx === 0 ? 0.35 : 1 }}
+                        accessibilityLabel="Выше в списке"
+                      >
+                        <Ionicons name="chevron-up" size={22} color={brand.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => moveChild(row.id, kids, idx, 1)}
+                        disabled={idx === kids.length - 1 || reorderChildrenMut.isPending}
+                        hitSlop={6}
+                        style={{ padding: 4, opacity: idx === kids.length - 1 ? 0.35 : 1 }}
+                        accessibilityLabel="Ниже в списке"
+                      >
+                        <Ionicons name="chevron-down" size={22} color={brand.primary} />
+                      </Pressable>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[typography.body, { fontWeight: '700', color: colors.text, fontSize: 15 }]} numberOfLines={2}>
+                        {ch.name}
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
+                        Лимит {fmtMoney(ch.expectedMonthly)} · месяц {fmtMoney(ch.spentMonth)} ·{' '}
+                        {ch.kind === 'business' ? 'Бизнес' : 'Личное'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => openEdit(ch)}
+                      hitSlop={8}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(168,85,247,0.15)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 8,
+                      }}
+                    >
+                      <Ionicons name="pencil" size={17} color={brand.primary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => confirmDelete(ch)}
+                      hitSlop={8}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(251,113,133,0.12)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))
+              : null}
+          </View>
+        </ScaleDecorator>
+      );
+    },
+    [
+      childrenByParentId,
+      collapsedRootIds,
+      colors,
+      radius,
+      typography,
+      brand,
+      toggleRoot,
+      moveChild,
+      reorderChildrenMut.isPending,
+      openEdit,
+      confirmDelete,
+    ]
+  );
+
+  const listHeader = useMemo(
+    () => (
+      <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 }]}>
+        Лимит — план на месяц; факт за текущий месяц из транзакций. Стрелка — подкатегории. Удерживай «≡» и перетащи
+        корневую категорию. Подкатегории: стрелки вверх/вниз. В транзакциях по-прежнему выбирается точное имя.
+      </Text>
+    ),
+    [typography.caption, colors.textMuted, spacing.md, colors]
+  );
 
   return (
     <>
@@ -165,122 +422,84 @@ export function FinanceCategoriesSettingsScreen() {
         }}
       />
       <ScreenCanvas>
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            padding: spacing.lg,
-            paddingBottom: insets.bottom + 100,
-          }}
-        >
+        <View style={{ flex: 1 }}>
           {!supabaseOn || !userId ? (
-            <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
-              Включи облако и войди в аккаунт.
-            </Text>
-          ) : q.isLoading ? (
-            <ActivityIndicator color={brand.primary} style={{ marginTop: 24 }} />
-          ) : q.isError ? (
-            <Text style={{ color: colors.danger }}>Не удалось загрузить категории.</Text>
-          ) : (
-            <>
-              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 }]}>
-                Лимит — план на месяц; факт за текущий месяц из транзакций. Подкатегория привязана к родителю; в
-                транзакциях по-прежнему выбирается точное имя категории.
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: spacing.lg, paddingBottom: listPaddingBottom }}
+            >
+              <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
+                Включи облако и войди в аккаунт.
               </Text>
-              {sortedRows.length === 0 ? (
-                <Text style={{ color: colors.textMuted }}>Пока нет категорий — нажми «Добавить».</Text>
-              ) : (
-                sortedRows.map((row) => (
-                  <View
-                    key={row.id}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 14,
-                      paddingHorizontal: 14,
-                      paddingLeft: 14 + row.depth * 18,
-                      borderRadius: radius.lg,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: colors.surface,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[typography.body, { fontWeight: '800', color: colors.text }]} numberOfLines={2}>
-                        {row.depth ? `· ${row.name}` : row.name}
-                      </Text>
-                      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                        Лимит {fmtMoney(row.expectedMonthly)} · месяц {fmtMoney(row.spentMonth)} ·{' '}
-                        {row.kind === 'business' ? 'Бизнес' : 'Личное'}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => openEdit(row)}
-                      hitSlop={8}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(168,85,247,0.15)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 8,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={18} color={brand.primary} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => confirmDelete(row)}
-                      hitSlop={8}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(251,113,133,0.12)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                    </Pressable>
-                  </View>
-                ))
-              )}
-            </>
+            </ScrollView>
+          ) : q.isLoading ? (
+            <View style={{ flex: 1, padding: spacing.lg }}>
+              <ActivityIndicator color={brand.primary} style={{ marginTop: 24 }} />
+            </View>
+          ) : q.isError ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: spacing.lg, paddingBottom: listPaddingBottom }}
+            >
+              <Text style={{ color: colors.danger }}>Не удалось загрузить категории.</Text>
+            </ScrollView>
+          ) : sortedRows.length === 0 ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: spacing.lg, paddingBottom: listPaddingBottom }}
+            >
+              {listHeader}
+              <Text style={{ color: colors.textMuted }}>Пока нет категорий — нажми «Добавить».</Text>
+            </ScrollView>
+          ) : (
+            <DraggableFlatList
+              style={{ flex: 1 }}
+              data={rootRows}
+              keyExtractor={(item) => item.id}
+              activationDistance={10}
+              onDragEnd={({ data }) => reorderRootsMut.mutate(data.map((x) => x.id))}
+              ListHeaderComponent={listHeader}
+              renderItem={renderRootItem}
+              contentContainerStyle={{
+                paddingHorizontal: spacing.lg,
+                paddingTop: spacing.lg,
+                paddingBottom: listPaddingBottom,
+              }}
+            />
           )}
-        </ScrollView>
 
-        {userId ? (
-          <Pressable
-            onPress={openCreate}
-            style={{
-              position: 'absolute',
-              left: spacing.lg,
-              right: spacing.lg,
-              bottom: insets.bottom + 20,
-              paddingVertical: 16,
-              borderRadius: radius.xl,
-              backgroundColor: brand.primary,
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 4 },
-            }}
-          >
-            <Text style={{ fontWeight: '800', color: '#fff', fontSize: 16 }}>Добавить категорию</Text>
-          </Pressable>
-        ) : null}
+          {userId ? (
+            <Pressable
+              onPress={openCreate}
+              style={{
+                position: 'absolute',
+                left: spacing.lg,
+                right: spacing.lg,
+                bottom: insets.bottom + 20,
+                paddingVertical: 16,
+                borderRadius: radius.xl,
+                backgroundColor: brand.primary,
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 4 },
+              }}
+            >
+              <Text style={{ fontWeight: '800', color: '#fff', fontSize: 16 }}>Добавить категорию</Text>
+            </Pressable>
+          ) : null}
 
-        <FinanceCategoryFormModal
-          visible={formOpen}
-          onClose={() => setFormOpen(false)}
-          userId={userId ?? ''}
-          mode={formMode}
-          categoryId={editId}
-          initial={editInitial}
-          allCategories={overview?.expenseCategories}
-        />
+          <FinanceCategoryFormModal
+            visible={formOpen}
+            onClose={() => setFormOpen(false)}
+            userId={userId ?? ''}
+            mode={formMode}
+            categoryId={editId}
+            initial={editInitial}
+            allCategories={overview?.expenseCategories}
+          />
+        </View>
       </ScreenCanvas>
     </>
   );

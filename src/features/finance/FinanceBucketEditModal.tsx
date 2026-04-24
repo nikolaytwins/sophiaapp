@@ -35,8 +35,12 @@ export function FinanceBucketEditModal({
   onClose,
   onSave,
 }: Props) {
-  const { colors, radius, typography, brand, spacing } = useAppTheme();
+  const { colors, radius, typography, brand, spacing, isLight } = useAppTheme();
   const insets = useSafeAreaInsets();
+  /** В darkPalette `colors.surface` почти прозрачный — для модалки нужен плотный фон. */
+  const sheetBg = isLight ? colors.surface : '#14121A';
+  const rowBgOff = isLight ? colors.surface2 : 'rgba(255,255,255,0.07)';
+  const backdropBg = isLight ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.78)';
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const sortedNames = useMemo(
@@ -72,14 +76,17 @@ export function FinanceBucketEditModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' }} onPress={onClose} />
+        <Pressable style={{ flex: 1, backgroundColor: backdropBg }} onPress={onClose} />
         <View
           style={{
             maxHeight: '88%',
             borderTopLeftRadius: radius.xl,
             borderTopRightRadius: radius.xl,
-            backgroundColor: colors.surface,
+            backgroundColor: sheetBg,
+            borderTopWidth: 1,
+            borderColor: colors.border,
             paddingBottom: insets.bottom + 16,
+            ...(Platform.OS === 'web' ? ({ boxShadow: '0 -8px 40px rgba(0,0,0,0.45)' } as const) : {}),
           }}
         >
         <View
@@ -123,7 +130,7 @@ export function FinanceBucketEditModal({
                   paddingHorizontal: 12,
                   borderRadius: radius.lg,
                   marginBottom: 6,
-                  backgroundColor: on ? 'rgba(168,85,247,0.12)' : colors.surface2,
+                  backgroundColor: on ? 'rgba(168,85,247,0.18)' : rowBgOff,
                   borderWidth: 1,
                   borderColor: on ? 'rgba(168,85,247,0.45)' : colors.border,
                   ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {}),

@@ -2,12 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { compareExpenseCategories } from '@/features/finance/financeApi';
 import type { FinanceCategoryMonthSeries, FinanceExpenseAnalytics } from '@/features/finance/financeApi';
 import type { FinanceExpenseCategory } from '@/features/finance/finance.types';
 import { useAppTheme } from '@/theme';
 
-const CAT_COL_W = 108;
-const MONTH_COL_W = 56;
+const FALLBACK_CAT_COL = 108;
+const FALLBACK_MONTH_COL = 56;
+const CHEVRON_COL = 28;
 
 function fmtCell(n: number) {
   if (n <= 0) return '—';
@@ -43,7 +45,7 @@ type ExtraRowModel = {
   series: FinanceCategoryMonthSeries;
 };
 
-function buildMatrixModels(
+export function buildMatrixModels(
   analytics: FinanceExpenseAnalytics,
   budgetRootTitles: string[],
   expenseCategories: FinanceExpenseCategory[]
@@ -72,7 +74,7 @@ function buildMatrixModels(
   for (const title of budgetRootTitles) {
     const cat = expenseCategories.find((c) => !c.parentId && c.name === title);
     if (!cat) continue;
-    const children = expenseCategories.filter((c) => c.parentId === cat.id).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const children = expenseCategories.filter((c) => c.parentId === cat.id).sort(compareExpenseCategories);
     const amounts = subtreeSpend(cat.id);
     const childSeries: FinanceCategoryMonthSeries[] = [];
     for (const ch of children) {
@@ -105,20 +107,58 @@ function buildMatrixModels(
   return { roots, extras };
 }
 
+function computeColumnWidths(containerWidth: number | undefined, monthCount: number) {
+  if (!containerWidth || containerWidth < 280) {
+    return { catW: FALLBACK_CAT_COL, monthW: FALLBACK_MONTH_COL, tableMinW: FALLBACK_CAT_COL + monthCount * FALLBACK_MONTH_COL, useScroll: true };
+  }
+  const minMonth = 38;
+  const minCat = 112;
+  const maxCat = Math.min(220, Math.round(containerWidth * 0.34));
+  let catW = maxCat;
+  let monthW = (containerWidth - catW) / monthCount;
+  if (monthW < minMonth) {
+    monthW = minMonth;
+    catW = Math.max(minCat, containerWidth - monthW * monthCount);
+  }
+  const tableMinW = catW + monthW * monthCount;
+  const useScroll = tableMinW > containerWidth + 0.5;
+  return {
+    catW: Math.round(catW),
+    monthW: Math.round(monthW),
+    tableMinW: Math.round(tableMinW),
+    useScroll,
+  };
+}
+
 type Props = {
   analytics: FinanceExpenseAnalytics;
   /** Корневые категории в порядке бюджета (как `budgetLines.map(l => l.title)`). */
   budgetRootTitles: string[];
   expenseCategories: FinanceExpenseCategory[];
+  /** Ширина области таблицы (без внешних отступов блока) — для подгонки колонок под блок. */
+  containerWidth?: number;
+  /** Без внешней рамки (родитель уже оформил блок). */
+  embedded?: boolean;
 };
 
-export function FinanceCategoryMonthMatrix({ analytics, budgetRootTitles, expenseCategories }: Props) {
+export function FinanceCategoryMonthMatrix({
+  analytics,
+  budgetRootTitles,
+  expenseCategories,
+  containerWidth,
+  embedded,
+}: Props) {
   const { colors, typography, radius, spacing, isLight, brand } = useAppTheme();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const { roots, extras } = useMemo(
     () => buildMatrixModels(analytics, budgetRootTitles, expenseCategories),
     [analytics, budgetRootTitles, expenseCategories]
+  );
+
+  const { catW, monthW, tableMinW, useScroll } = useMemo(
+    () => computeColumnWidths(containerWidth, analytics.monthKeys.length),
+    [containerWidth, analytics.monthKeys.length]
   );
 
   const toggle = (name: string) => {
@@ -139,9 +179,10 @@ export function FinanceCategoryMonthMatrix({ analytics, budgetRootTitles, expens
       <View
         key={`${rowKey}-${analytics.monthKeys[i]}`}
         style={{
-          width: MONTH_COL_W,
+          width: monthW,
           paddingVertical: 10,
           paddingHorizontal: 4,
+          paddingRight: 10,
           alignItems: 'center',
           justifyContent: 'center',
           borderLeftWidth: 1,
@@ -162,164 +203,191 @@ export function FinanceCategoryMonthMatrix({ analytics, budgetRootTitles, expens
       </View>
     ));
 
-  const renderNameCell = (label: string, depth: 0 | 1, expandable?: boolean, expandedNow?: boolean, onToggle?: () => void) => (
+  const renderNameCell = (
+    label: string,
+    opts: {
+      expandable?: boolean;
+      expandedNow?: boolean;
+      onToggle?: () => void;
+      isChild?: boolean;
+    }
+  ) => (
     <View
       style={{
-        width: CAT_COL_W,
+        width: catW,
+        minHeight: 44,
         paddingVertical: 10,
-        paddingHorizontal: 10,
-        paddingLeft: 10 + depth * 12,
-        justifyContent: 'center',
+        paddingLeft: 8,
+        paddingRight: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        borderRightWidth: 1,
+        borderRightColor: colors.border,
       }}
     >
-      {expandable ? (
-        <Pressable onPress={onToggle} hitSlop={8} style={{ padding: 2 }}>
-          <Ionicons name={expandedNow ? 'chevron-down' : 'chevron-forward'} size={16} color={brand.primary} />
-        </Pressable>
-      ) : depth === 1 ? (
-        <View style={{ width: 18 }} />
-      ) : null}
-      <Text style={[typography.caption, { color: colors.text, fontWeight: '700', flex: 1 }]} numberOfLines={2}>
-        {depth === 1 ? `· ${label}` : label}
-      </Text>
-    </View>
-  );
-
-  return (
-    <View
-      style={{
-        marginBottom: spacing.lg,
-        borderRadius: radius.xl,
-        borderWidth: 1,
-        borderColor: shellBorder,
-        backgroundColor: shellBg,
-        overflow: 'hidden',
-      }}
-    >
+      <View style={{ width: CHEVRON_COL, alignItems: 'center', justifyContent: 'center' }}>
+        {opts.expandable ? (
+          <Pressable onPress={opts.onToggle} hitSlop={8} style={{ padding: 2 }}>
+            <Ionicons name={opts.expandedNow ? 'chevron-down' : 'chevron-forward'} size={16} color={brand.primary} />
+          </Pressable>
+        ) : (
+          <View style={{ width: CHEVRON_COL }} />
+        )}
+      </View>
       <Text
         style={[
           typography.caption,
           {
-            color: colors.textMuted,
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-            paddingHorizontal: spacing.md,
-            paddingTop: spacing.md,
-            marginBottom: spacing.xs,
+            flex: 1,
+            color: colors.text,
+            fontWeight: '700',
+            paddingLeft: opts.isChild ? 4 : 0,
           },
         ]}
+        numberOfLines={2}
       >
-        Расходы по месяцам
+        {opts.isChild ? `· ${label}` : label}
       </Text>
-      <Text
-        style={[
-          typography.body,
-          {
-            color: colors.textMuted,
-            paddingHorizontal: spacing.md,
-            marginBottom: spacing.sm,
-            fontSize: 13,
-            lineHeight: 18,
-          },
-        ]}
-      >
-        Сравнение за 12 месяцев (₽). У родителя — сумма подкатегорий; стрелка раскрывает детализацию.
-      </Text>
+    </View>
+  );
 
-      <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
-        <View style={{ minWidth: CAT_COL_W + analytics.monthLabels.length * MONTH_COL_W }}>
+  const tableInner = (
+    <View
+      style={{
+        minWidth: useScroll ? tableMinW : containerWidth ?? '100%',
+        width: useScroll ? undefined : containerWidth ?? '100%',
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          backgroundColor: headerBg,
+        }}
+      >
+        <View
+          style={{
+            width: catW,
+            paddingVertical: 10,
+            paddingLeft: 8,
+            paddingRight: 12,
+            justifyContent: 'center',
+            borderRightWidth: 1,
+            borderRightColor: colors.border,
+          }}
+        >
+          <Text style={[typography.caption, { fontWeight: '800', color: colors.textMuted }]}>Категория</Text>
+        </View>
+        {analytics.monthLabels.map((lab, i) => (
           <View
+            key={analytics.monthKeys[i]}
             style={{
-              flexDirection: 'row',
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-              backgroundColor: headerBg,
+              width: monthW,
+              paddingVertical: 10,
+              paddingHorizontal: 4,
+              paddingRight: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderLeftWidth: 1,
+              borderLeftColor: colors.border,
             }}
           >
-            <View style={{ width: CAT_COL_W, paddingVertical: 10, paddingHorizontal: 10, justifyContent: 'center' }}>
-              <Text style={[typography.caption, { fontWeight: '800', color: colors.textMuted }]}>Категория</Text>
-            </View>
-            {analytics.monthLabels.map((lab, i) => (
-              <View
-                key={analytics.monthKeys[i]}
-                style={{
-                  width: MONTH_COL_W,
-                  paddingVertical: 10,
-                  paddingHorizontal: 4,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderLeftWidth: 1,
-                  borderLeftColor: colors.border,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: '800',
-                    color: colors.textMuted,
-                    textAlign: 'center',
-                  }}
-                  numberOfLines={2}
-                >
-                  {lab}
-                </Text>
-              </View>
-            ))}
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: '800',
+                color: colors.textMuted,
+                textAlign: 'center',
+              }}
+              numberOfLines={2}
+            >
+              {lab}
+            </Text>
           </View>
+        ))}
+      </View>
 
-          {roots.map((row) => {
-            const isOpen = expanded.has(row.name);
-            const hasKids = row.children.length > 0;
-            return (
-              <View key={row.name}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  {renderNameCell(row.name, 0, hasKids, isOpen, hasKids ? () => toggle(row.name) : undefined)}
-                  {renderAmountCells(row.rolled.amounts, `p-${row.name}`)}
-                </View>
-                {hasKids && isOpen
-                  ? row.children.map((ch) => (
-                      <View
-                        key={ch.category}
-                        style={{
-                          flexDirection: 'row',
-                          borderBottomWidth: 1,
-                          borderBottomColor: colors.border,
-                          backgroundColor: isLight ? 'rgba(15,17,24,0.03)' : 'rgba(255,255,255,0.02)',
-                        }}
-                      >
-                        {renderNameCell(ch.category, 1)}
-                        {renderAmountCells(ch.amounts, `c-${ch.category}`)}
-                      </View>
-                    ))
-                  : null}
-              </View>
-            );
-          })}
-
-          {extras.map((ex) => (
+      {roots.map((row) => {
+        const isOpen = expanded.has(row.name);
+        const hasKids = row.children.length > 0;
+        return (
+          <View key={row.name}>
             <View
-              key={`x-${ex.series.category}`}
               style={{
                 flexDirection: 'row',
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
               }}
             >
-              {renderNameCell(ex.series.category, 0)}
-              {renderAmountCells(ex.series.amounts, `x-${ex.series.category}`)}
+              {renderNameCell(row.name, {
+                expandable: hasKids,
+                expandedNow: isOpen,
+                onToggle: hasKids ? () => toggle(row.name) : undefined,
+                isChild: false,
+              })}
+              {renderAmountCells(row.rolled.amounts, `p-${row.name}`)}
             </View>
-          ))}
+            {hasKids && isOpen
+              ? row.children.map((ch) => (
+                  <View
+                    key={ch.category}
+                    style={{
+                      flexDirection: 'row',
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      backgroundColor: isLight ? 'rgba(15,17,24,0.03)' : 'rgba(255,255,255,0.02)',
+                    }}
+                  >
+                    {renderNameCell(ch.category, { isChild: true })}
+                    {renderAmountCells(ch.amounts, `c-${ch.category}`)}
+                  </View>
+                ))
+              : null}
+          </View>
+        );
+      })}
+
+      {extras.map((ex) => (
+        <View
+          key={`x-${ex.series.category}`}
+          style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}
+        >
+          {renderNameCell(ex.series.category, {})}
+          {renderAmountCells(ex.series.amounts, `x-${ex.series.category}`)}
         </View>
+      ))}
+    </View>
+  );
+
+  const scrollBody =
+    useScroll ? (
+      <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
+        {tableInner}
       </ScrollView>
+    ) : (
+      <View style={{ width: '100%' }}>{tableInner}</View>
+    );
+
+  if (embedded) {
+    return scrollBody;
+  }
+
+  return (
+    <View
+      style={{
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: shellBorder,
+        backgroundColor: shellBg,
+        overflow: 'hidden',
+      }}
+    >
+      {scrollBody}
     </View>
   );
 }

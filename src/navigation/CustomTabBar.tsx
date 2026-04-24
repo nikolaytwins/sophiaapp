@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Link, type Href } from 'expo-router';
 import { Fragment, useMemo } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TAB_BAR_ROUTE_ORDER, TAB_HREF, TAB_ICONS, TAB_LABELS } from '@/navigation/tabBarCatalog';
@@ -13,6 +13,10 @@ import { useAppTheme } from '@/theme';
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, isLight, typography, shadows } = useAppTheme();
+  const screenW = Dimensions.get('window').width;
+  const tabMinW = screenW < 340 ? 38 : screenW < 380 ? 46 : screenW < 420 ? 52 : 58;
+  const iconSize = screenW < 340 ? 22 : screenW < 380 ? 24 : 28;
+  const labelSize = screenW < 340 ? 9 : screenW < 380 ? 10 : 11;
 
   const styles = useMemo(
     () =>
@@ -32,8 +36,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           elevation: Platform.OS === 'web' ? 0 : 24,
         },
         barOuter: {
-          maxWidth: '100%' as const,
-          width: '100%',
+          alignSelf: 'center',
+          maxWidth: Math.max(screenW - 24, 200),
           borderRadius: 28,
           overflow: 'hidden',
           borderWidth: 1,
@@ -41,37 +45,40 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           ...shadows.card,
         },
         blurFill: {
-          width: '100%',
+          alignSelf: 'center',
           ...(Platform.OS === 'web'
             ? {
                 backgroundColor: isLight ? 'rgba(255,255,255,0.94)' : 'rgba(10,10,14,0.94)',
               }
             : {}),
         },
-        scrollInner: {
+        tabsRow: {
           flexDirection: 'row',
           alignItems: 'flex-end',
-          paddingVertical: 10,
-          paddingHorizontal: 8,
-          gap: 4,
+          justifyContent: 'center',
+          paddingVertical: 12,
+          paddingHorizontal: 10,
+          gap: 2,
         },
         tab: {
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: 48,
-          minWidth: 70,
-          paddingHorizontal: 6,
-          paddingVertical: 4,
+          minHeight: 54,
+          minWidth: tabMinW,
+          paddingHorizontal: 4,
+          paddingVertical: 6,
         },
         label: {
           ...typography.caption,
-          fontSize: 9,
-          marginTop: 3,
+          fontSize: labelSize,
+          fontWeight: '700',
+          marginTop: 4,
           textAlign: 'center',
-          maxWidth: 76,
+          maxWidth: 92,
+          letterSpacing: -0.15,
         },
       }),
-    [colors, isLight, shadows, typography]
+    [colors, isLight, shadows, typography, tabMinW, labelSize, screenW]
   );
 
   const visibleRoutes = TAB_BAR_ROUTE_ORDER.map((name) => state.routes.find((r) => r.name === name)).filter(
@@ -116,7 +123,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             onLongPress={onLongPress}
             style={styles.tab}
           >
-            <Ionicons name={iconName} size={21} color={tint} />
+            <Ionicons name={iconName} size={iconSize} color={tint} />
             <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
               {label}
             </Text>
@@ -134,18 +141,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         return <Fragment key={route.key}>{normalBtn}</Fragment>;
       });
 
-  const row = (
-    <ScrollView
-      horizontal
-      style={{ width: '100%' }}
-      showsHorizontalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      bounces={Platform.OS !== 'web'}
-      contentContainerStyle={styles.scrollInner}
-    >
-      {tabsRow}
-    </ScrollView>
-  );
+  const row = <View style={styles.tabsRow}>{tabsRow}</View>;
 
   return (
     <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 10) }]}>

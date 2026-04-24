@@ -106,3 +106,41 @@ export const supabaseAnonKey = (() => {
 })();
 
 export const useSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+/**
+ * Teamtracker (Next, обычно `npm run dev` → порт 3003): выручка агентства за месяц для дашборда Sophia.
+ * Секрет совпадает с `TT_INTEGRATION_SECRET` в Teamtracker — попадает в клиентский бандл; только для личного/LAN.
+ */
+export const teamtrackerBaseUrl = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_TEAMTRACKER_URL
+      ? String(process.env.EXPO_PUBLIC_TEAMTRACKER_URL).trim()
+      : '';
+  if (fromEnv) return trimBase(fromEnv);
+
+  const extra = Constants.expoConfig?.extra as { teamtrackerUrl?: string } | undefined;
+  if (extra?.teamtrackerUrl && String(extra.teamtrackerUrl).trim()) {
+    return trimBase(String(extra.teamtrackerUrl).trim());
+  }
+
+  return '';
+})();
+
+export const teamtrackerIntegrationSecret = (() => {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET
+      ? String(process.env.EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET).trim()
+      : '';
+  if (fromEnv) return fromEnv;
+
+  const extra = Constants.expoConfig?.extra as { teamtrackerIntegrationSecret?: string } | undefined;
+  if (extra?.teamtrackerIntegrationSecret && String(extra.teamtrackerIntegrationSecret).trim()) {
+    return String(extra.teamtrackerIntegrationSecret).trim();
+  }
+
+  return '';
+})();
+
+export const useTeamtrackerAgencyIncomeConfigured = Boolean(
+  teamtrackerBaseUrl && teamtrackerIntegrationSecret.length >= 16
+);

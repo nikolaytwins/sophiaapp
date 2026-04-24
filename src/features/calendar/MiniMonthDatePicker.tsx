@@ -63,7 +63,7 @@ export function MiniMonthDateField({
   const rows = useMemo(() => monthCalendarRows(pickerYm.y, pickerYm.m), [pickerYm.y, pickerYm.m]);
   const label = value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDateKeyRu(value) : 'Без даты';
 
-  const cardBg = isLight ? 'rgba(255,255,255,0.98)' : 'rgba(18, 10, 40, 0.96)';
+  const cardBg = isLight ? 'rgba(255,255,255,0.98)' : '#1A1428';
   const cardBorder = isLight ? colors.border : 'rgba(157, 107, 255, 0.35)';
 
   return (

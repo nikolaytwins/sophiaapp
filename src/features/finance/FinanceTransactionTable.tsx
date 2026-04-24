@@ -58,11 +58,11 @@ function fmtMoney(n: number, fractionDigits = 0) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: fractionDigits }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
-/** Ширины колонок: дата шире, чтобы год в поле не обрезался; категория — длинные названия и подкатегории. */
+/** Ширины колонок: дата и сумма шире (сумма — ключевое поле); категория и «хвост» на описание сбалансированы. */
 const COL = {
-  date: 128,
-  amount: 96,
-  category: 228,
+  date: 154,
+  amount: 124,
+  category: 204,
   actions: 52,
 } as const;
 
@@ -313,7 +313,7 @@ function EditableTransactionRow({
           />
         )}
       </View>
-      <View style={{ width: COL.amount, paddingRight: 6 }}>
+      <View style={{ width: COL.amount, paddingRight: 6, alignItems: 'flex-end' }}>
         <TextInput
           value={amountDraft}
           onChangeText={setAmountDraft}
@@ -322,6 +322,8 @@ function EditableTransactionRow({
           onBlur={onBlurAmount}
           style={[
             {
+              width: '100%',
+              textAlign: 'right',
               color: amountColor,
               fontSize: 14,
               fontWeight: '800',
@@ -372,7 +374,7 @@ function EditableTransactionRow({
           />
         )}
       </View>
-      <View style={{ flex: 1, minWidth: 100, paddingRight: 8 }}>
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 72, paddingRight: 8 }}>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -570,7 +572,7 @@ function AddTransactionRow({
           )}
         </View>
 
-        <View style={{ width: COL.amount, paddingRight: 6 }}>
+        <View style={{ width: COL.amount, paddingRight: 6, alignItems: 'flex-end' }}>
           <TextInput
             value={amountDraft}
             onChangeText={setAmountDraft}
@@ -581,6 +583,8 @@ function AddTransactionRow({
             onBlur={() => setFocusKey((k) => (k === 'amount' ? null : k))}
             style={[
               {
+                width: '100%',
+                textAlign: 'right',
                 color: inputTextColor,
                 fontSize: 14,
                 fontWeight: '800',
@@ -633,7 +637,7 @@ function AddTransactionRow({
           )}
         </View>
 
-        <View style={{ flex: 1, minWidth: 100, paddingRight: 8 }}>
+        <View style={{ flex: 1, flexBasis: 0, minWidth: 72, paddingRight: 8 }}>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -791,7 +795,11 @@ input.finance-web-date::-webkit-calendar-picker-indicator:hover {
       ).map(([label, w], i) => (
         <View
           key={`h-${i}`}
-          style={w != null ? { width: w, paddingRight: 6 } : { flex: 1, minWidth: 100, paddingRight: 8 }}
+          style={
+            w != null
+              ? { width: w, paddingRight: 6, ...(label === 'СУММА' ? ({ alignItems: 'flex-end' } as const) : {}) }
+              : { flex: 1, flexBasis: 0, minWidth: 72, paddingRight: 8 }
+          }
         >
           {label ? (
             <Text
@@ -800,6 +808,7 @@ input.finance-web-date::-webkit-calendar-picker-indicator:hover {
                 fontWeight: '800',
                 letterSpacing: 1.1,
                 color: colors.textMuted,
+                ...(label === 'СУММА' ? ({ textAlign: 'right' as const, width: '100%' as const }) : {}),
                 ...sans,
               }}
             >

@@ -1,14 +1,35 @@
 import { localDateKey } from '@/features/habits/habitLogic';
 
+/**
+ * Нормализует `event_date` из БД/JSON в `YYYY-MM-DD`.
+ * Иногда в ответе приезжает ISO с временем (`2026-04-24T00:00:00+00:00`); сравнение с колонкой дня должно быть по дате.
+ */
+export function plannerEventDateKey(d: string | null | undefined): string | null {
+  if (d == null) return null;
+  const s = String(d).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
+}
+
 /** Локальная дата YYYY-MM-DD из ISO timestamptz. */
 export function isoToLocalDateKey(iso: string): string {
   return localDateKey(new Date(iso));
 }
 
+/** Дробные минуты от локальной полуночи до момента `iso` (для выравнивания сетки с `isoToHm`). */
+export function isoToLocalMinutesSinceMidnight(iso: string): number {
+  const dt = new Date(iso);
+  return dt.getHours() * 60 + dt.getMinutes() + dt.getSeconds() / 60 + dt.getMilliseconds() / 60_000;
+}
+
 /** Локальное время HH:mm из ISO. */
 export function isoToHm(iso: string): string {
-  const dt = new Date(iso);
-  return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+  const m = isoToLocalMinutesSinceMidnight(iso);
+  const hh = Math.floor(m / 60) % 24;
+  const mm = Math.floor(m % 60);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 /** Сборка ISO UTC из локальной даты и времени HH:mm (календарь пользователя). */

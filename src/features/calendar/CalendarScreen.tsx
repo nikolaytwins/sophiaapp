@@ -87,6 +87,18 @@ const DOT_EVENT = '#38BDF8';
 const CAL_SOLID_ACCENT = '#7337dd';
 const CAL_SOLID_ACCENT_RGB = '115, 55, 221';
 
+/** Непрозрачный фон листа модалки в тёмной теме (палитра `colors.surface` почти прозрачная — не использовать). */
+const CALENDAR_MODAL_SHEET_DARK = '#14121A';
+
+function calendarModalBackdrop(isLight: boolean) {
+  return {
+    flex: 1,
+    justifyContent: 'flex-end' as const,
+    padding: 16,
+    backgroundColor: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.78)',
+  };
+}
+
 export type CalendarMainView = 'month' | 'week' | 'day';
 function minimalField(colors: { text: string }, isLight: boolean) {
   const base = {
@@ -1306,7 +1318,7 @@ export function CalendarScreen() {
       </View>
 
       <Modal visible={addEventOpen} animationType="fade" transparent onRequestClose={() => setAddEventOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddEventOpen(false)}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setAddEventOpen(false)}>
           <Pressable
             style={[
               styles.modalCard,
@@ -1388,7 +1400,7 @@ export function CalendarScreen() {
       </Modal>
 
       <Modal visible={addNoteOpen} animationType="fade" transparent onRequestClose={() => setAddNoteOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddNoteOpen(false)}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setAddNoteOpen(false)}>
           <Pressable
             style={[styles.modalCard, modalCardShell(isLight, isV2), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
             onPress={() => {}}
@@ -1424,7 +1436,7 @@ export function CalendarScreen() {
       </Modal>
 
       <Modal visible={addFocusOpen} animationType="fade" transparent onRequestClose={() => setAddFocusOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddFocusOpen(false)}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setAddFocusOpen(false)}>
           <Pressable
             style={[styles.modalCard, modalCardShell(isLight, isV2), isLight ? { backgroundColor: brand.canvasBase, borderColor: colors.border } : null]}
             onPress={() => {}}
@@ -1470,9 +1482,17 @@ export function CalendarScreen() {
       </Modal>
 
       <Modal visible={dayModalKey != null} animationType="slide" transparent onRequestClose={() => setDayModalKey(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setDayModalKey(null)}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setDayModalKey(null)}>
           <Pressable
-            style={[styles.modalCard, { backgroundColor: brand.canvasBase, borderColor: colors.border, overflow: 'visible' }]}
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isLight ? brand.canvasBase : isV2 ? '#1A1535' : CALENDAR_MODAL_SHEET_DARK,
+                borderColor: colors.border,
+                overflow: 'visible',
+                ...(Platform.OS === 'web' && !isLight ? ({ boxShadow: '0 -8px 40px rgba(0,0,0,0.45)' } as const) : {}),
+              },
+            ]}
             onPress={() => {}}
           >
             {dayModalKey ? (
@@ -1506,7 +1526,7 @@ export function CalendarScreen() {
                   onChangeText={setModalNewTitle}
                   placeholder="Название"
                   placeholderTextColor={colors.textMuted}
-                  style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 8 }]}
+                  style={[typography.body, minimalField(colors, isLight), { marginTop: 8 }]}
                 />
                 <EventKindPicker
                   value={modalNewKind}
@@ -1525,14 +1545,14 @@ export function CalendarScreen() {
                     onChangeText={setModalDayStart}
                     placeholder="09:00"
                     placeholderTextColor={colors.textMuted}
-                    style={[typography.body, { color: colors.text, flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10 }]}
+                    style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
                   />
                   <TextInput
                     value={modalDayEnd}
                     onChangeText={setModalDayEnd}
                     placeholder="10:00"
                     placeholderTextColor={colors.textMuted}
-                    style={[typography.body, { color: colors.text, flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10 }]}
+                    style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
                   />
                 </View>
                 <Pressable onPress={addDayEvent} disabled={createEventMut.isPending} style={[primaryBtn(fillAccent), { marginTop: spacing.md }]}>
@@ -1545,14 +1565,24 @@ export function CalendarScreen() {
       </Modal>
 
       <Modal visible={editingNote != null} animationType="fade" transparent onRequestClose={() => setEditingNote(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setEditingNote(null)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: brand.canvasBase, borderColor: colors.border, maxHeight: '70%' }]} onPress={() => {}}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setEditingNote(null)}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isLight ? brand.canvasBase : isV2 ? '#1A1535' : CALENDAR_MODAL_SHEET_DARK,
+                borderColor: colors.border,
+                maxHeight: '70%',
+              },
+            ]}
+            onPress={() => {}}
+          >
             <Text style={[typography.title2, { color: colors.text, fontWeight: '900' }]}>Заметка</Text>
             <TextInput
               value={noteEditBody}
               onChangeText={setNoteEditBody}
               multiline
-              style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 12, minHeight: 120, textAlignVertical: 'top' }]}
+              style={[typography.body, minimalField(colors, isLight), { marginTop: 12, minHeight: 120, textAlignVertical: 'top' }]}
             />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
               <Pressable onPress={() => setEditingNote(null)} style={[ghostBtn('transparent', colors, brand), { flex: 1, alignItems: 'center' }]}>
@@ -1574,8 +1604,19 @@ export function CalendarScreen() {
       </Modal>
 
       <Modal visible={editingEvent != null} animationType="slide" transparent onRequestClose={() => setEditingEvent(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setEditingEvent(null)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: brand.canvasBase, borderColor: colors.border, maxHeight: '90%' }]} onPress={() => {}}>
+        <Pressable style={calendarModalBackdrop(isLight)} onPress={() => setEditingEvent(null)}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isLight ? brand.canvasBase : isV2 ? '#1A1535' : CALENDAR_MODAL_SHEET_DARK,
+                borderColor: colors.border,
+                maxHeight: '90%',
+                ...(Platform.OS === 'web' && !isLight ? ({ boxShadow: '0 -8px 40px rgba(0,0,0,0.45)' } as const) : {}),
+              },
+            ]}
+            onPress={() => {}}
+          >
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -1587,7 +1628,7 @@ export function CalendarScreen() {
               <TextInput
                 value={evEditTitle}
                 onChangeText={setEvEditTitle}
-                style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 6 }]}
+                style={[typography.body, minimalField(colors, isLight), { marginTop: 6 }]}
               />
               <EventKindPicker
                 value={evEditKind}
@@ -1638,12 +1679,12 @@ export function CalendarScreen() {
                     <TextInput
                       value={evEditStart}
                       onChangeText={setEvEditStart}
-                      style={[typography.body, { color: colors.text, flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10 }]}
+                      style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
                     />
                     <TextInput
                       value={evEditEnd}
                       onChangeText={setEvEditEnd}
-                      style={[typography.body, { color: colors.text, flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10 }]}
+                      style={[typography.body, minimalField(colors, isLight), { flex: 1 }]}
                     />
                   </View>
                 </>
@@ -1653,7 +1694,7 @@ export function CalendarScreen() {
                 value={evEditNote}
                 onChangeText={setEvEditNote}
                 multiline
-                style={[typography.body, { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 6, minHeight: 72, textAlignVertical: 'top' }]}
+                style={[typography.body, minimalField(colors, isLight), { marginTop: 6, minHeight: 72, textAlignVertical: 'top' }]}
               />
               <Pressable onPress={saveEditedEvent} disabled={updateEventMut.isPending} style={[primaryBtn(fillAccent), { marginTop: spacing.lg }]}>
                 <Text style={primaryBtnText(onAccent)}>Сохранить</Text>
@@ -1792,14 +1833,15 @@ function notePlate(border: string, isLight: boolean, isV2: boolean) {
   };
 }
 
-function modalCardShell(isLight: boolean, _isV2: boolean) {
+function modalCardShell(isLight: boolean, isV2: boolean) {
   if (!isLight) {
     return {
       maxWidth: 420,
       width: '100%' as const,
       borderRadius: 20,
-      borderWidth: 0,
-      backgroundColor: '#1A1535',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: isV2 ? '#1A1535' : CALENDAR_MODAL_SHEET_DARK,
     } as const;
   }
   return { maxWidth: 420, width: '100%' as const };
@@ -2101,6 +2143,5 @@ function FocusLine({
 
 const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 2.5 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', padding: 16 },
   modalCard: { borderRadius: 20, padding: 20, borderWidth: 1, maxHeight: '88%' },
 });

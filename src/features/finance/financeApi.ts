@@ -128,7 +128,13 @@ function mapCategory(row: Record<string, unknown>): FinanceExpenseCategory {
     type: String(row.type),
     expectedMonthly: num(row.expected_monthly),
     parentId: row.parent_id != null && String(row.parent_id).trim() !== '' ? String(row.parent_id) : null,
+    sortOrder: num(row.sort_order),
   };
+}
+
+export function compareExpenseCategories(a: FinanceExpenseCategory, b: FinanceExpenseCategory): number {
+  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  return a.name.localeCompare(b.name, 'ru');
 }
 
 function mapOneTime(row: Record<string, unknown>): FinanceOneTimeExpense {
@@ -163,7 +169,7 @@ export function expenseCategorySelectOptions(categories: FinanceExpenseCategory[
       const rootA = !a.parentId;
       const rootB = !b.parentId;
       if (rootA !== rootB) return rootA ? -1 : 1;
-      return a.name.localeCompare(b.name, 'ru');
+      return compareExpenseCategories(a, b);
     })
     .map((c) => ({
       value: c.name,
@@ -219,9 +225,7 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
   const accounts = (accountsRes.data ?? [])
     .map((r) => mapAccount(r as Record<string, unknown>))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ru'));
-  const categories = (categoriesRes.data ?? [])
-    .map((r) => mapCategory(r as Record<string, unknown>))
-    .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, 'ru'));
+  const categories = (categoriesRes.data ?? []).map((r) => mapCategory(r as Record<string, unknown>));
   const settingsRow = settingsRes.data as Record<string, unknown> | null;
   const expenseSettings: FinanceExpenseSettings = {
     dailyExpenseLimit: settingsRow ? num(settingsRow.daily_expense_limit) : 3500,
@@ -269,6 +273,9 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
       childrenByParent.set(c.parentId, arr);
     }
   }
+  for (const arr of childrenByParent.values()) {
+    arr.sort(compareExpenseCategories);
+  }
 
   const rollupSpentFor = (cat: FinanceExpenseCategory): number => {
     let s = spendByCategory.get(cat.name) ?? 0;
@@ -280,7 +287,15 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
 
   const fmtR0 = (n: number) => Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g, ' ') + ' ₽';
 
-  const rootCategories = categories.filter((c) => !c.parentId);
+  const rootCategories = categories.filter((c) => !c.parentId).sort(compareExpenseCategories);
+  const expenseCategoriesOrdered: FinanceExpenseCategory[] = [];
+  for (const r of rootCategories) {
+    expenseCategoriesOrdered.push(r);
+    expenseCategoriesOrdered.push(...(childrenByParent.get(r.id) ?? []));
+  }
+  const orphanCategories = categories.filter((c) => !expenseCategoriesOrdered.some((x) => x.id === c.id));
+  const categoriesDisplay = [...expenseCategoriesOrdered, ...orphanCategories.sort(compareExpenseCategories)];
+
   const budgetLines: FinanceBudgetLine[] = rootCategories.map((c) => {
     const spent = rollupSpentFor(c);
     const exp = c.expectedMonthly;
@@ -315,7 +330,7 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
     monthExpense,
     forecastEndOfMonth,
     dailyExpenseLimit: expenseSettings.dailyExpenseLimit,
-    expenseCategories: categories,
+    expenseCategories: categoriesDisplay,
     budgetLines,
     accounts,
     transactionsThisMonth,
@@ -357,6 +372,15 @@ export async function createFinanceExpenseCategory(userId: string, input: Financ
     if (!par) throw new Error('Родительская категория не найдена');
   }
 
+  let nextSort = 0;
+  let maxQuery = sb.from('finance_expense_categories').select('sort_order').eq('user_id', userId);
+  maxQuery = parentId === null ? maxQuery.is('parent_id', null) : maxQuery.eq('parent_id', parentId);
+  const { data: maxRow, error: maxErr } = await maxQuery.order('sort_order', { ascending: false }).limit(1).maybeSingle();
+  if (maxErr) throw maxErr;
+  if (maxRow != null && (maxRow as { sort_order?: unknown }).sort_order != null) {
+    nextSort = num((maxRow as { sort_order: unknown }).sort_order) + 1;
+  }
+
   const { error } = await sb.from('finance_expense_categories').insert({
     id,
     user_id: userId,
@@ -364,6 +388,7 @@ export async function createFinanceExpenseCategory(userId: string, input: Financ
     type: input.type,
     expected_monthly: input.expectedMonthly,
     parent_id: parentId,
+    sort_order: nextSort,
     created_at: nowIso(),
     updated_at: nowIso(),
   });
@@ -448,6 +473,42 @@ export async function deleteFinanceExpenseCategory(userId: string, categoryId: s
   if (error) throw error;
 }
 
+/** Сохранить порядок соседей: одинаковый parent_id (null — только корни). */
+export async function reorderFinanceExpenseCategories(
+  userId: string,
+  parentId: string | null,
+  orderedIds: string[]
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  if (orderedIds.length === 0) return;
+
+  const { data: rows, error: selErr } = await sb
+    .from('finance_expense_categories')
+    .select('id, parent_id')
+    .eq('user_id', userId)
+    .in('id', orderedIds);
+  if (selErr) throw selErr;
+  if (!rows || rows.length !== orderedIds.length) {
+    throw new Error('Не все категории найдены');
+  }
+  for (const r of rows) {
+    const pid = r.parent_id != null && String(r.parent_id).trim() !== '' ? String(r.parent_id) : null;
+    if (pid !== parentId) {
+      throw new Error('Категории из разных групп нельзя упорядочить вместе');
+    }
+  }
+
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await sb
+      .from('finance_expense_categories')
+      .update({ sort_order: i, updated_at: nowIso() })
+      .eq('user_id', userId)
+      .eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
 export async function updateFinanceAccount(
   userId: string,
   accountId: string,
@@ -463,6 +524,42 @@ export async function updateFinanceAccount(
   if (patch.notes !== undefined) row.notes = patch.notes;
   const { error } = await sb.from('finance_accounts').update(row).eq('id', accountId).eq('user_id', userId);
   if (error) throw error;
+}
+
+export async function createFinanceAccount(
+  userId: string,
+  input: { name: string; balance?: number; type?: string; currency?: string }
+): Promise<FinanceAccount> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const name = input.name.trim();
+  if (!name) throw new Error('Введи название счёта');
+  const { data: lastRow, error: e0 } = await sb
+    .from('finance_accounts')
+    .select('sort_order')
+    .eq('user_id', userId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (e0) throw e0;
+  const sortOrder = lastRow != null ? num((lastRow as Record<string, unknown>).sort_order) + 1 : 0;
+  const id = newFinanceTransactionId();
+  const ts = nowIso();
+  const row = {
+    id,
+    user_id: userId,
+    name,
+    type: input.type != null && String(input.type).trim() !== '' ? String(input.type).trim() : 'checking',
+    currency: input.currency != null && String(input.currency).trim() !== '' ? String(input.currency).trim() : 'RUB',
+    balance: input.balance != null && Number.isFinite(input.balance) ? input.balance : 0,
+    notes: null,
+    sort_order: sortOrder,
+    created_at: ts,
+    updated_at: ts,
+  };
+  const { data, error } = await sb.from('finance_accounts').insert(row).select('*').single();
+  if (error) throw error;
+  return mapAccount(data as Record<string, unknown>);
 }
 
 export type CreateFinanceTransactionInput = {
@@ -594,7 +691,7 @@ export async function bulkInsertFinanceExpenseTransactions(
   if (error) throw error;
 }
 
-const EXPENSE_ANALYTICS_MONTHS = 12;
+const EXPENSE_ANALYTICS_MONTHS = 18;
 
 export type FinanceCategoryMonthSeries = {
   category: string;

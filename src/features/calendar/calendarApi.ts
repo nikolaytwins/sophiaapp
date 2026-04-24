@@ -6,7 +6,7 @@ import type {
   PlannerWeekNotesRow,
 } from '@/features/calendar/calendar.types';
 import { normalizeEventKind } from '@/features/calendar/calendarEventChips';
-import { isoToLocalDateKey } from '@/features/calendar/calendarLocalTime';
+import { isoToLocalDateKey, plannerEventDateKey } from '@/features/calendar/calendarLocalTime';
 import { getSupabase } from '@/lib/supabase';
 
 const EV_FIELDS =
@@ -35,7 +35,7 @@ function normalizeEvent(row: PlannerCalendarEventRow): PlannerCalendarEventRow {
   }
   return {
     ...row,
-    event_date: row.event_date ?? null,
+    event_date: plannerEventDateKey(row.event_date ?? null),
     note: row.note ?? null,
     starts_at,
     ends_at,
