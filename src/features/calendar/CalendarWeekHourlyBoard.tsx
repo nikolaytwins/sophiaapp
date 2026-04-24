@@ -295,7 +295,15 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
         <View style={{ height: WEEK_COL_HEADER_H }} />
         <View style={{ height: allDayRowH }} />
         {hours.map((h) => (
-          <View key={h} style={{ height: WEEK_GRID_SLOT_PX, justifyContent: 'flex-end', paddingBottom: 2 }}>
+          <View
+            key={h}
+            style={{
+              height: WEEK_GRID_SLOT_PX,
+              /** Верх слота = начало часа h (как `layoutTimedEventOnDay`); не `flex-end` — иначе метка визуально на границе h+1. */
+              justifyContent: 'flex-start',
+              paddingTop: 4,
+            }}
+          >
             <Text
               style={{
                 fontSize: 9,
