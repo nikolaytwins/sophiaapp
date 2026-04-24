@@ -148,7 +148,9 @@ export function CalendarWeekHourlyBoard({ dayKeys, weekEvents, todayKey, fullWid
   };
 
   const renderTimedLayer = (dk: string) => {
-    const timed = timedEventsStartingOnDay(weekEvents, dk);
+    const timed = timedEventsStartingOnDay(weekEvents, dk).sort(
+      (a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime()
+    );
     return (
       <View style={{ height: gridH, position: 'relative', marginBottom: 10, width: '100%' }}>
         {hours.map((h) => (

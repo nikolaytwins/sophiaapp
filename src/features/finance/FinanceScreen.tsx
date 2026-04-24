@@ -31,7 +31,7 @@ import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
 import { FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
 import { FinanceCategoryFormModal } from '@/features/finance/FinanceCategoryFormModal';
-import { FinanceTransactionTable } from '@/features/finance/FinanceTransactionTable';
+import { FinanceMonthTransactionsBlock } from '@/features/finance/FinanceMonthTransactionsBlock';
 import {
   enrichMonthSnapshots,
   MonthHistoryCards,
@@ -901,15 +901,12 @@ export function FinanceScreen() {
             ) : null}
 
             {mainTab === 'transactions' ? (
-              <View style={{ marginTop: spacing.md, position: 'relative', zIndex: 2 }}>
-                <FinanceTransactionTable
-                  userId={userId}
-                  overview={overview}
-                  transactions={overview.transactionsRecent}
-                  onSaved={invalidateFinance}
-                  prefillCategoryName={addTxPrefill}
-                />
-              </View>
+              <FinanceMonthTransactionsBlock
+                userId={userId}
+                overview={overview}
+                onSaved={invalidateFinance}
+                prefillCategoryName={addTxPrefill}
+              />
             ) : null}
 
             {mainTab === 'categories' ? (
@@ -926,9 +923,6 @@ export function FinanceScreen() {
                   <Text style={[typography.caption, { color: colors.textMuted, flex: 1, lineHeight: 20 }]}>
                     Расходы по категориям за текущий месяц (к плану). Карандаш — лимит и название, корзина — удалить.
                   </Text>
-                  <Pressable onPress={openAddCategory} hitSlop={8}>
-                    <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Добавить</Text>
-                  </Pressable>
                   <Pressable onPress={openCategorySettings} hitSlop={8}>
                     <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>Настройки</Text>
                   </Pressable>
@@ -942,27 +936,47 @@ export function FinanceScreen() {
                 ) : expenseAnalyticsQ.data ? (
                   <FinanceCategoryMonthMatrix
                     analytics={expenseAnalyticsQ.data}
-                    budgetCategoryTitles={overview.expenseCategories.map((c) => c.name)}
+                    budgetRootTitles={overview.budgetLines.map((l) => l.title)}
+                    expenseCategories={overview.expenseCategories}
                   />
                 ) : null}
+
+                <Pressable
+                  onPress={openAddCategory}
+                  style={{
+                    marginTop: spacing.md,
+                    marginBottom: spacing.md,
+                    paddingVertical: 16,
+                    paddingHorizontal: 20,
+                    borderRadius: radius.xl,
+                    backgroundColor: brand.primary,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    ...(Platform.OS === 'web'
+                      ? ({
+                          boxShadow: '0 0 28px rgba(168, 85, 247, 0.45), 0 10px 28px rgba(0,0,0,0.4)',
+                        } as object)
+                      : {
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 6 },
+                          shadowOpacity: 0.25,
+                          shadowRadius: 10,
+                          elevation: 6,
+                        }),
+                  }}
+                >
+                  <Ionicons name="add-circle" size={24} color="#fff" />
+                  <Text style={{ fontWeight: '900', color: '#fff', fontSize: 16, letterSpacing: 0.2 }}>
+                    Добавить категорию
+                  </Text>
+                </Pressable>
+
                 {overview.budgetLines.length === 0 ? (
-                  <View style={{ marginTop: spacing.sm }}>
-                    <Text style={{ color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md }}>
-                      Нет категорий. Добавь первую или импортируй данные (см. scripts/FINANCE_IMPORT.md).
-                    </Text>
-                    <Pressable
-                      onPress={openAddCategory}
-                      style={{
-                        alignSelf: 'flex-start',
-                        paddingVertical: 14,
-                        paddingHorizontal: 18,
-                        borderRadius: radius.lg,
-                        backgroundColor: brand.primary,
-                      }}
-                    >
-                      <Text style={{ fontWeight: '800', color: '#fff', fontSize: 15 }}>Добавить категорию</Text>
-                    </Pressable>
-                  </View>
+                  <Text style={{ color: colors.textMuted, lineHeight: 22, marginBottom: spacing.sm }}>
+                    Пока нет категорий в бюджете. Импорт: scripts/FINANCE_IMPORT.md.
+                  </Text>
                 ) : (
                   overview.budgetLines.map((line) => (
                     <BudgetCard

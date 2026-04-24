@@ -19,6 +19,8 @@ export type TbankCsvParseStats = {
   skippedFailed: number;
   skippedNotOk: number;
   skippedNonExpense: number;
+  /** Переводы между своими счетами (не расходы для бюджета). */
+  skippedInternalTransfer: number;
   skippedParse: number;
 };
 
@@ -57,6 +59,34 @@ export function splitSemicolonCsvLine(line: string): string[] {
 
 function normHeaderCell(s: string): string {
   return s.replace(/^\uFEFF/, '').replace(/^"|"$/g, '').trim().toLowerCase();
+}
+
+/** Нормализация описания для сравнения (ё → е, нижний регистр). */
+function normDescriptionForMatch(s: string): string {
+  return s.replace(/"/g, '').trim().toLowerCase().replace(/ё/g, 'е');
+}
+
+/**
+ * Перевод между своими счетами / накопительным / брокерским и т.п. — не импортируем как расход.
+ * Подстроки по типичным выпискам Т‑Банка и общим формулировкам.
+ */
+export function isTbankInternalOwnAccountTransfer(description: string): boolean {
+  const d = normDescriptionForMatch(description);
+  if (!d) return false;
+  const hints = [
+    'между своими счетами',
+    'между моими счетами',
+    'перевод между своими счетами',
+    'перевод на свой счет',
+    'перевод со своего счета',
+    'перевод с накопительного счета',
+    'перевод на накопительный счет',
+    'перевод на брокерский счет',
+    'перевод с брокерского счета',
+    'between own accounts',
+    'between my accounts',
+  ];
+  return hints.some((h) => d.includes(h));
 }
 
 function parseRuAmount(s: string): number | null {
@@ -98,6 +128,7 @@ export function parseTbankOperationsCsv(content: string): TbankCsvParseResult {
     skippedFailed: 0,
     skippedNotOk: 0,
     skippedNonExpense: 0,
+    skippedInternalTransfer: 0,
     skippedParse: 0,
   };
 
@@ -164,6 +195,11 @@ export function parseTbankOperationsCsv(content: string): TbankCsvParseResult {
 
     let description = (cells[idxDesc] ?? '').replace(/"/g, '').trim();
     if (!description) description = 'Без описания';
+
+    if (isTbankInternalOwnAccountTransfer(description)) {
+      stats.skippedInternalTransfer++;
+      continue;
+    }
 
     keySeq++;
     rows.push({

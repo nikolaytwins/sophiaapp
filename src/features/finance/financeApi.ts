@@ -63,6 +63,32 @@ function monthRangeISO(): { startISO: string; endISO: string; y: number; m: numb
   return { startISO: start.toISOString(), endISO: end.toISOString(), y, m };
 }
 
+/** Границы календарного месяца в локальной TZ (для выборки транзакций). */
+export function monthDateBoundsISO(year: number, month: number): { startISO: string; endISO: string } {
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
+export async function loadFinanceTransactionsForMonth(
+  userId: string,
+  year: number,
+  month: number
+): Promise<FinanceTransaction[]> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const { startISO, endISO } = monthDateBoundsISO(year, month);
+  const { data, error } = await sb
+    .from('finance_transactions')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', startISO)
+    .lte('date', endISO)
+    .order('date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => mapTransaction(r as Record<string, unknown>));
+}
+
 function daysLeftInMonthInclusive(): number {
   const now = new Date();
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();

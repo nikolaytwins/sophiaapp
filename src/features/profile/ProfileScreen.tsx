@@ -1,22 +1,12 @@
 import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HabitsManagePanel } from '@/features/habits/HabitsManagePanel';
 import { ProfileAboutTab } from '@/features/profile/ProfileAboutTab';
 import { SettingsAccountPanel } from '@/features/profile/SettingsAccountPanel';
-import { AppLeftNavRail } from '@/navigation/AppLeftNavRail';
-import { SOPHIA_UI_ACCENT, WEB_NAV_LG_MIN } from '@/navigation/navConstants';
+import { SOPHIA_UI_ACCENT } from '@/navigation/navConstants';
 import { useAppTheme } from '@/theme';
 
 type TabId = 'about' | 'settings' | 'habits';
@@ -28,19 +18,12 @@ function parseTab(raw: string | string[] | undefined): TabId {
 }
 
 export function ProfileScreen() {
-  const { colors, typography, spacing, radius, isLight } = useAppTheme();
+  const { colors, spacing, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const initial = useMemo(() => parseTab(params.tab), [params.tab]);
   const [tab, setTab] = useState<TabId>(initial);
-  const isDesktopWeb = Platform.OS === 'web' && windowWidth >= WEB_NAV_LG_MIN;
-  const [navRailCollapsed, setNavRailCollapsed] = useState(() => !isDesktopWeb);
-
-  useEffect(() => {
-    setNavRailCollapsed(!isDesktopWeb);
-  }, [isDesktopWeb]);
 
   useEffect(() => {
     setTab(parseTab(params.tab));
@@ -77,14 +60,9 @@ export function ProfileScreen() {
   return (
     <>
       <Stack.Screen options={headerOptions} />
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
-        <AppLeftNavRail
-          collapsed={navRailCollapsed}
-          onToggleCollapsed={() => setNavRailCollapsed((c) => !c)}
-          isLight={isLight}
-        />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <KeyboardAvoidingView
-          style={{ flex: 1, minWidth: 0, backgroundColor: colors.bg }}
+          style={{ flex: 1, backgroundColor: colors.bg }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView

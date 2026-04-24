@@ -15,10 +15,16 @@ export function weekGridTotalHeightPx(): number {
   return (WEEK_GRID_HOUR_END - WEEK_GRID_HOUR_START + 1) * WEEK_GRID_SLOT_PX;
 }
 
-/** Событие с интервалом, начинающимся в этот календарный день (локально). */
+/**
+ * События с интервалом в колонке дня недели.
+ * Для событий с `event_date` колонка = эта дата (как у «весь день»), иначе — по локальной дате `starts_at`.
+ * Так вертикальная позиция не расходится с днём карточки при рассинхроне timestamptz и `event_date`.
+ */
 export function timedEventsStartingOnDay(events: PlannerCalendarEventRow[], dayKey: string): PlannerCalendarEventRow[] {
   return events.filter((e) => {
     if (!e.starts_at || !e.ends_at) return false;
+    const dated = e.event_date != null && String(e.event_date).trim() !== '';
+    if (dated) return e.event_date === dayKey;
     return isoToLocalDateKey(e.starts_at) === dayKey;
   });
 }
@@ -47,20 +53,33 @@ export type TimedLayout = { top: number; height: number };
 
 export function layoutTimedEventOnDay(ev: PlannerCalendarEventRow, dayKey: string): TimedLayout | null {
   if (!ev.starts_at || !ev.ends_at) return null;
-  if (isoToLocalDateKey(ev.starts_at) !== dayKey) return null;
-  const start = new Date(ev.starts_at);
-  const end = new Date(ev.ends_at);
-  const startMin = start.getHours() * 60 + start.getMinutes();
+  const dated = ev.event_date != null && String(ev.event_date).trim() !== '';
+  if (dated) {
+    if (ev.event_date !== dayKey) return null;
+  } else if (isoToLocalDateKey(ev.starts_at) !== dayKey) {
+    return null;
+  }
+
+  const [y, m, d] = dayKey.split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  const dayMidnight = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  const startMs = new Date(ev.starts_at).getTime();
+  const endMs = new Date(ev.ends_at).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+
+  /** Минуты от полуночи колонки `dayKey` до начала события (дробные — учёт секунд). */
+  const startMinOfDay = (startMs - dayMidnight) / 60_000;
   const gridStartMin = WEEK_GRID_HOUR_START * 60;
   const gridEndMin = (WEEK_GRID_HOUR_END + 1) * 60;
-  let t0 = startMin - gridStartMin;
+  let t0 = startMinOfDay - gridStartMin;
   if (t0 < 0) t0 = 0;
-  const durMin = Math.max(15, Math.round((end.getTime() - start.getTime()) / 60_000));
+  const durMin = Math.max(15, Math.round((endMs - startMs) / 60_000));
   const top = (t0 / 60) * WEEK_GRID_SLOT_PX;
   let height = (durMin / 60) * WEEK_GRID_SLOT_PX;
   height = Math.max(24, Math.min(height, weekGridTotalHeightPx() - top));
-  if (startMin + durMin > gridEndMin) {
-    const maxH = ((gridEndMin - Math.max(gridStartMin, startMin)) / 60) * WEEK_GRID_SLOT_PX;
+  const startMinWhole = Math.floor(startMinOfDay);
+  if (startMinWhole + durMin > gridEndMin) {
+    const maxH = ((gridEndMin - Math.max(gridStartMin, startMinWhole)) / 60) * WEEK_GRID_SLOT_PX;
     height = Math.max(24, maxH);
   }
   return { top, height };

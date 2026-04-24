@@ -86,7 +86,7 @@ export function FinanceCsvImportModal({ visible, csvText, userId, overview, onCl
   const statsLine = useMemo(() => {
     if (!parsed) return null;
     const s = parsed.stats;
-    return `Строк в файле: ${s.totalLines} · пропуск: FAILED ${s.skippedFailed}, не OK ${s.skippedNotOk}, поступления/≥0 ${s.skippedNonExpense}, разбор ${s.skippedParse}`;
+    return `Строк в файле: ${s.totalLines} · пропуск: FAILED ${s.skippedFailed}, не OK ${s.skippedNotOk}, поступления/≥0 ${s.skippedNonExpense}, свои счета ${s.skippedInternalTransfer}, разбор ${s.skippedParse}`;
   }, [parsed]);
 
   const applyBulkCategory = () => {
