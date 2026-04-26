@@ -10,6 +10,10 @@ export type AnnualGoalCard = {
   /** file:// после выбора с устройства или https:// для облака */
   imageUri?: string | null;
   sortOrder: number;
+  /** Сколько уже отложено под цель, ₽ (ручной учёт). */
+  savedRub?: number;
+  /** Целевая сумма, ₽ — для полосы прогресса; 0 или не задано — полоса скрыта. */
+  targetRub?: number;
 };
 
 export type AnnualSphereSection = {

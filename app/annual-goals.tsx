@@ -1,6 +1,6 @@
-import { GoalsScreen } from '@/features/goals/GoalsScreen';
+import { Redirect } from 'expo-router';
 
-/** Годовые цели и глобальное видение (маршрут вне нижнего меню). */
-export default function AnnualGoalsRoute() {
-  return <GoalsScreen />;
+/** Старый URL: годовые цели теперь в разделе «Цели». */
+export default function AnnualGoalsRedirect() {
+  return <Redirect href="/goals" />;
 }

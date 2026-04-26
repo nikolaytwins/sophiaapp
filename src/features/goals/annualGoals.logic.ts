@@ -64,13 +64,21 @@ export function normalizeAnnualDocument(raw: unknown): AnnualGoalsDocument {
     const cardsRaw = Array.isArray(b.cards) ? b.cards : [];
     const cards = cardsRaw
       .filter((c): c is Record<string, unknown> => c != null && typeof c === 'object')
-      .map((c, i) => ({
-        id: typeof c.id === 'string' ? c.id : newAnnualCardId(),
-        title: typeof c.title === 'string' ? c.title : '',
-        problematica: typeof c.problematica === 'string' ? c.problematica : undefined,
-        imageUri: typeof c.imageUri === 'string' ? c.imageUri : c.imageUri === null ? null : undefined,
-        sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : i,
-      }));
+      .map((c, i) => {
+        const savedRub =
+          typeof c.savedRub === 'number' && Number.isFinite(c.savedRub) ? Math.max(0, c.savedRub) : undefined;
+        const targetRub =
+          typeof c.targetRub === 'number' && Number.isFinite(c.targetRub) ? Math.max(0, c.targetRub) : undefined;
+        return {
+          id: typeof c.id === 'string' ? c.id : newAnnualCardId(),
+          title: typeof c.title === 'string' ? c.title : '',
+          problematica: typeof c.problematica === 'string' ? c.problematica : undefined,
+          imageUri: typeof c.imageUri === 'string' ? c.imageUri : c.imageUri === null ? null : undefined,
+          sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : i,
+          ...(savedRub !== undefined ? { savedRub } : {}),
+          ...(targetRub !== undefined ? { targetRub } : {}),
+        };
+      });
     const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
     /** Годовая цель — одна на сферу; лишние карточки отбрасываем при загрузке. */
     const oneCard = sorted.slice(0, 1);
@@ -123,13 +131,21 @@ export function normalizeAnnualDocument(raw: unknown): AnnualGoalsDocument {
   if (Array.isArray(genRaw)) {
     base.generalGoals = genRaw
       .filter((c): c is Record<string, unknown> => c != null && typeof c === 'object')
-      .map((c, i) => ({
-        id: typeof c.id === 'string' ? c.id : newAnnualCardId(),
-        title: typeof c.title === 'string' ? c.title : '',
-        problematica: typeof c.problematica === 'string' ? c.problematica : undefined,
-        imageUri: typeof c.imageUri === 'string' ? c.imageUri : c.imageUri === null ? null : undefined,
-        sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : i,
-      }))
+      .map((c, i) => {
+        const savedRub =
+          typeof c.savedRub === 'number' && Number.isFinite(c.savedRub) ? Math.max(0, c.savedRub) : undefined;
+        const targetRub =
+          typeof c.targetRub === 'number' && Number.isFinite(c.targetRub) ? Math.max(0, c.targetRub) : undefined;
+        return {
+          id: typeof c.id === 'string' ? c.id : newAnnualCardId(),
+          title: typeof c.title === 'string' ? c.title : '',
+          problematica: typeof c.problematica === 'string' ? c.problematica : undefined,
+          imageUri: typeof c.imageUri === 'string' ? c.imageUri : c.imageUri === null ? null : undefined,
+          sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : i,
+          ...(savedRub !== undefined ? { savedRub } : {}),
+          ...(targetRub !== undefined ? { targetRub } : {}),
+        };
+      })
       .filter((c) => c.title.trim());
   } else {
     base.generalGoals = [];

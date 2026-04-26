@@ -6,11 +6,14 @@ type Props = {
   parts: StrategyRichParagraph;
   baseColor: string;
   mutedColor: string;
+  fontSize?: number;
+  lineHeight?: number;
 };
 
-export function RichParagraphBlock({ parts, baseColor, mutedColor }: Props) {
+export function RichParagraphBlock({ parts, baseColor, mutedColor, fontSize = 13, lineHeight }: Props) {
+  const lh = lineHeight ?? Math.round(fontSize * 1.65);
   return (
-    <Text style={{ fontSize: 13, lineHeight: 22, color: baseColor }}>
+    <Text style={{ fontSize, lineHeight: lh, color: baseColor }}>
       {parts.map((seg, i) => {
         const c =
           seg.variant === 'strong'

@@ -38,6 +38,8 @@ const sophiaHabitsUrl = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_URL || '').trim()
 const sophiaHabitsSyncKey = (process.env.EXPO_PUBLIC_SOPHIA_HABITS_SYNC_KEY || '').trim();
 const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || '').trim();
 const supabaseAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+const teamtrackerUrl = (process.env.EXPO_PUBLIC_TEAMTRACKER_URL || '').trim();
+const teamtrackerIntegrationSecret = (process.env.EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET || '').trim();
 
 module.exports = {
   ...appJson,
@@ -50,6 +52,8 @@ module.exports = {
       ...(sophiaHabitsSyncKey ? { sophiaHabitsSyncKey } : {}),
       ...(supabaseUrl ? { supabaseUrl } : {}),
       ...(supabaseAnonKey ? { supabaseAnonKey } : {}),
+      ...(teamtrackerUrl ? { teamtrackerUrl } : {}),
+      ...(teamtrackerIntegrationSecret ? { teamtrackerIntegrationSecret } : {}),
     },
   },
 };

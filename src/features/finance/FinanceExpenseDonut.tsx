@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { LayoutChangeEvent, Text, View } from 'react-native';
+import { LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
 export type DonutSegment = { label: string; value: number; color?: string };
@@ -32,9 +32,14 @@ function donutPath(cx: number, cy: number, rOut: number, rIn: number, a0: number
   ].join(' ');
 }
 
+function fmtRub(n: number) {
+  return Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g, ' ') + ' ₽';
+}
+
 /** Кольцевая диаграмма долей расхода по категориям. */
 export function FinanceExpenseDonut({ segments, height, isLight }: Props) {
   const [width, setWidth] = useState(320);
+  const [hl, setHl] = useState<number | null>(null);
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w > 60) setWidth(w);
@@ -48,15 +53,18 @@ export function FinanceExpenseDonut({ segments, height, isLight }: Props) {
     const rIn = size * 0.2;
     const raw = segments.filter((s) => s.value > 0);
     const total = raw.reduce((a, s) => a + s.value, 0);
-    if (total <= 0) return { paths: [] as { d: string; fill: string }[], total: 0, colored: [] as DonutSegment[], size };
+    if (total <= 0) {
+      return { paths: [] as { d: string; fill: string; legendIndex: number }[], total: 0, colored: [] as DonutSegment[], size };
+    }
     const colored = raw.map((s, i) => ({ ...s, color: s.color || PALETTE[i % PALETTE.length]! }));
     let ang = -Math.PI / 2;
-    const paths: { d: string; fill: string }[] = [];
-    for (const s of colored) {
+    const paths: { d: string; fill: string; legendIndex: number }[] = [];
+    for (let i = 0; i < colored.length; i++) {
+      const s = colored[i]!;
       const frac = s.value / total;
       const a1 = ang + frac * Math.PI * 2;
       if (frac > 0.001) {
-        paths.push({ d: donutPath(cx, cy, rOut, rIn, ang, a1), fill: s.color });
+        paths.push({ d: donutPath(cx, cy, rOut, rIn, ang, a1), fill: s.color, legendIndex: i });
       }
       ang = a1;
     }
@@ -66,6 +74,9 @@ export function FinanceExpenseDonut({ segments, height, isLight }: Props) {
   const muted = isLight ? 'rgba(15,17,24,0.5)' : 'rgba(196,181,253,0.55)';
   const text = isLight ? '#0F1118' : '#FAFAFC';
 
+  const hlSeg = hl != null && colored[hl] ? colored[hl]! : null;
+  const hlPct = hlSeg && total > 0 ? Math.round((hlSeg.value / total) * 100) : null;
+
   return (
     <View style={{ width: '100%', minHeight: height }} onLayout={onLayout}>
       <View style={{ flexDirection: width > 420 ? 'row' : 'column', alignItems: 'center', gap: 16 }}>
@@ -73,25 +84,65 @@ export function FinanceExpenseDonut({ segments, height, isLight }: Props) {
           <Svg width={size} height={size}>
             <G>
               {paths.map((p, i) => (
-                <Path key={i} d={p.d} fill={p.fill} stroke="rgba(0,0,0,0.25)" strokeWidth={1} />
+                <Path
+                  key={i}
+                  d={p.d}
+                  fill={p.fill}
+                  stroke="rgba(0,0,0,0.25)"
+                  strokeWidth={1}
+                  opacity={hl == null || p.legendIndex === hl ? 1 : 0.34}
+                />
               ))}
             </G>
           </Svg>
           <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
-            <Text style={{ fontSize: 10, fontWeight: '700', color: muted }}>всего</Text>
-            <Text style={{ fontSize: 15, fontWeight: '900', color: text, marginTop: 2, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
-              {Math.round(total).toLocaleString('ru-RU').replace(/\u00A0/g, ' ')} ₽
-            </Text>
+            {hlSeg != null && hlPct != null ? (
+              <>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: text, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>
+                  {hlSeg.label}
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: text, marginTop: 4, fontVariant: ['tabular-nums'] }}>
+                  {hlPct}% · {fmtRub(hlSeg.value)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: muted }}>всего</Text>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: text, marginTop: 2, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                  {Math.round(total).toLocaleString('ru-RU').replace(/\u00A0/g, ' ')} ₽
+                </Text>
+              </>
+            )}
           </View>
         </View>
         <View style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', gap: 8 }}>
           {colored.length === 0 ? (
             <Text style={{ fontSize: 13, color: muted }}>Нет данных расходов за выбранный месяц.</Text>
           ) : (
-            colored.slice(0, 8).map((s) => {
+            colored.slice(0, 8).map((s, i) => {
               const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
               return (
-                <View key={s.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Pressable
+                  key={s.label}
+                  onPressIn={() => setHl(i)}
+                  onPressOut={() => setHl(null)}
+                  {...(Platform.OS === 'web'
+                    ? ({
+                        onPointerEnter: () => setHl(i),
+                        onPointerLeave: () => setHl(null),
+                      } as object)
+                    : {})}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    borderRadius: 10,
+                    paddingVertical: 4,
+                    paddingHorizontal: 4,
+                    marginHorizontal: -4,
+                    backgroundColor: pressed || hl === i ? (isLight ? 'rgba(124,58,237,0.08)' : 'rgba(168,85,247,0.12)') : 'transparent',
+                  })}
+                >
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: text }} numberOfLines={1}>
@@ -99,7 +150,7 @@ export function FinanceExpenseDonut({ segments, height, isLight }: Props) {
                     </Text>
                   </View>
                   <Text style={{ fontSize: 12, fontWeight: '800', color: muted, fontVariant: ['tabular-nums'] }}>{pct}%</Text>
-                </View>
+                </Pressable>
               );
             })
           )}

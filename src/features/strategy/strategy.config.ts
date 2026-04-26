@@ -5,6 +5,7 @@
 
 import { EXTRA_STRATEGY_MONTHLY_PLANS } from '@/features/strategy/data/monthlyPlansExtra';
 import { newStrategyProjectsTab } from '@/features/strategy/data/newStrategyProjectsContent';
+import { newStrategyVisionTab } from '@/features/strategy/data/newStrategyVisionContent';
 
 export type StrategyPhaseBadgeVariant = 'now' | 'build' | 'growth' | 'launch' | 'scale' | 'muted';
 
@@ -244,8 +245,86 @@ export type StrategyNewSynastryProjectsDef = {
   geo: StrategyProjectsGeoDef;
 };
 
-/** Контент вкладки «Новая стратегия» (астро + рынки/проекты из HTML). */
+export type StrategyVisionNationKind = 'fire' | 'crystal' | 'forest' | 'air';
+
+export type StrategyVisionNationDef = {
+  id: string;
+  kind: StrategyVisionNationKind;
+  title: string;
+  body: StrategyRichParagraph;
+};
+
+export type StrategyVisionPhaseKeyDateVariant = 'fire' | 'gold';
+
+export type StrategyVisionPhaseKeyDateDef = {
+  variant: StrategyVisionPhaseKeyDateVariant;
+  dateLine: string;
+  headline: string;
+  body: StrategyRichParagraph;
+};
+
+export type StrategyVisionPhaseDef = {
+  yearKey: string;
+  nameLine: string;
+  title: string;
+  bodyParagraphs: StrategyRichParagraph[];
+  target: string;
+  keyDate?: StrategyVisionPhaseKeyDateDef;
+};
+
+export type StrategyVisionStrategyBlockDef = {
+  title: string;
+  bodyParts: StrategyRichParagraph;
+};
+
+export type StrategyArkaliumVisionDef = {
+  innerTabLabel: string;
+  hero: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    statementParagraphs: StrategyRichParagraph[];
+  };
+  mission: {
+    sectionLabel: string;
+    sectionTitle: string;
+    paragraphs: StrategyRichParagraph[];
+  };
+  nations: {
+    sectionLabel: string;
+    sectionTitle: string;
+    intro: string;
+    nations: StrategyVisionNationDef[];
+    landscapeNote: StrategyRichParagraph;
+  };
+  phases: {
+    sectionLabel: string;
+    sectionTitle: string;
+    items: StrategyVisionPhaseDef[];
+  };
+  numbers: {
+    sectionLabel: string;
+    sectionTitle: string;
+    cells: { value: string; label: string }[];
+    footnote: string;
+  };
+  strategyWhy: {
+    sectionLabel: string;
+    sectionTitle: string;
+    blocks: StrategyVisionStrategyBlockDef[];
+  };
+  finale: {
+    dateLine: string;
+    titleLine1: string;
+    titleLine2: string;
+    subtitle: StrategyRichParagraph;
+    noteLines: string[];
+  };
+};
+
+/** Контент вкладки «Новая стратегия» (видение Аркалиум + астро + рынки/проекты). */
 export type StrategyNewSynastryDef = {
+  vision: StrategyArkaliumVisionDef;
   money: StrategyNewSynastryMoneyTabDef;
   projects: StrategyNewSynastryProjectsDef;
 };
@@ -1060,6 +1139,7 @@ export const strategyData: StrategyPageConfig = {
     newStrategy: 'Новая стратегия',
   },
   newStrategySynastry: {
+    vision: newStrategyVisionTab,
     money: {
       innerTabLabel: 'Деньги · 2й/8й',
       screenTitle: 'Деньги · психология',

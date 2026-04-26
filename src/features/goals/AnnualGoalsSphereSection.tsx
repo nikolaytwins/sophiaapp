@@ -186,18 +186,45 @@ export function AnnualGoalsSphereSection({ sphere, onOpenAddGoal, onOpenEditGoal
                 paddingRight: 4,
               }}
             >
-              <Text
-                style={{
-                  flex: 1,
-                  fontSize: 17,
-                  fontWeight: '700',
-                  letterSpacing: -0.3,
-                  color: colors.text,
-                }}
-                numberOfLines={4}
-              >
-                {card.title}
-              </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    fontSize: 17,
+                    fontWeight: '700',
+                    letterSpacing: -0.3,
+                    color: colors.text,
+                  }}
+                  numberOfLines={4}
+                >
+                  {card.title}
+                </Text>
+                {card.targetRub != null && card.targetRub > 0 ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)' }}>
+                      {Math.round(card.savedRub ?? 0).toLocaleString('ru-RU').replace(/\u00A0/g, ' ')} ₽ из{' '}
+                      {Math.round(card.targetRub).toLocaleString('ru-RU').replace(/\u00A0/g, ' ')} ₽
+                    </Text>
+                    <View
+                      style={{
+                        marginTop: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${Math.min(100, Math.round(((card.savedRub ?? 0) / card.targetRub) * 100))}%`,
+                          height: '100%',
+                          borderRadius: 999,
+                          backgroundColor: GOALS_ACCENT,
+                        }}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Pressable onPress={() => onOpenEditGoal(sphere, card)} hitSlop={10} style={{ padding: 8 }}>
                   <Ionicons name="create-outline" size={22} color="rgba(255,255,255,0.45)" />

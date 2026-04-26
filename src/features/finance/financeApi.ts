@@ -162,6 +162,53 @@ function mapSnapshot(row: Record<string, unknown>): FinanceMonthSnapshot {
   };
 }
 
+export type UpsertFinanceMonthSnapshotInput = {
+  year: number;
+  month: number;
+  /** Если не передано при upsert, подставится 0 или текущее из БД. */
+  totalBalance?: number;
+  personalExpenses?: number;
+  businessExpenses?: number;
+  totalRevenue?: number | null;
+  projectProfit?: number | null;
+};
+
+/** Создать или обновить снимок месяца (ручная правка дохода/расхода и т.д.). */
+export async function upsertFinanceMonthSnapshot(userId: string, input: UpsertFinanceMonthSnapshotInput): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const { year, month } = input;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    throw new Error('Некорректный месяц');
+  }
+
+  const { data: existing, error: selErr } = await sb
+    .from('finance_month_snapshots')
+    .select('id,total_balance,personal_expenses,business_expenses,total_revenue,project_profit')
+    .eq('user_id', userId)
+    .eq('year', year)
+    .eq('month', month)
+    .maybeSingle();
+  if (selErr) throw selErr;
+
+  const ex = existing as Record<string, unknown> | null;
+  const row = {
+    user_id: userId,
+    year,
+    month,
+    total_balance: input.totalBalance ?? (ex ? num(ex.total_balance) : 0),
+    personal_expenses: input.personalExpenses ?? (ex ? num(ex.personal_expenses) : 0),
+    business_expenses: input.businessExpenses ?? (ex ? num(ex.business_expenses) : 0),
+    total_revenue:
+      input.totalRevenue !== undefined ? input.totalRevenue : ex != null && ex.total_revenue != null ? num(ex.total_revenue) : null,
+    project_profit:
+      input.projectProfit !== undefined ? input.projectProfit : ex != null && ex.project_profit != null ? num(ex.project_profit) : null,
+  };
+
+  const { error } = await sb.from('finance_month_snapshots').upsert(row, { onConflict: 'user_id,year,month' });
+  if (error) throw error;
+}
+
 /** Имена категорий для полей выбора (включая подкатегории). */
 export function expenseCategorySelectOptions(categories: FinanceExpenseCategory[]): { value: string; label: string }[] {
   return [...categories]

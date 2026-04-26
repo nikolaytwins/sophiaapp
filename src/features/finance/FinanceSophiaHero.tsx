@@ -9,22 +9,32 @@ const FINANCE_HERO_IMAGE = require('../../assets/images/finance-hero-sophia.png'
 const STACK_BREAKPOINT = 480;
 
 type Props = {
-  /** Максимальная ширина баннера на десктопе (не на всю ширину экрана). */
+  /** Максимальная ширина баннера на десктопе (если не fullWidth). */
   maxContentWidth?: number;
+  /** На всю ширину контейнера (как остальные плашки бенто). */
+  fullWidth?: boolean;
 };
 
 /**
  * Заметный герой-блок с Софией (как на экране «День»): градиенты, крупное фото.
  */
-export function FinanceSophiaHero({ maxContentWidth = 640 }: Props) {
+export function FinanceSophiaHero({ maxContentWidth = 640, fullWidth = true }: Props) {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
   const stackLayout = windowWidth < STACK_BREAKPOINT;
   const cardRadius = 22;
-  const constrained = Platform.OS === 'web' ? Math.min(windowWidth - 40, maxContentWidth) : undefined;
+  const constrained =
+    fullWidth || Platform.OS !== 'web' ? undefined : Math.min(windowWidth - 40, maxContentWidth);
 
   return (
-    <View style={[styles.wrap, { borderRadius: cardRadius }, constrained != null ? { maxWidth: constrained, alignSelf: 'center' } : null]}>
+    <View
+      style={[
+        styles.wrap,
+        { borderRadius: cardRadius },
+        fullWidth ? { width: '100%' as const, alignSelf: 'stretch' } : null,
+        constrained != null ? { maxWidth: constrained, alignSelf: 'center' } : null,
+      ]}
+    >
       <LinearGradient
         pointerEvents="none"
         colors={['#141018', '#0a090f', '#030306']}
@@ -57,11 +67,11 @@ export function FinanceSophiaHero({ maxContentWidth = 640 }: Props) {
           <Pressable
             onPress={() => {
               if (Platform.OS !== 'web') void Haptics.selectionAsync();
-              router.push('/annual-goals' as Href);
+              router.push('/goals' as Href);
             }}
             style={styles.cta}
           >
-            <Text style={styles.ctaText}>К годовым целям →</Text>
+            <Text style={styles.ctaText}>К целям →</Text>
           </Pressable>
         </View>
 
@@ -100,7 +110,7 @@ export function FinanceSophiaHero({ maxContentWidth = 640 }: Props) {
             StyleSheet.absoluteFillObject,
             {
               borderRadius: cardRadius,
-              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 72px rgba(120,60,200,0.22), 0 18px 48px rgba(0,0,0,0.55)',
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06), 0 18px 40px rgba(0,0,0,0.45)',
             } as object,
           ]}
         />
@@ -118,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139,92,246,0.4)',
     ...(Platform.OS === 'web'
       ? {
-          boxShadow: '0 18px 52px rgba(0,0,0,0.55), 0 0 80px rgba(88,40,160,0.22)',
+          boxShadow: '0 18px 48px rgba(0,0,0,0.5)',
         }
       : {
           shadowColor: '#000',

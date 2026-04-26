@@ -1,7 +1,21 @@
+import { useMutation } from '@tanstack/react-query';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  LayoutChangeEvent,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
+import { upsertFinanceMonthSnapshot, type UpsertFinanceMonthSnapshotInput } from '@/features/finance/financeApi';
 import type { FinanceMonthSnapshot } from '@/features/finance/finance.types';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { useAppTheme } from '@/theme';
@@ -336,14 +350,23 @@ function MonthHistoryCapitalLineChart({ rows, width: viewportW }: { rows: Enrich
 type TableProps = {
   rows: EnrichedMonthRow[];
   screenInnerWidth: number;
+  editable?: boolean;
+  onPressRevenue?: (s: FinanceMonthSnapshot) => void;
+  onPressExpenseTotal?: (s: FinanceMonthSnapshot) => void;
 };
 
-export function MonthHistoryTableTwin({ rows, screenInnerWidth }: TableProps) {
-  const { colors, typography, radius, isLight } = useAppTheme();
+export function MonthHistoryTableTwin({
+  rows,
+  screenInnerWidth,
+  editable,
+  onPressRevenue,
+  onPressExpenseTotal,
+}: TableProps) {
+  const { colors, typography, radius, brand, isLight } = useAppTheme();
   const lineColor = colors.border;
   const line = StyleSheet.hairlineWidth;
   const headerBg = isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.05)';
-  const tableMinW = Math.max(screenInnerWidth - 8, 360);
+  const tableMinW = Math.max(screenInnerWidth - 8, 520);
 
   const head = (t: string, flexGrow: number, align: 'left' | 'center' | 'right', last?: boolean) => (
     <View
@@ -410,6 +433,67 @@ export function MonthHistoryTableTwin({ rows, screenInnerWidth }: TableProps) {
     );
   };
 
+  const expenseTotal = (s: FinanceMonthSnapshot) => s.personalExpenses + s.businessExpenses;
+
+  const cellEditableMoney = (
+    s: FinanceMonthSnapshot,
+    flexGrow: number,
+    value: number | null,
+    onPress: (() => void) | undefined,
+    hint: string
+  ) => {
+    const text = value == null ? '—' : fmtMoneyPlain(value);
+    const inner = (
+      <Text
+        style={[
+          typography.caption,
+          {
+            textAlign: 'right',
+            fontWeight: '800',
+            fontVariant: ['tabular-nums'],
+            color: colors.text,
+            fontSize: 12,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {text}
+      </Text>
+    );
+    return (
+      <View
+        style={{
+          flex: flexGrow,
+          minWidth: 78,
+          paddingVertical: 11,
+          paddingHorizontal: 8,
+          borderRightWidth: line,
+          borderRightColor: lineColor,
+          justifyContent: 'center',
+        }}
+      >
+        {editable && onPress ? (
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={hint}
+            style={({ pressed }) => ({
+              borderRadius: 8,
+              paddingVertical: 4,
+              paddingHorizontal: 4,
+              marginHorizontal: -4,
+              backgroundColor: pressed ? (isLight ? brand.primaryMuted : 'rgba(168,85,247,0.12)') : 'transparent',
+            })}
+          >
+            {inner}
+          </Pressable>
+        ) : (
+          inner
+        )}
+      </View>
+    );
+  };
+
   const cellMonth = (s: FinanceMonthSnapshot, flexGrow: number) => (
     <View
       style={{
@@ -461,8 +545,9 @@ export function MonthHistoryTableTwin({ rows, screenInnerWidth }: TableProps) {
           {head('Месяц', 1.05, 'left')}
           {head('Всего на счетах', 1.1, 'right')}
           {head('Динамика капитала', 1.15, 'right')}
-          {head('Общая выручка', 1.05, 'right')}
-          {head('Прибыль', 1, 'right', true)}
+          {head('Доход', 1, 'right')}
+          {head('Расход', 1, 'right')}
+          {head('Прибыль', 0.95, 'right', true)}
         </View>
         {rows.map(({ snapshot: s, capitalDelta }, i) => (
           <View
@@ -501,8 +586,21 @@ export function MonthHistoryTableTwin({ rows, screenInnerWidth }: TableProps) {
               </Text>
             </View>
             {cellMoney(capitalDelta, 1.15, 'right', false, true)}
-            {cellMoney(s.totalRevenue, 1.05, 'right', false, false)}
-            {cellMoney(s.projectProfit, 1, 'right', true, true)}
+            {cellEditableMoney(
+              s,
+              1,
+              s.totalRevenue,
+              onPressRevenue ? () => onPressRevenue(s) : undefined,
+              'Правка дохода за месяц'
+            )}
+            {cellEditableMoney(
+              s,
+              1,
+              expenseTotal(s),
+              onPressExpenseTotal ? () => onPressExpenseTotal(s) : undefined,
+              'Правка расхода за месяц'
+            )}
+            {cellMoney(s.projectProfit, 0.95, 'right', true, true)}
           </View>
         ))}
       </View>
@@ -616,6 +714,10 @@ type HistorySectionProps = {
   screenInnerWidth: number;
   viewMode: MonthHistoryViewMode;
   onViewModeChange: (v: MonthHistoryViewMode) => void;
+  userId?: string | null;
+  onSnapshotsSaved?: () => void;
+  /** Баланс для новой строки «текущий месяц» (обычно сумма по счетам сейчас). */
+  seedTotalBalance?: number;
 };
 
 /** История месяцев: оболочка как у «Таблицы расходов», график капитала, переключатель таблица/карточки. */
@@ -624,9 +726,82 @@ export function FinanceMonthHistorySection({
   screenInnerWidth,
   viewMode,
   onViewModeChange,
+  userId,
+  onSnapshotsSaved,
+  seedTotalBalance = 0,
 }: HistorySectionProps) {
-  const { colors, typography, spacing, radius, isLight } = useAppTheme();
+  const { colors, typography, spacing, radius, brand, isLight } = useAppTheme();
   const [blockW, setBlockW] = useState(0);
+  const [moneyModal, setMoneyModal] = useState<null | {
+    kind: 'income' | 'expense';
+    snapshot: FinanceMonthSnapshot;
+    draft: string;
+  }>(null);
+
+  const upsertMut = useMutation({
+    mutationFn: (input: UpsertFinanceMonthSnapshotInput) => {
+      if (!userId) return Promise.reject(new Error('Нет пользователя'));
+      return upsertFinanceMonthSnapshot(userId, input);
+    },
+    onSuccess: () => {
+      onSnapshotsSaved?.();
+      setMoneyModal(null);
+    },
+    onError: (e: Error) => Alert.alert('Снимок месяца', e.message ?? 'Ошибка'),
+  });
+
+  const now = useMemo(() => new Date(), []);
+  const cy = now.getFullYear();
+  const cm = now.getMonth() + 1;
+  const hasCurrentMonth = rows.some((r) => r.snapshot.year === cy && r.snapshot.month === cm);
+  const canEdit = Boolean(userId);
+
+  const openIncome = useCallback((s: FinanceMonthSnapshot) => {
+    setMoneyModal({
+      kind: 'income',
+      snapshot: s,
+      draft: s.totalRevenue != null ? String(Math.round(s.totalRevenue)) : '',
+    });
+  }, []);
+
+  const openExp = useCallback((s: FinanceMonthSnapshot) => {
+    const t = s.personalExpenses + s.businessExpenses;
+    setMoneyModal({ kind: 'expense', snapshot: s, draft: String(Math.round(t)) });
+  }, []);
+
+  const submitMoneyModal = useCallback(() => {
+    if (!moneyModal) return;
+    const raw = moneyModal.draft.replace(/\s/g, '').replace(',', '.');
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      Alert.alert('Снимок', 'Введите неотрицательное число.');
+      return;
+    }
+    if (moneyModal.kind === 'income') {
+      upsertMut.mutate({ year: moneyModal.snapshot.year, month: moneyModal.snapshot.month, totalRevenue: n });
+    } else {
+      upsertMut.mutate({
+        year: moneyModal.snapshot.year,
+        month: moneyModal.snapshot.month,
+        personalExpenses: n,
+        businessExpenses: 0,
+      });
+    }
+  }, [moneyModal, upsertMut]);
+
+  const addCurrentMonth = useCallback(() => {
+    const bal =
+      typeof seedTotalBalance === 'number' && Number.isFinite(seedTotalBalance) ? Math.max(0, seedTotalBalance) : 0;
+    upsertMut.mutate({
+      year: cy,
+      month: cm,
+      totalBalance: bal,
+      personalExpenses: 0,
+      businessExpenses: 0,
+      totalRevenue: 0,
+      projectProfit: null,
+    });
+  }, [cy, cm, seedTotalBalance, upsertMut]);
 
   const onBlockLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -670,10 +845,32 @@ export function FinanceMonthHistorySection({
       <MonthHistoryCapitalLineChart rows={rows} width={chartWidth} />
 
       <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.md, lineHeight: 20 }]}>
-        История по месяцам. Динамика капитала в таблице — изменение баланса к предыдущему месяцу в списке. Выручка и
-        прибыль — если есть в Twinworks: миграция 010_finance_snapshot_revenue.sql в Supabase и при необходимости
-        повторный импорт.
+        История по месяцам. Динамика капитала — изменение баланса к предыдущему месяцу в списке. Колонки «Доход» и
+        «Расход» можно править по тапу — значения сохраняются в снимок месяца и попадают на график «Доходы» / «Расходы»
+        на дашборде.
       </Text>
+
+      {canEdit && !hasCurrentMonth ? (
+        <Pressable
+          onPress={addCurrentMonth}
+          disabled={upsertMut.isPending}
+          style={{
+            marginTop: spacing.sm,
+            alignSelf: 'flex-start',
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: radius.lg,
+            borderWidth: 1,
+            borderColor: 'rgba(167,139,250,0.45)',
+            backgroundColor: 'rgba(168,85,247,0.12)',
+            opacity: upsertMut.isPending ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ fontWeight: '900', color: brand.primary, fontSize: 14 }}>
+            + Снимок за текущий месяц
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={{ marginTop: spacing.sm, marginBottom: spacing.sm }}>
         <SegmentedControl<MonthHistoryViewMode>
@@ -688,10 +885,83 @@ export function FinanceMonthHistorySection({
       </View>
 
       {viewMode === 'table' ? (
-        <MonthHistoryTableTwin rows={rows} screenInnerWidth={screenInnerWidth} />
+        <MonthHistoryTableTwin
+          rows={rows}
+          screenInnerWidth={screenInnerWidth}
+          editable={canEdit}
+          onPressRevenue={canEdit ? openIncome : undefined}
+          onPressExpenseTotal={canEdit ? openExp : undefined}
+        />
       ) : (
         <MonthHistoryCards rows={rows} />
       )}
+
+      <Modal visible={moneyModal != null} transparent animationType="fade" onRequestClose={() => setMoneyModal(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: spacing.lg }}
+          onPress={() => setMoneyModal(null)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: radius.xl,
+              padding: spacing.lg,
+              backgroundColor: isLight ? '#FFFFFF' : '#16161c',
+              borderWidth: isLight ? 1 : 0,
+              borderColor: colors.border,
+              ...(Platform.OS === 'web'
+                ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.55)' } as object)
+                : {}),
+            }}
+          >
+            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 8 }}>
+              {moneyModal?.kind === 'income' ? 'Доход за месяц, ₽' : 'Расход за месяц (сумма), ₽'}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 12 }}>
+              {moneyModal
+                ? `${monthLabel(moneyModal.snapshot)} · сохранится в finance_month_snapshots`
+                : ''}
+            </Text>
+            <TextInput
+              value={moneyModal?.draft ?? ''}
+              onChangeText={(t) => setMoneyModal((m) => (m ? { ...m, draft: t } : m))}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.lg,
+                padding: 14,
+                fontSize: 17,
+                fontWeight: '800',
+                color: colors.text,
+                marginBottom: 14,
+              }}
+            />
+            <Pressable
+              onPress={submitMoneyModal}
+              disabled={upsertMut.isPending}
+              style={{
+                paddingVertical: 14,
+                borderRadius: radius.lg,
+                backgroundColor: brand.primary,
+                alignItems: 'center',
+                opacity: upsertMut.isPending ? 0.65 : 1,
+              }}
+            >
+              {upsertMut.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ fontWeight: '900', color: '#fff' }}>Сохранить</Text>
+              )}
+            </Pressable>
+            <Pressable onPress={() => setMoneyModal(null)} style={{ marginTop: 12, padding: 12, alignItems: 'center' }}>
+              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Отмена</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

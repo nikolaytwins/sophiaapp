@@ -26,7 +26,7 @@ const GOALS_MAIN_TABS: {
 ];
 
 /**
- * Годовые цели и глобальное видение (отдельный маршрут `/annual-goals`, не нижнее меню).
+ * Годовые цели и глобальное видение (маршрут `/goals` в нижнем меню).
  */
 export function GoalsScreen() {
   const insets = useSafeAreaInsets();

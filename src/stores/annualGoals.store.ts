@@ -26,7 +26,13 @@ type AnnualGoalsState = {
   updateCard: (
     sphere: AnnualSphere,
     cardId: string,
-    patch: Partial<{ title: string; imageUri: string | null; problematica: string }>
+    patch: Partial<{
+      title: string;
+      imageUri: string | null;
+      problematica: string;
+      savedRub: number;
+      targetRub: number;
+    }>
   ) => void;
   removeCard: (sphere: AnnualSphere, cardId: string) => void;
   replaceDocument: (doc: AnnualGoalsDocument) => void;
@@ -47,7 +53,13 @@ type AnnualGoalsState = {
   }) => { ok: true; id: string } | { ok: false; error: string };
   updateGeneralGoal: (
     goalId: string,
-    patch: Partial<{ title: string; imageUri: string | null; problematica: string }>
+    patch: Partial<{
+      title: string;
+      imageUri: string | null;
+      problematica: string;
+      savedRub: number;
+      targetRub: number;
+    }>
   ) => void;
   removeGeneralGoal: (goalId: string) => void;
 };
@@ -133,6 +145,8 @@ export const useAnnualGoalsStore = create<AnnualGoalsState>()(
                           ...(patch.problematica !== undefined
                             ? { problematica: patch.problematica.trim() }
                             : {}),
+                          ...(patch.savedRub !== undefined ? { savedRub: Math.max(0, patch.savedRub) } : {}),
+                          ...(patch.targetRub !== undefined ? { targetRub: Math.max(0, patch.targetRub) } : {}),
                         }
                       : c
                   ),
@@ -248,6 +262,8 @@ export const useAnnualGoalsStore = create<AnnualGoalsState>()(
                       ...(patch.problematica !== undefined
                         ? { problematica: patch.problematica.trim() }
                         : {}),
+                      ...(patch.savedRub !== undefined ? { savedRub: Math.max(0, patch.savedRub) } : {}),
+                      ...(patch.targetRub !== undefined ? { targetRub: Math.max(0, patch.targetRub) } : {}),
                     }
                   : c
               ),

@@ -4,6 +4,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 
 import { STRATEGY, strategyEyebrow } from '@/features/strategy/strategyDashboardUi';
 import { StrategyProjectsTabContent } from '@/features/strategy/StrategyProjectsTabContent';
+import { StrategyVisionTabContent } from '@/features/strategy/StrategyVisionTabContent';
 import { RichParagraphBlock } from '@/features/strategy/strategyRichParagraph';
 import type {
   StrategyNewSynastryDef,
@@ -136,7 +137,7 @@ function MoneyCard({
   );
 }
 
-type Inner = 'money' | 'projects';
+type Inner = 'vision' | 'money' | 'projects';
 
 type Props = {
   config: StrategyNewSynastryDef;
@@ -144,12 +145,13 @@ type Props = {
 
 export function StrategyNewStrategyPanel({ config }: Props) {
   const { typography, spacing, colors, brand, isLight } = useAppTheme();
-  const [inner, setInner] = useState<Inner>('money');
-  const { money, projects } = config;
+  const [inner, setInner] = useState<Inner>('vision');
+  const { vision, money, projects } = config;
   const baseColor = colors.text;
   const mutedColor = colors.textMuted;
 
   const subTabs: { id: Inner; label: string }[] = [
+    { id: 'vision', label: vision.innerTabLabel },
     { id: 'money', label: money.innerTabLabel },
     { id: 'projects', label: projects.innerTabLabel },
   ];
@@ -193,7 +195,9 @@ export function StrategyNewStrategyPanel({ config }: Props) {
         })}
       </View>
 
-      {inner === 'money' ? (
+      {inner === 'vision' ? (
+        <StrategyVisionTabContent config={vision} />
+      ) : inner === 'money' ? (
         <>
           <View style={{ gap: 6 }}>
             <Text style={[typography.title1, { fontSize: 26, fontWeight: '700', color: baseColor, letterSpacing: -0.3 }]}>

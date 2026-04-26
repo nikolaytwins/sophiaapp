@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -34,8 +33,6 @@ import { computeFinanceMonthTxStats } from '@/features/finance/financeMonthTxSta
 import type { FinanceAccount, FinanceOverview } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY, teamtrackerAgencyProfitKey } from '@/features/finance/queryKeys';
 import { fetchTeamtrackerAgencyProfitForMonth } from '@/features/finance/teamtrackerAgencyProfit';
-import { ANNUAL_SPHERE_TITLE, type AnnualSphere } from '@/features/goals/annualGoals.types';
-import { useAnnualGoalsStore } from '@/stores/annualGoals.store';
 import { WEB_NAV_LG_MIN } from '@/navigation/navConstants';
 import { useAppTheme } from '@/theme';
 import type { DonutSegment } from '@/features/finance/FinanceExpenseDonut';
@@ -46,8 +43,6 @@ import { FinanceSophiaHero } from '@/features/finance/FinanceSophiaHero';
 
 import type { EnrichedMonthRow } from '@/features/finance/FinanceMonthHistoryViews';
 
-const SPHERES: AnnualSphere[] = ['relationships', 'energy', 'work'];
-
 function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
 }
@@ -56,13 +51,6 @@ type ChartTab = 'income' | 'expense' | 'capital';
 type ChartViz = 'line' | 'bars';
 
 const DONUT_PALETTE = ['#A855F7', '#C084FC', '#7C3AED', '#E879F9', '#38BDF8', '#34D399', '#FBBF24'] as const;
-
-const GOAL_CARD_STYLES = [
-  { border: 'rgba(232,121,249,0.75)', glow0: 'rgba(168,85,247,0.5)', glow1: 'rgba(232,121,249,0.12)', bar: ['#E879F9', '#A855F7'] as const },
-  { border: 'rgba(167,139,250,0.7)', glow0: 'rgba(139,92,246,0.45)', glow1: 'rgba(232,121,249,0.1)', bar: ['#C084FC', '#7C3AED'] as const },
-  { border: 'rgba(56,189,248,0.55)', glow0: 'rgba(56,189,248,0.35)', glow1: 'rgba(167,139,250,0.08)', bar: ['#38BDF8', '#A855F7'] as const },
-  { border: 'rgba(52,211,153,0.55)', glow0: 'rgba(52,211,153,0.35)', glow1: 'rgba(167,139,250,0.08)', bar: ['#34D399', '#22C55E'] as const },
-] as const;
 
 /** Карточка бенто в духе календаря: стекло, фиолетовая кайма, мягкая тень. */
 function BentoShell({
@@ -135,8 +123,10 @@ export function FinanceDashboardBento({
   const [addAccountBucket, setAddAccountBucket] = useState<'available' | 'frozen' | 'reserve' | null>(null);
   const [newAccountName, setNewAccountName] = useState('');
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-
-  const annualDoc = useAnnualGoalsStore((s) => s.doc);
+  /** −1: показывать последний месяц в аналитике; иначе индекс месяца (стрелки). */
+  const [donutMonthIdx, setDonutMonthIdx] = useState(-1);
+  const [expectedIncomeModal, setExpectedIncomeModal] = useState(false);
+  const [expectedIncomeDraft, setExpectedIncomeDraft] = useState('');
 
   const reloadLocalPrefs = useCallback(async () => {
     const [p, life, work] = await Promise.all([
@@ -186,12 +176,18 @@ export function FinanceDashboardBento({
     : prefs.expectedIncomeMonthly > 0
       ? fmtMoney(prefs.expectedIncomeMonthly)
       : '—';
-  const incomeSub = ttIncomeOk ? 'ожидаемый (агентство, Teamtracker)' : 'ожидаемый';
+  const incomeSub = ttIncomeOk
+    ? 'ожидаемый (агентство, Teamtracker)'
+    : prefs.expectedIncomeMonthly > 0
+      ? 'ожидаемый (задано вручную)'
+      : useTeamtrackerAgencyIncomeConfigured
+        ? 'ожидаемый (Teamtracker или вручную)'
+        : 'ожидаемый (вручную — тап по блоку)';
   const incomeTiny = ttIncomeOk
     ? `реально (выручка агентства): ${fmtMoney(ttIncomeQ.data.actualRevenue)}`
     : useTeamtrackerAgencyIncomeConfigured && ttIncomeQ.isError
-      ? `реально: ${fmtMoney(overview.monthIncome)} · Teamtracker недоступен`
-      : `реально: ${fmtMoney(overview.monthIncome)}`;
+      ? `факт по счетам: ${fmtMoney(overview.monthIncome)} · TT не ответил — укажите ожидаемый доход тапом`
+      : `факт по счетам: ${fmtMoney(overview.monthIncome)}`;
 
   const lifeLimit = prefs.lifeSpendLimitMonthly;
   const lifeProgress = lifeLimit > 0 ? Math.min(1, txStats.lifeExpense / lifeLimit) : 0;
@@ -208,25 +204,6 @@ export function FinanceDashboardBento({
     const lines = picked.length > 0 ? picked : rootCategories.slice(0, 4);
     return overview.budgetLines.filter((bl) => lines.some((c) => c.id === bl.id));
   }, [overview.budgetLines, prefs.pinnedCategoryIds, rootCategories]);
-
-  const goalTrackerRows = useMemo(() => {
-    const out: { id: string; title: string; imageUri?: string | null; tag: string }[] = [];
-    for (const sp of SPHERES) {
-      const card = annualDoc.spheres[sp].cards[0];
-      if (card) {
-        out.push({
-          id: `${sp}-${card.id}`,
-          title: card.title,
-          imageUri: card.imageUri,
-          tag: ANNUAL_SPHERE_TITLE[sp],
-        });
-      }
-    }
-    for (const g of annualDoc.generalGoals) {
-      out.push({ id: `g-${g.id}`, title: g.title, imageUri: g.imageUri, tag: 'Общая цель' });
-    }
-    return out;
-  }, [annualDoc]);
 
   const accountsByBucket = useMemo(() => {
     const m: Record<'available' | 'frozen' | 'reserve', FinanceAccount[]> = {
@@ -288,15 +265,25 @@ export function FinanceDashboardBento({
     };
   }, [chartRowsAsc, chartTab, brand.primary]);
 
+  const workSetDonut = useMemo(
+    () => new Set(workNames.map((n) => n.trim().toLowerCase()).filter(Boolean)),
+    [workNames]
+  );
+
+  const donutMonthCount = expenseAnalytics?.monthKeys?.length ?? 0;
+  const donutLastIdx = Math.max(0, donutMonthCount - 1);
+  const donutIdxSafe =
+    donutMonthCount === 0 ? 0 : donutMonthIdx < 0 ? donutLastIdx : Math.min(Math.max(0, donutMonthIdx), donutLastIdx);
+  const donutMonthLabel =
+    expenseAnalytics?.monthLabels?.[donutIdxSafe] ??
+    (donutMonthCount ? expenseAnalytics!.monthKeys[donutIdxSafe] : '');
+
   const donutSegments = useMemo((): DonutSegment[] => {
     if (!expenseAnalytics?.monthKeys?.length) return [];
-    const now = new Date();
-    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    let idx = expenseAnalytics.monthKeys.indexOf(key);
-    if (idx < 0) idx = expenseAnalytics.monthKeys.length - 1;
+    const idx = donutIdxSafe;
     const rows = expenseAnalytics.categorySeries
       .map((s) => ({ label: s.category, value: s.amounts[idx] ?? 0 }))
-      .filter((r) => r.value > 0)
+      .filter((r) => r.value > 0 && !workSetDonut.has(r.label.trim().toLowerCase()))
       .sort((a, b) => b.value - a.value);
     const top = rows.slice(0, 6);
     const restSum = rows.slice(6).reduce((a, r) => a + r.value, 0);
@@ -313,7 +300,20 @@ export function FinanceDashboardBento({
       });
     }
     return out;
-  }, [expenseAnalytics]);
+  }, [expenseAnalytics, donutIdxSafe, workSetDonut]);
+
+  const lifeSpendByCategory = useMemo(() => {
+    const lifeSet = new Set(lifeNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
+    const m = new Map<string, number>();
+    for (const t of overview.transactionsThisMonth) {
+      if (t.type !== 'expense') continue;
+      const key = (t.category ?? '').trim();
+      if (!key) continue;
+      if (!lifeSet.has(key.toLowerCase())) continue;
+      m.set(key, (m.get(key) ?? 0) + t.amount);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [overview.transactionsThisMonth, lifeNames]);
 
   const hasExpensePlan = prefs.plannedFixedMonthlyRub > 0 || prefs.plannedDailyAllowanceRub > 0;
   const expectedExpenseMonthly = useMemo(
@@ -394,8 +394,10 @@ export function FinanceDashboardBento({
   const signedCapital = chartTab === 'capital';
 
   const chartBody =
-    chartRowsAsc.length < 2 ? (
-      <Text style={{ color: colors.textMuted, fontSize: 13 }}>Нужна история снимков по месяцам (импорт / данные).</Text>
+    chartRowsAsc.length < 1 ? (
+      <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+        Добавьте снимок месяца во вкладке «История» — график подтянет доход и расход.
+      </Text>
     ) : chartViz === 'line' ? (
       <FinancePremiumChart
         values={chartSeries.values}
@@ -470,7 +472,15 @@ export function FinanceDashboardBento({
           'cap'
         )}
         {metricTileShell(
-          <>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              setExpectedIncomeDraft(prefs.expectedIncomeMonthly > 0 ? String(Math.round(prefs.expectedIncomeMonthly)) : '');
+              setExpectedIncomeModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Задать ожидаемый доход в месяц"
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>ДОХОД</Text>
               <Ionicons name="trending-up-outline" size={20} color="#4ADE80" />
@@ -488,10 +498,11 @@ export function FinanceDashboardBento({
             >
               {expectedIncomeDisplay}
             </Text>
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }} numberOfLines={3}>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }} numberOfLines={4}>
               {incomeSub} · {incomeTiny}
             </Text>
-          </>,
+            <Text style={{ fontSize: 10, fontWeight: '800', color: brand.primary, marginTop: 6 }}>Тап — ожидаемый доход, ₽</Text>
+          </Pressable>,
           'inc'
         )}
         {metricTileShell(
@@ -551,7 +562,7 @@ export function FinanceDashboardBento({
         )}
       </View>
 
-      <FinanceSophiaHero />
+      <FinanceSophiaHero fullWidth />
 
       {desktopBento ? (
         <>
@@ -582,55 +593,123 @@ export function FinanceDashboardBento({
               <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.6, marginBottom: 6 }}>
                 ТРАТЫ ПО КАТЕГОРИЯМ
               </Text>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 8 }}>Текущий месяц</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>
+                Только «на жизнь» — рабочие категории из графика исключены.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    setDonutMonthIdx((prev) => {
+                      const cur = prev < 0 ? donutLastIdx : prev;
+                      return Math.max(0, cur - 1);
+                    });
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  }}
+                  disabled={donutMonthCount === 0 || donutIdxSafe <= 0}
+                  hitSlop={8}
+                  style={{ opacity: donutMonthCount === 0 || donutIdxSafe <= 0 ? 0.35 : 1 }}
+                >
+                  <Ionicons name="chevron-back" size={22} color="#E9D5FF" />
+                </Pressable>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text, textAlign: 'center', flex: 1 }} numberOfLines={1}>
+                  {donutMonthLabel || '—'}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setDonutMonthIdx((prev) => {
+                      const cur = prev < 0 ? donutLastIdx : prev;
+                      return Math.min(donutLastIdx, cur + 1);
+                    });
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  }}
+                  disabled={donutMonthCount === 0 || donutIdxSafe >= donutLastIdx}
+                  hitSlop={8}
+                  style={{ opacity: donutMonthCount === 0 || donutIdxSafe >= donutLastIdx ? 0.35 : 1 }}
+                >
+                  <Ionicons name="chevron-forward" size={22} color="#E9D5FF" />
+                </Pressable>
+              </View>
               {expenseAnalyticsLoading ? <ActivityIndicator color={brand.primary} style={{ marginTop: 24 }} /> : null}
               {!expenseAnalyticsLoading ? (
-                <FinanceExpenseDonut segments={donutSegments} height={268} isLight={isLight} />
+                <FinanceExpenseDonut segments={donutSegments} height={240} isLight={isLight} />
               ) : null}
             </BentoShell>
           </View>
 
           <View style={{ marginTop: colGap }}>
             <BentoShell style={{ padding: 22, borderWidth: 2, borderColor: 'rgba(232,121,249,0.55)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЛИМИТ</Text>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.text, marginTop: 8 }}>Траты «на жизнь»</Text>
-                  <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
-                    Те же категории, что в транзакциях. Нажми значок, чтобы задать лимит.
-                  </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
+                <View style={{ flex: 1, minWidth: 280, flexBasis: desktopBento ? '48%' : '100%' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЛИМИТ</Text>
+                      <Text style={{ fontSize: 22, fontWeight: '900', color: colors.text, marginTop: 8 }}>Траты «на жизнь»</Text>
+                      <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
+                        Те же категории, что в транзакциях. Карандаш — лимит месяца.
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
+                        setLimitModal(true);
+                      }}
+                      hitSlop={10}
+                      style={{ padding: 10, borderRadius: 14, backgroundColor: 'rgba(168,85,247,0.2)' }}
+                      accessibilityLabel="Задать лимит"
+                    >
+                      <Ionicons name="pencil" size={22} color="#E9D5FF" />
+                    </Pressable>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, alignItems: 'baseline' }}>
+                    <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                      {fmtMoney(txStats.lifeExpense)}
+                    </Text>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                      {lifeLimit > 0 ? `из ${fmtMoney(lifeLimit)}` : 'лимит не задан'}
+                    </Text>
+                  </View>
+                  <View style={{ marginTop: 18, height: 22, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                    <LinearGradient
+                      colors={lifeOver ? (['#FB7185', '#F43F5E'] as const) : (['#C084FC', '#9333EA', '#6D28D9'] as const)}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={{
+                        width: `${Math.round(lifeProgress * 100)}%`,
+                        height: '100%',
+                        borderRadius: 12,
+                      }}
+                    />
+                  </View>
                 </View>
-                <Pressable
-                  onPress={() => {
-                    setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
-                    setLimitModal(true);
-                  }}
-                  hitSlop={10}
-                  style={{ padding: 10, borderRadius: 14, backgroundColor: 'rgba(168,85,247,0.2)' }}
-                  accessibilityLabel="Задать лимит"
-                >
-                  <Ionicons name="pencil" size={22} color="#E9D5FF" />
-                </Pressable>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, alignItems: 'baseline' }}>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, fontVariant: ['tabular-nums'] }}>
-                  {fmtMoney(txStats.lifeExpense)}
-                </Text>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
-                  {lifeLimit > 0 ? `из ${fmtMoney(lifeLimit)}` : 'лимит не задан'}
-                </Text>
-              </View>
-              <View style={{ marginTop: 18, height: 22, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' }}>
-                <LinearGradient
-                  colors={lifeOver ? (['#FB7185', '#F43F5E'] as const) : (['#C084FC', '#9333EA', '#6D28D9'] as const)}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={{
-                    width: `${Math.round(lifeProgress * 100)}%`,
-                    height: '100%',
-                    borderRadius: 12,
-                  }}
-                />
+                <View style={{ flex: 1, minWidth: 280, flexBasis: desktopBento ? '48%' : '100%' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.85)', letterSpacing: 1.2 }}>КАТЕГОРИИ</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 6 }}>На жизнь в этом месяце</Text>
+                  {lifeSpendByCategory.length === 0 ? (
+                    <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 10 }}>Нет трат в категориях «жизнь» за месяц.</Text>
+                  ) : (
+                    <ScrollView style={{ maxHeight: 220, marginTop: 12 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                      {lifeSpendByCategory.map(([name, amt]) => (
+                        <View
+                          key={name}
+                          style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            paddingVertical: 8,
+                            borderBottomWidth: StyleSheet.hairlineWidth,
+                            borderBottomColor: colors.border,
+                          }}
+                        >
+                          <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={2}>
+                            {name}
+                          </Text>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                            {fmtMoney(amt)}
+                          </Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
               </View>
             </BentoShell>
           </View>
@@ -709,9 +788,45 @@ export function FinanceDashboardBento({
 
           <View style={{ marginTop: colGap }}>
             <BentoShell style={{ paddingVertical: 18 }}>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 8 }}>Траты по категориям (месяц)</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 4 }}>Траты по категориям</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>
+                Только «на жизнь»; рабочие категории скрыты.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    setDonutMonthIdx((prev) => {
+                      const cur = prev < 0 ? donutLastIdx : prev;
+                      return Math.max(0, cur - 1);
+                    });
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  }}
+                  disabled={donutMonthCount === 0 || donutIdxSafe <= 0}
+                  hitSlop={8}
+                  style={{ opacity: donutMonthCount === 0 || donutIdxSafe <= 0 ? 0.35 : 1 }}
+                >
+                  <Ionicons name="chevron-back" size={22} color="#E9D5FF" />
+                </Pressable>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: colors.text, flex: 1, textAlign: 'center' }} numberOfLines={1}>
+                  {donutMonthLabel || '—'}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setDonutMonthIdx((prev) => {
+                      const cur = prev < 0 ? donutLastIdx : prev;
+                      return Math.min(donutLastIdx, cur + 1);
+                    });
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                  }}
+                  disabled={donutMonthCount === 0 || donutIdxSafe >= donutLastIdx}
+                  hitSlop={8}
+                  style={{ opacity: donutMonthCount === 0 || donutIdxSafe >= donutLastIdx ? 0.35 : 1 }}
+                >
+                  <Ionicons name="chevron-forward" size={22} color="#E9D5FF" />
+                </Pressable>
+              </View>
               {expenseAnalyticsLoading ? <ActivityIndicator color={brand.primary} /> : null}
-              {!expenseAnalyticsLoading ? <FinanceExpenseDonut segments={donutSegments} height={260} isLight={isLight} /> : null}
+              {!expenseAnalyticsLoading ? <FinanceExpenseDonut segments={donutSegments} height={220} isLight={isLight} /> : null}
             </BentoShell>
           </View>
 
@@ -749,6 +864,32 @@ export function FinanceDashboardBento({
                   style={{ width: `${Math.round(lifeProgress * 100)}%`, height: '100%', borderRadius: 10 }}
                 />
               </View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted, marginTop: 16 }}>На жизнь по категориям</Text>
+              {lifeSpendByCategory.length === 0 ? (
+                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 8 }}>Нет трат в категориях «жизнь».</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 200, marginTop: 8 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                  {lifeSpendByCategory.map(([name, amt]) => (
+                    <View
+                      key={name}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        paddingVertical: 8,
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: colors.border,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={2}>
+                        {name}
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                        {fmtMoney(amt)}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </BentoShell>
           </View>
 
@@ -794,86 +935,6 @@ export function FinanceDashboardBento({
         </>
       )}
 
-      <View style={{ marginTop: colGap }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЦЕЛИ</Text>
-          <Pressable onPress={() => router.push('/annual-goals' as Href)}>
-            <Text style={{ fontSize: 14, fontWeight: '900', color: brand.primary }}>Все цели →</Text>
-          </Pressable>
-        </View>
-        {goalTrackerRows.length === 0 ? (
-          <Text style={{ color: colors.textMuted, fontSize: 14, marginBottom: 8 }}>
-            Добавьте годовые цели в разделе «Цели».
-          </Text>
-        ) : (
-          <View style={{ gap: 14 }}>
-            {goalTrackerRows.map((row, gi) => {
-              const st = GOAL_CARD_STYLES[gi % GOAL_CARD_STYLES.length]!;
-              return (
-                <Pressable
-                  key={row.id}
-                  onPress={() => router.push('/annual-goals' as Href)}
-                  style={{
-                    borderRadius: 26,
-                    overflow: 'hidden',
-                    borderWidth: 2,
-                    borderColor: st.border,
-                    backgroundColor: '#0E0E12',
-                    paddingVertical: 18,
-                    paddingHorizontal: 18,
-                  }}
-                >
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={[st.glow0, st.glow1, 'transparent']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                    <View
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 16,
-                        overflow: 'hidden',
-                        backgroundColor: 'rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      {row.imageUri ? (
-                        <Image source={{ uri: row.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-                      ) : (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name="flag-outline" size={26} color="#E9D5FF" />
-                        </View>
-                      )}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.85)', letterSpacing: 1.2 }}>{row.tag}</Text>
-                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#FAFAFC', marginTop: 6 }} numberOfLines={3}>
-                        {row.title}
-                      </Text>
-                      <View style={{ marginTop: 14, height: 10, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                        <LinearGradient
-                          colors={st.bar}
-                          start={{ x: 0, y: 0.5 }}
-                          end={{ x: 1, y: 0.5 }}
-                          style={{ width: '72%', height: '100%', borderRadius: 999 }}
-                        />
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={22} color="rgba(250,250,252,0.45)" />
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 12, lineHeight: 16 }}>
-          Суммы целей и счёт «цель» синхронизируются в следующей итерации.
-        </Text>
-      </View>
-
       <View style={{ marginTop: colGap + 4 }}>
         <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4, marginBottom: 10 }}>СЧЕТА</Text>
         {(['available', 'frozen', 'reserve'] as const).map((bucket) => {
@@ -882,7 +943,7 @@ export function FinanceDashboardBento({
               ? { title: 'Доступные деньги', icon: 'wallet-outline' as const, tint: '#4ADE80' }
               : bucket === 'frozen'
                 ? { title: 'Замороженные активы', icon: 'snow-outline' as const, tint: '#FB7185' }
-                : { title: 'Цели и резервы', icon: 'flag-outline' as const, tint: brand.primary };
+                : { title: 'Резервы и накопления', icon: 'flag-outline' as const, tint: brand.primary };
           const list = accountsByBucket[bucket];
           return (
             <View key={bucket} style={{ marginBottom: colGap + 6 }}>
@@ -890,7 +951,7 @@ export function FinanceDashboardBento({
                 <Ionicons name={meta.icon} size={18} color={meta.tint} />
                 <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text }}>{meta.title}</Text>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                 {list.map((acc) => (
                   <AccountPlaqueTile
                     key={acc.id}
@@ -902,7 +963,7 @@ export function FinanceDashboardBento({
                     pending={updateAccMut.isPending}
                   />
                 ))}
-              </ScrollView>
+              </View>
               <Pressable
                 onPress={() => {
                   setAddAccountBucket(bucket);
@@ -927,8 +988,18 @@ export function FinanceDashboardBento({
       </View>
 
       <Modal visible={limitModal} transparent animationType="fade" onRequestClose={() => setLimitModal(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setLimitModal(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ borderRadius: radius.xl, backgroundColor: colors.surface, padding: spacing.lg }}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setLimitModal(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: radius.xl,
+              backgroundColor: isLight ? colors.surface : '#16161c',
+              padding: spacing.lg,
+              borderWidth: isLight ? 1 : 0,
+              borderColor: colors.border,
+              ...(Platform.OS === 'web' ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } as object) : {}),
+            }}
+          >
             <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 10 }}>Лимит «на жизнь», ₽</Text>
             <TextInput
               value={limitDraft}
@@ -961,50 +1032,120 @@ export function FinanceDashboardBento({
         </Pressable>
       </Modal>
 
-      <Modal visible={pinModal} animationType="slide" transparent onRequestClose={() => setPinModal(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setPinModal(false)} />
-        <View style={{ maxHeight: '70%', backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.lg }}>
-          <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 12 }}>Категории на дашборде</Text>
-          <ScrollView>
-            {rootCategories.map((c) => {
-              const on = prefs.pinnedCategoryIds.includes(c.id);
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => {
-                    setPrefs((prev) => {
-                      const set = new Set(prev.pinnedCategoryIds);
-                      if (set.has(c.id)) set.delete(c.id);
-                      else set.add(c.id);
-                      const pinnedCategoryIds = [...set];
-                      void saveFinanceDashboardPrefs({ pinnedCategoryIds });
-                      return { ...prev, pinnedCategoryIds };
-                    });
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 12,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{c.name}</Text>
-                  <Ionicons name={on ? 'checkbox' : 'square-outline'} size={22} color={on ? brand.primary : colors.textMuted} />
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Pressable onPress={() => setPinModal(false)} style={{ marginTop: 12, padding: 14, alignItems: 'center' }}>
-            <Text style={{ fontWeight: '800', color: brand.primary }}>Готово</Text>
+      <Modal visible={expectedIncomeModal} transparent animationType="fade" onRequestClose={() => setExpectedIncomeModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setExpectedIncomeModal(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: radius.xl,
+              backgroundColor: isLight ? colors.surface : '#16161c',
+              padding: spacing.lg,
+              borderWidth: isLight ? 1 : 0,
+              borderColor: colors.border,
+              ...(Platform.OS === 'web' ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } as object) : {}),
+            }}
+          >
+            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 8 }}>Ожидаемый доход в месяц, ₽</Text>
+            <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 12 }}>
+              Используется в плитке «Доход» и в «Дельте», если Teamtracker недоступен.
+            </Text>
+            <TextInput
+              value={expectedIncomeDraft}
+              onChangeText={setExpectedIncomeDraft}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.lg,
+                padding: 14,
+                fontSize: 17,
+                fontWeight: '800',
+                color: colors.text,
+                marginBottom: 14,
+              }}
+            />
+            <Pressable
+              onPress={() => {
+                const n = Number(expectedIncomeDraft.replace(/\s/g, '').replace(',', '.'));
+                void persistPrefs({ expectedIncomeMonthly: Number.isFinite(n) && n >= 0 ? n : 0 });
+                setExpectedIncomeModal(false);
+              }}
+              style={{ paddingVertical: 14, borderRadius: radius.lg, backgroundColor: brand.primary, alignItems: 'center' }}
+            >
+              <Text style={{ fontWeight: '900', color: '#fff' }}>Сохранить</Text>
+            </Pressable>
           </Pressable>
-        </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={pinModal} animationType="fade" transparent onRequestClose={() => setPinModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setPinModal(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: radius.xl,
+              maxHeight: '78%',
+              backgroundColor: isLight ? colors.surface : '#16161c',
+              padding: spacing.lg,
+              borderWidth: isLight ? 1 : 0,
+              borderColor: colors.border,
+              ...(Platform.OS === 'web' ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } as object) : {}),
+            }}
+          >
+            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 12 }}>Категории на дашборде</Text>
+            <ScrollView style={{ maxHeight: 420 }} nestedScrollEnabled showsVerticalScrollIndicator>
+              {rootCategories.map((c) => {
+                const on = prefs.pinnedCategoryIds.includes(c.id);
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => {
+                      setPrefs((prev) => {
+                        const set = new Set(prev.pinnedCategoryIds);
+                        if (set.has(c.id)) set.delete(c.id);
+                        else set.add(c.id);
+                        const pinnedCategoryIds = [...set];
+                        void saveFinanceDashboardPrefs({ pinnedCategoryIds });
+                        return { ...prev, pinnedCategoryIds };
+                      });
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: 12,
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: colors.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{c.name}</Text>
+                    <Ionicons name={on ? 'checkbox' : 'square-outline'} size={22} color={on ? brand.primary : colors.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable onPress={() => setPinModal(false)} style={{ marginTop: 12, padding: 14, alignItems: 'center' }}>
+              <Text style={{ fontWeight: '800', color: brand.primary }}>Готово</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal visible={addAccountBucket != null} transparent animationType="fade" onRequestClose={() => setAddAccountBucket(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setAddAccountBucket(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ borderRadius: radius.xl, backgroundColor: colors.surface, padding: spacing.lg }}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: spacing.lg }} onPress={() => setAddAccountBucket(null)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: radius.xl,
+              backgroundColor: isLight ? colors.surface : '#16161c',
+              padding: spacing.lg,
+              borderWidth: isLight ? 1 : 0,
+              borderColor: colors.border,
+              ...(Platform.OS === 'web' ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } as object) : {}),
+            }}
+          >
             <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 10 }}>Новый счёт</Text>
             <TextInput
               value={newAccountName}
@@ -1065,7 +1206,8 @@ function AccountPlaqueTile({
   return (
     <View
       style={{
-        width: 168,
+        width: 186,
+        minHeight: 118,
         borderRadius: radius.lg,
         borderWidth: 1,
         borderColor: 'rgba(167,139,250,0.45)',

@@ -70,40 +70,13 @@ function FinancePageGlow({ isLight }: { isLight: boolean }) {
     );
   }
   if (Platform.OS === 'web') {
-    const blur = { filter: 'blur(92px)', WebkitFilter: 'blur(92px)' } as const;
     return (
       <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
-        <View
-          style={{
-            position: 'absolute',
-            width: 620,
-            height: 460,
-            borderRadius: 310,
-            bottom: '-14%',
-            left: '-8%',
-            backgroundColor: 'rgba(123, 92, 255, 0.26)',
-            opacity: 0.75,
-            ...blur,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: 480,
-            height: 420,
-            borderRadius: 240,
-            bottom: '2%',
-            right: '-18%',
-            backgroundColor: 'rgba(167, 139, 250, 0.18)',
-            opacity: 0.65,
-            ...blur,
-          }}
-        />
         <LinearGradient
           pointerEvents="none"
-          colors={['transparent', 'rgba(99, 102, 241, 0.06)', 'transparent']}
-          start={{ x: 0.5, y: 0.35 }}
-          end={{ x: 0.5, y: 1 }}
+          colors={['transparent', 'rgba(30, 27, 40, 0.5)', 'transparent']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 0.45 }}
           style={StyleSheet.absoluteFillObject}
         />
       </View>
@@ -661,18 +634,15 @@ export function FinanceScreen() {
 
             {mainTab === 'history' ? (
               <View style={{ marginTop: spacing.md }}>
-                {overview.snapshots.length === 0 ? (
-                  <Text style={{ color: colors.textMuted, lineHeight: 22 }}>
-                    Снимков нет. После импорта таблицы finance_month_snapshots здесь появится история.
-                  </Text>
-                ) : (
-                  <FinanceMonthHistorySection
-                    rows={monthHistoryRows}
-                    screenInnerWidth={SCREEN_W - padH * 2}
-                    viewMode={historyViewMode}
-                    onViewModeChange={setHistoryViewMode}
-                  />
-                )}
+                <FinanceMonthHistorySection
+                  rows={monthHistoryRows}
+                  screenInnerWidth={SCREEN_W - padH * 2}
+                  viewMode={historyViewMode}
+                  onViewModeChange={setHistoryViewMode}
+                  userId={userId}
+                  onSnapshotsSaved={invalidateFinance}
+                  seedTotalBalance={overview.totalBalance}
+                />
               </View>
             ) : null}
           </>
