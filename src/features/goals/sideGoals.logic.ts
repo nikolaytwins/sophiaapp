@@ -63,6 +63,20 @@ export function normalizeDateKey(raw: string): string | null {
   return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+/** Последняя значимая дата цели (дедлайн): один день или конец периода. */
+export function sideGoalDeadlineKey(g: SideGoalPersisted): string | null {
+  if (g.dateMode === 'single' && g.dateSingle?.trim()) return g.dateSingle.trim();
+  if (g.dateMode === 'range' && g.dateTo?.trim()) return g.dateTo.trim();
+  return null;
+}
+
+/** Есть дата и она не позже `deadlineKey` (включительно), формат YYYY-MM-DD. */
+export function sideGoalDeadlineOnOrBefore(g: SideGoalPersisted, deadlineKey: string): boolean {
+  const k = sideGoalDeadlineKey(g);
+  if (!k) return false;
+  return k <= deadlineKey;
+}
+
 export function formatSideGoalDateCaption(g: SideGoalPersisted): string | null {
   if (g.dateMode === 'single' && g.dateSingle) {
     const [y, m, d] = g.dateSingle.split('-').map(Number);

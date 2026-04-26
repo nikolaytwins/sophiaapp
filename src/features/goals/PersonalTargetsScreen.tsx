@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Modal,
@@ -17,13 +16,8 @@ import { Image } from 'expo-image';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
-import {
-  formatSideGoalDateCaption,
-  normalizeDateKey,
-  sideGoalDatedOutsideYear,
-  sideGoalInCalendarYear,
-  type SideGoalBoardTab,
-} from '@/features/goals/sideGoals.logic';
+import { GoalsNavigatorBento, nearestCutoffForAugust, SideGoalBentoTile } from '@/features/goals/GoalsNavigatorBento';
+import { normalizeDateKey, sideGoalDatedOutsideYear, sideGoalInCalendarYear, type SideGoalBoardTab } from '@/features/goals/sideGoals.logic';
 import { strategyPageConfig, type StrategyGoalsTabDef } from '@/features/strategy/strategy.config';
 import { getSupabase } from '@/lib/supabase';
 import { uploadSideGoalPhotoToSupabase } from '@/services/sideGoalsPhotoUpload';
@@ -35,214 +29,9 @@ import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 import { alertInfo } from '@/shared/lib/confirmAction';
 
-function fmtRub(n: number): string {
-  return new Intl.NumberFormat('ru-RU').format(Math.round(n));
-}
-
 function parseAmount(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(n) ? Math.round(n) : 0;
-}
-
-function formatSideProgressLine(g: SideGoalPersisted): string {
-  const { current, target } = g;
-  if (target <= 1) return current >= target ? 'Выполнено' : 'В работе';
-  if (target >= 100_000) return `${fmtRub(current)} из ${fmtRub(target)} ₽`;
-  return `${current} из ${target}`;
-}
-
-const VISION_PHOTO_SIZE = 124;
-const VISION_PHOTO_GAP = 10;
-
-function SideGoalProgressCard({
-  goal,
-  onEdit,
-  variant = 'default',
-}: {
-  goal: SideGoalPersisted;
-  onEdit: () => void;
-  variant?: 'default' | 'hero';
-}) {
-  const { typography, spacing, colors } = useAppTheme();
-  const pct = Math.min(1, Math.max(0, goal.target > 0 ? goal.current / goal.target : 0));
-  const photos = goal.photoUris ?? [];
-  const hero = variant === 'hero';
-  const photoW = hero ? Math.round(VISION_PHOTO_SIZE * 1.12) : VISION_PHOTO_SIZE;
-  const photoH = Math.round(photoW * 0.92);
-  const dateCap = formatSideGoalDateCaption(goal);
-
-  return (
-    <LinearGradient
-      colors={['rgba(232,121,249,0.55)', 'rgba(139,92,246,0.35)']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ borderRadius: hero ? 26 : 22, padding: 2 }}
-    >
-      <View
-        style={{
-          borderRadius: hero ? 24 : 20,
-          backgroundColor: '#0E0E12',
-          paddingBottom: spacing.lg,
-          overflow: 'hidden',
-        }}
-      >
-        {photos.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              flexDirection: 'row',
-              alignItems: 'stretch',
-              paddingHorizontal: spacing.md,
-              paddingTop: spacing.md,
-              paddingBottom: 4,
-              gap: VISION_PHOTO_GAP,
-            }}
-          >
-            {photos.map((uri, i) => (
-              <View
-                key={`${uri}-${i}`}
-                style={{
-                  width: photoW,
-                  height: photoH,
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.14)',
-                  backgroundColor: 'rgba(0,0,0,0.35)',
-                }}
-              >
-                <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <View
-            style={{
-              marginHorizontal: spacing.md,
-              marginTop: spacing.md,
-              paddingVertical: hero ? 22 : 18,
-              paddingHorizontal: spacing.md,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderStyle: 'dashed',
-              borderColor: 'rgba(255,255,255,0.14)',
-              backgroundColor: 'rgba(255,255,255,0.03)',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
-            }}
-          >
-            <Ionicons name="images-outline" size={22} color="rgba(250,232,255,0.38)" />
-            <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: 'rgba(250,232,255,0.42)', lineHeight: 18 }}>
-              Добавь фото в редактировании — сохраняем в облаке, не пропадут после перезагрузки.
-            </Text>
-          </View>
-        )}
-
-        <View style={{ paddingHorizontal: spacing.lg + 2, paddingTop: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-            <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-              {goal.isHorizon ? (
-                <View
-                  style={{
-                    alignSelf: 'flex-start',
-                    paddingVertical: 3,
-                    paddingHorizontal: 8,
-                    borderRadius: 8,
-                    backgroundColor: 'rgba(251,191,36,0.14)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(251,191,36,0.35)',
-                  }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 0.8, color: 'rgba(253,224,71,0.95)' }}>
-                    ГОРИЗОНТ
-                  </Text>
-                </View>
-              ) : null}
-              {goal.isNearestPinned ? (
-                <View
-                  style={{
-                    alignSelf: 'flex-start',
-                    paddingVertical: 3,
-                    paddingHorizontal: 8,
-                    borderRadius: 8,
-                    backgroundColor: 'rgba(168,85,247,0.2)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(168,85,247,0.45)',
-                  }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 0.8, color: '#E9D5FF' }}>
-                    БЛИЖАЙШАЯ
-                  </Text>
-                </View>
-              ) : null}
-              <Text
-                style={[
-                  typography.title2,
-                  { fontSize: hero ? 20 : 17, fontWeight: '800', color: colors.text },
-                ]}
-              >
-                {goal.title}
-              </Text>
-              {dateCap ? (
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted }}>{dateCap}</Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={() => {
-                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                onEdit();
-              }}
-              accessibilityLabel="Редактировать цель"
-              hitSlop={10}
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: pressed ? 'rgba(232,121,249,0.2)' : 'rgba(255,255,255,0.07)',
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
-              })}
-            >
-              <Ionicons name="create-outline" size={22} color="#E879F9" />
-            </Pressable>
-          </View>
-
-          <Text
-            style={{
-              marginTop: 10,
-              fontSize: hero ? 15 : 14,
-              fontWeight: '700',
-              color: 'rgba(250,232,255,0.72)',
-              fontVariant: ['tabular-nums'],
-            }}
-          >
-            {formatSideProgressLine(goal)}
-          </Text>
-
-          <View
-            style={{
-              marginTop: 14,
-              height: hero ? 18 : 16,
-              borderRadius: 999,
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              overflow: 'hidden',
-            }}
-          >
-            <LinearGradient
-              colors={['#E879F9', '#A855F7']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={{ width: `${Math.round(pct * 1000) / 10}%`, height: '100%', borderRadius: 999 }}
-            />
-          </View>
-        </View>
-      </View>
-    </LinearGradient>
-  );
 }
 
 const BOARD_TABS: { id: SideGoalBoardTab; label: string }[] = [
@@ -457,7 +246,7 @@ function SideGoalsBoardBlock({
 
   const tabIntro =
     boardTab === 'all'
-      ? 'Ниже подряд: ближайшие, год, доска желаний и горизонт. Вкладка оставляет на экране только выбранный раздел.'
+      ? 'Режим «все»: бенто-навигатор — ближайшие сверху, фото-доска в центре, горизонт внизу. Остальные вкладки показывают один раздел.'
       : boardTab === 'nearest'
         ? 'Закреплённые «ближайшие» карточки + Китай и подушка.'
         : boardTab === 'year'
@@ -519,175 +308,132 @@ function SideGoalsBoardBlock({
 
       <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(247,244,250,0.42)', lineHeight: 17 }}>{tabIntro}</Text>
 
-      {boardTab === 'all' || boardTab === 'nearest' ? (
-        <View style={{ gap: spacing.lg }}>
-          {boardTab === 'all' ? (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(168,85,247,0.85)',
-                marginBottom: 2,
-              }}
-            >
-              Ближайшие
-            </Text>
+      {boardTab === 'all' ? (
+        <GoalsNavigatorBento
+          calendarYear={calendarYear}
+          nearestDeadlineCutoffKey={nearestCutoffForAugust(calendarYear)}
+          pinnedGoals={pinnedGoals}
+          yearGoals={yearGoals}
+          wishGoals={wishGoals}
+          horizonGoals={horizonGoals}
+          otherYearGoals={otherYearGoals}
+          nearestSlot={nearestSlot}
+          onEditGoal={setEditId}
+        />
+      ) : (
+        <>
+          {boardTab === 'nearest' ? (
+            <View style={{ gap: spacing.lg }}>
+              {nearestSlot}
+              {pinnedGoals.length === 0 ? (
+                <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
+                  Пока нет закреплённых целей. Нажми «Добавить цель» и включи «Ближайшая цель».
+                </Text>
+              ) : (
+                pinnedGoals.map((g) => (
+                  <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />
+                ))
+              )}
+            </View>
           ) : null}
-          {nearestSlot}
-          {pinnedGoals.length === 0 ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
-              Пока нет закреплённых целей. Нажми «Добавить цель» и включи «Ближайшая цель».
-            </Text>
-          ) : (
-            pinnedGoals.map((g) => <SideGoalProgressCard key={g.id} goal={g} variant="hero" onEdit={() => setEditId(g.id)} />)
-          )}
-        </View>
-      ) : null}
 
-      {boardTab === 'all' || boardTab === 'year' ? (
-        <View style={{ gap: spacing.lg }}>
-          {boardTab === 'all' ? (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(168,85,247,0.85)',
-                marginBottom: 2,
-              }}
-            >
-              {config.boardYearSubheading} · {calendarYear}
-            </Text>
-          ) : (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(251,191,36,0.75)',
-                marginBottom: 2,
-              }}
-            >
-              {config.boardYearSubheading} · {calendarYear}
-            </Text>
-          )}
-          {yearGoals.length === 0 ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
-              Пока пусто — добавь цель с датой в этом году.
-            </Text>
-          ) : (
-            yearGoals.map((g) => <SideGoalProgressCard key={g.id} goal={g} onEdit={() => setEditId(g.id)} />)
-          )}
-          {otherYearGoals.length > 0 ? (
-            <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
+          {boardTab === 'year' ? (
+            <View style={{ gap: spacing.lg }}>
               <Text
                 style={{
                   fontSize: 11,
                   lineHeight: 15,
                   fontWeight: '700',
-                  letterSpacing: 1.1,
+                  letterSpacing: 1.2,
                   textTransform: 'uppercase',
-                  color: 'rgba(247,244,250,0.4)',
+                  color: 'rgba(251,191,36,0.75)',
+                  marginBottom: 2,
                 }}
               >
-                Другие года
+                {config.boardYearSubheading} · {calendarYear}
               </Text>
-              {otherYearGoals.map((g) => (
-                <SideGoalProgressCard key={g.id} goal={g} onEdit={() => setEditId(g.id)} />
-              ))}
+              {yearGoals.length === 0 ? (
+                <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
+                  Пока пусто — добавь цель с датой в этом году.
+                </Text>
+              ) : (
+                yearGoals.map((g) => <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />)
+              )}
+              {otherYearGoals.length > 0 ? (
+                <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      lineHeight: 15,
+                      fontWeight: '700',
+                      letterSpacing: 1.1,
+                      textTransform: 'uppercase',
+                      color: 'rgba(247,244,250,0.4)',
+                    }}
+                  >
+                    Другие года
+                  </Text>
+                  {otherYearGoals.map((g) => (
+                    <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : null}
-        </View>
-      ) : null}
 
-      {boardTab === 'all' || boardTab === 'wish' ? (
-        <View style={{ gap: spacing.lg }}>
-          {boardTab === 'all' ? (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(168,85,247,0.85)',
-                marginBottom: 2,
-              }}
-            >
-              Доска желаний · без даты
-            </Text>
-          ) : (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(251,191,36,0.75)',
-                marginBottom: 2,
-              }}
-            >
-              Без даты
-            </Text>
-          )}
-          {wishGoals.length === 0 ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
-              Пока пусто — добавь цель и оставь режим даты «без даты».
-            </Text>
-          ) : (
-            wishGoals.map((g) => <SideGoalProgressCard key={g.id} goal={g} onEdit={() => setEditId(g.id)} />)
-          )}
-        </View>
-      ) : null}
+          {boardTab === 'wish' ? (
+            <View style={{ gap: spacing.lg }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  lineHeight: 15,
+                  fontWeight: '700',
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                  color: 'rgba(251,191,36,0.75)',
+                  marginBottom: 2,
+                }}
+              >
+                Без даты
+              </Text>
+              {wishGoals.length === 0 ? (
+                <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
+                  Пока пусто — добавь цель и оставь режим даты «без даты».
+                </Text>
+              ) : (
+                wishGoals.map((g) => <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />)
+              )}
+            </View>
+          ) : null}
 
-      {boardTab === 'all' || boardTab === 'horizon' ? (
-        <View style={{ gap: spacing.lg }}>
-          {boardTab === 'all' ? (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(168,85,247,0.85)',
-                marginBottom: 2,
-              }}
-            >
-              {config.boardHorizonSubheading}
-            </Text>
-          ) : (
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(251,191,36,0.75)',
-                marginBottom: 2,
-              }}
-            >
-              {config.boardHorizonSubheading}
-            </Text>
-          )}
-          {horizonGoals.length === 0 ? (
-            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
-              Пока пусто — добавь цель и включи «На горизонте».
-            </Text>
-          ) : (
-            horizonGoals.map((g) => <SideGoalProgressCard key={g.id} goal={g} onEdit={() => setEditId(g.id)} />)
-          )}
-        </View>
-      ) : null}
+          {boardTab === 'horizon' ? (
+            <View style={{ gap: spacing.lg }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  lineHeight: 15,
+                  fontWeight: '700',
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                  color: 'rgba(251,191,36,0.75)',
+                  marginBottom: 2,
+                }}
+              >
+                {config.boardHorizonSubheading}
+              </Text>
+              {horizonGoals.length === 0 ? (
+                <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
+                  Пока пусто — добавь цель и включи «На горизонте».
+                </Text>
+              ) : (
+                horizonGoals.map((g) => (
+                  <SideGoalBentoTile key={g.id} goal={g} size="xlarge" onEdit={() => setEditId(g.id)} />
+                ))
+              )}
+            </View>
+          ) : null}
+        </>
+      )}
 
       <Pressable
         onPress={() => openAddForTab(boardTab)}
