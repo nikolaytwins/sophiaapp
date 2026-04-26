@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,11 +38,13 @@ import { ANNUAL_SPHERE_TITLE, type AnnualSphere } from '@/features/goals/annualG
 import { useAnnualGoalsStore } from '@/stores/annualGoals.store';
 import { WEB_NAV_LG_MIN } from '@/navigation/navConstants';
 import { useAppTheme } from '@/theme';
+import type { DonutSegment } from '@/features/finance/FinanceExpenseDonut';
+import { FinanceExpenseDonut } from '@/features/finance/FinanceExpenseDonut';
+import { FinanceMonthBarChart } from '@/features/finance/FinanceMonthBarChart';
 import { FinancePremiumChart } from '@/features/finance/FinancePremiumChart';
+import { FinanceSophiaHero } from '@/features/finance/FinanceSophiaHero';
 
 import type { EnrichedMonthRow } from '@/features/finance/FinanceMonthHistoryViews';
-
-const FINANCE_HERO_IMAGE = require('../../assets/images/finance-hero-sophia.png');
 
 const SPHERES: AnnualSphere[] = ['relationships', 'energy', 'work'];
 
@@ -50,6 +53,16 @@ function fmtMoney(n: number) {
 }
 
 type ChartTab = 'income' | 'expense' | 'capital';
+type ChartViz = 'line' | 'bars';
+
+const DONUT_PALETTE = ['#A855F7', '#C084FC', '#7C3AED', '#E879F9', '#38BDF8', '#34D399', '#FBBF24'] as const;
+
+const GOAL_CARD_STYLES = [
+  { border: 'rgba(232,121,249,0.75)', glow0: 'rgba(168,85,247,0.5)', glow1: 'rgba(232,121,249,0.12)', bar: ['#E879F9', '#A855F7'] as const },
+  { border: 'rgba(167,139,250,0.7)', glow0: 'rgba(139,92,246,0.45)', glow1: 'rgba(232,121,249,0.1)', bar: ['#C084FC', '#7C3AED'] as const },
+  { border: 'rgba(56,189,248,0.55)', glow0: 'rgba(56,189,248,0.35)', glow1: 'rgba(167,139,250,0.08)', bar: ['#38BDF8', '#A855F7'] as const },
+  { border: 'rgba(52,211,153,0.55)', glow0: 'rgba(52,211,153,0.35)', glow1: 'rgba(167,139,250,0.08)', bar: ['#34D399', '#22C55E'] as const },
+] as const;
 
 /** Карточка бенто в духе календаря: стекло, фиолетовая кайма, мягкая тень. */
 function BentoShell({
@@ -87,65 +100,6 @@ function BentoShell({
   return <View style={[shell, style]}>{children}</View>;
 }
 
-/** Компактная метрика в правой колонке бенто (веб). */
-function SlimMetricCard({
-  icon,
-  tint,
-  label,
-  value,
-  hint,
-  link,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  tint: string;
-  label: string;
-  value: string;
-  hint?: string;
-  link?: { label: string; onPress: () => void };
-}) {
-  const { colors, brand } = useAppTheme();
-  return (
-    <BentoShell style={{ padding: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 13,
-            backgroundColor: tint,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name={icon} size={20} color="#FAFAFC" />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.2 }}>{label}</Text>
-          <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text, marginTop: 4 }} numberOfLines={1}>
-            {value}
-          </Text>
-          {hint ? (
-            <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textMuted, marginTop: 4 }} numberOfLines={2}>
-              {hint}
-            </Text>
-          ) : null}
-          {link ? (
-            <Pressable
-              onPress={() => {
-                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                link.onPress();
-              }}
-              style={{ marginTop: 6 }}
-            >
-              <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 11 }}>{link.label}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-    </BentoShell>
-  );
-}
-
 type Props = {
   overview: FinanceOverview;
   userId: string;
@@ -159,17 +113,16 @@ export function FinanceDashboardBento({
   overview,
   userId,
   monthHistoryRows,
-  expenseAnalytics: _expenseAnalytics,
+  expenseAnalytics,
   expenseAnalyticsLoading,
   onRefresh,
 }: Props) {
-  const { colors, typography, spacing, radius, brand, isLight } = useAppTheme();
+  const { colors, spacing, radius, brand, isLight } = useAppTheme();
   const router = useRouter();
   const qc = useQueryClient();
   const { width: winW } = useWindowDimensions();
   const colGap = 16;
   const desktopBento = Platform.OS === 'web' && winW >= WEB_NAV_LG_MIN;
-  const tileMinW = Math.min(360, (winW - spacing.xl * 2 - colGap) / 2);
 
   const [prefs, setPrefs] = useState<FinanceDashboardPrefs>({ ...DEFAULT_FINANCE_DASHBOARD_PREFS });
   const [lifeNames, setLifeNames] = useState<string[]>([]);
@@ -178,8 +131,10 @@ export function FinanceDashboardBento({
   const [limitDraft, setLimitDraft] = useState('');
   const [pinModal, setPinModal] = useState(false);
   const [chartTab, setChartTab] = useState<ChartTab>('income');
+  const [chartViz, setChartViz] = useState<ChartViz>('line');
   const [addAccountBucket, setAddAccountBucket] = useState<'available' | 'frozen' | 'reserve' | null>(null);
   const [newAccountName, setNewAccountName] = useState('');
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
 
   const annualDoc = useAnnualGoalsStore((s) => s.doc);
 
@@ -333,6 +288,33 @@ export function FinanceDashboardBento({
     };
   }, [chartRowsAsc, chartTab, brand.primary]);
 
+  const donutSegments = useMemo((): DonutSegment[] => {
+    if (!expenseAnalytics?.monthKeys?.length) return [];
+    const now = new Date();
+    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let idx = expenseAnalytics.monthKeys.indexOf(key);
+    if (idx < 0) idx = expenseAnalytics.monthKeys.length - 1;
+    const rows = expenseAnalytics.categorySeries
+      .map((s) => ({ label: s.category, value: s.amounts[idx] ?? 0 }))
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const top = rows.slice(0, 6);
+    const restSum = rows.slice(6).reduce((a, r) => a + r.value, 0);
+    const out: DonutSegment[] = top.map((r, i) => ({
+      label: r.label,
+      value: r.value,
+      color: DONUT_PALETTE[i % DONUT_PALETTE.length]!,
+    }));
+    if (restSum > 0) {
+      out.push({
+        label: 'Прочее',
+        value: restSum,
+        color: DONUT_PALETTE[out.length % DONUT_PALETTE.length]!,
+      });
+    }
+    return out;
+  }, [expenseAnalytics]);
+
   const hasExpensePlan = prefs.plannedFixedMonthlyRub > 0 || prefs.plannedDailyAllowanceRub > 0;
   const expectedExpenseMonthly = useMemo(
     () => computeExpectedMonthlyExpense(prefs.plannedFixedMonthlyRub, prefs.plannedDailyAllowanceRub),
@@ -343,59 +325,6 @@ export function FinanceDashboardBento({
 
   const expectedDelta = expectedIncomeForDelta - expectedExpenseMonthly;
   const actualDelta = overview.monthIncome - overview.monthExpense;
-
-  const statCard = (
-    icon: keyof typeof Ionicons.glyphMap,
-    iconBg: string,
-    footer: string,
-    big: string,
-    sub?: string,
-    tiny?: string,
-    planLink?: { label: string; onPress: () => void }
-  ) => (
-    <BentoShell style={{ width: tileMinW, flexGrow: 1, minWidth: 156 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: iconBg,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name={icon} size={22} color="#fff" />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.text, letterSpacing: -0.5 }} numberOfLines={2}>
-            {big}
-          </Text>
-          {sub ? (
-            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted, marginTop: 4 }}>{sub}</Text>
-          ) : null}
-          {tiny ? (
-            <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(148,163,184,0.95)', marginTop: 6 }}>{tiny}</Text>
-          ) : null}
-          {planLink ? (
-            <Pressable
-              onPress={() => {
-                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                planLink.onPress();
-              }}
-              hitSlop={6}
-              style={{ marginTop: 8, alignSelf: 'flex-start' }}
-            >
-              <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 12 }}>{planLink.label}</Text>
-            </Pressable>
-          ) : null}
-          <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 10, letterSpacing: 0.6 }}>
-            {footer}
-          </Text>
-        </View>
-      </View>
-    </BentoShell>
-  );
 
   const chartTabs = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -430,439 +359,523 @@ export function FinanceDashboardBento({
     </View>
   );
 
+  const chartVizTabs = (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10, marginTop: 4 }}>
+      {(
+        [
+          { id: 'line' as const, label: 'Линия' },
+          { id: 'bars' as const, label: 'Столбцы' },
+        ] as const
+      ).map((t) => {
+        const on = chartViz === t.id;
+        return (
+          <Pressable
+            key={t.id}
+            onPress={() => {
+              setChartViz(t.id);
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+            }}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: on ? 'rgba(167,139,250,0.55)' : colors.border,
+              backgroundColor: on ? 'rgba(168,85,247,0.18)' : 'transparent',
+            }}
+          >
+            <Text style={{ fontWeight: '800', fontSize: 12, color: on ? '#E9D5FF' : colors.textMuted }}>{t.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const signedCapital = chartTab === 'capital';
+
   const chartBody =
     chartRowsAsc.length < 2 ? (
       <Text style={{ color: colors.textMuted, fontSize: 13 }}>Нужна история снимков по месяцам (импорт / данные).</Text>
-    ) : (
+    ) : chartViz === 'line' ? (
       <FinancePremiumChart
         values={chartSeries.values}
         labels={chartSeries.labels}
         color={chartSeries.color}
-        height={220}
+        height={240}
         isLight={isLight}
+        signedDiverging={signedCapital}
+      />
+    ) : (
+      <FinanceMonthBarChart
+        values={chartSeries.values}
+        labels={chartSeries.labels}
+        height={240}
+        isLight={isLight}
+        signedFromZero={signedCapital}
       />
     );
 
+  const deltaPositive = expectedDelta >= 0;
+
+  const metricTileShell = (child: ReactNode, key: string) => (
+    <BentoShell
+      key={key}
+      style={{
+        flex: desktopBento ? 1 : undefined,
+        flexBasis: desktopBento ? '22%' : '47%',
+        minWidth: desktopBento ? 120 : 148,
+        maxWidth: desktopBento ? undefined : '48%',
+        paddingVertical: 18,
+        paddingHorizontal: 16,
+        minHeight: desktopBento ? 168 : 156,
+      }}
+    >
+      {child}
+    </BentoShell>
+  );
+
   return (
-    <View style={{ marginTop: spacing.md }}>
-      {desktopBento ? (
-        <View style={{ flexDirection: 'row', gap: colGap, alignItems: 'stretch', marginBottom: colGap }}>
-          <BentoShell style={{ flex: 1.85, minWidth: 0, minHeight: 200 }}>
-            <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 2.2 }}>КАПИТАЛ</Text>
+    <View
+      style={{
+        marginTop: spacing.md,
+        marginHorizontal: isLight ? 0 : -spacing.xl,
+        paddingHorizontal: isLight ? 0 : spacing.xl,
+        paddingBottom: spacing.md,
+        backgroundColor: isLight ? undefined : '#000000',
+      }}
+    >
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: colGap }}>
+        {metricTileShell(
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>КАПИТАЛ</Text>
+              <Ionicons name="wallet-outline" size={20} color="rgba(167,139,250,0.9)" />
+            </View>
             <Text
               style={{
-                fontSize: 40,
+                marginTop: 10,
+                fontSize: desktopBento ? 26 : 22,
                 fontWeight: '900',
                 color: colors.text,
-                marginTop: 10,
-                letterSpacing: -1.2,
+                letterSpacing: -0.8,
+                fontVariant: ['tabular-nums'],
               }}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {fmtMoney(overview.totalBalance)}
             </Text>
-            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 10 }}>По всем счетам · руб.</Text>
-          </BentoShell>
-          <View style={{ flex: 1, minWidth: 220, gap: colGap }}>
-            <SlimMetricCard
-              icon="trending-up-outline"
-              tint="rgba(74,222,128,0.42)"
-              label="ДОХОД (ОЖИД.)"
-              value={expectedIncomeDisplay}
-              hint={incomeTiny}
-            />
-            <SlimMetricCard
-              icon="trending-down-outline"
-              tint="rgba(251,113,133,0.42)"
-              label="РАСХОДЫ (ПЛАН)"
-              value={expectedExpenseDisplay}
-              hint={`реально: ${fmtMoney(overview.monthExpense)}`}
-              link={{ label: 'План расходов →', onPress: () => router.push('/finance-planned-expenses' as Href) }}
-            />
-            <SlimMetricCard
-              icon="analytics-outline"
-              tint="rgba(99,102,241,0.45)"
-              label="ДЕЛЬТА (ОЖИД.)"
-              value={fmtMoney(expectedDelta)}
-              hint={`факт: ${fmtMoney(actualDelta)}`}
-            />
-          </View>
-        </View>
-      ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: colGap }}>
-          {statCard(
-            'wallet-outline',
-            'rgba(168,85,247,0.35)',
-            'Текущий баланс',
-            fmtMoney(overview.totalBalance),
-            undefined,
-            undefined
-          )}
-          {statCard(
-            'trending-up-outline',
-            'rgba(74,222,128,0.35)',
-            'Доход за месяц',
-            expectedIncomeDisplay,
-            incomeSub,
-            incomeTiny
-          )}
-          {statCard(
-            'trending-down-outline',
-            'rgba(251,113,133,0.35)',
-            'Расходы за месяц',
-            expectedExpenseDisplay,
-            'ожидаемые',
-            `реально: ${fmtMoney(overview.monthExpense)}`,
-            {
-              label: 'План расходов →',
-              onPress: () => router.push('/finance-planned-expenses' as Href),
-            }
-          )}
-          {statCard(
-            'analytics-outline',
-            'rgba(99,102,241,0.4)',
-            'Дельта (ожид.)',
-            fmtMoney(expectedDelta),
-            'ожидаемый доход − ожидаемые расходы',
-            `факт: доход − расход = ${fmtMoney(actualDelta)}`
-          )}
-        </View>
-      )}
-
-      <View style={{ marginTop: colGap }}>
-        <BentoShell>
-          <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 2.2, marginBottom: 8 }}>АССИСТЕНТ</Text>
-          <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-            <View
+            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8 }}>По всем счетам · ₽</Text>
+          </>,
+          'cap'
+        )}
+        {metricTileShell(
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>ДОХОД</Text>
+              <Ionicons name="trending-up-outline" size={20} color="#4ADE80" />
+            </View>
+            <Text
               style={{
-                width: 72,
-                height: 72,
-                borderRadius: 18,
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: isLight ? 'rgba(15,17,24,0.1)' : 'rgba(157,107,255,0.35)',
-                ...(Platform.OS === 'web' && !isLight
-                  ? ({ boxShadow: '0 0 28px rgba(123,92,255,0.35)' } as object)
-                  : {}),
+                marginTop: 10,
+                fontSize: desktopBento ? 26 : 22,
+                fontWeight: '900',
+                color: '#BBF7D0',
+                letterSpacing: -0.8,
+                fontVariant: ['tabular-nums'],
               }}
+              numberOfLines={1}
             >
-              <Image source={FINANCE_HERO_IMAGE} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+              {expectedIncomeDisplay}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }} numberOfLines={3}>
+              {incomeSub} · {incomeTiny}
+            </Text>
+          </>,
+          'inc'
+        )}
+        {metricTileShell(
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>РАСХОДЫ</Text>
+              <Ionicons name="trending-down-outline" size={20} color="#FB7185" />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>София</Text>
-              <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 6, lineHeight: 19 }}>
-                Разберём доходы и расходы вместе: цели, лимиты и что поменять в первую очередь.
-              </Text>
-              <Pressable
-                onPress={() => {
-                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                  router.push('/annual-goals' as Href);
-                }}
-                style={{ marginTop: 10, alignSelf: 'flex-start' }}
-              >
-                <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 14 }}>Перейти к целям →</Text>
-              </Pressable>
+            <Text
+              style={{
+                marginTop: 10,
+                fontSize: desktopBento ? 26 : 22,
+                fontWeight: '900',
+                color: '#FECDD3',
+                letterSpacing: -0.8,
+                fontVariant: ['tabular-nums'],
+              }}
+              numberOfLines={1}
+            >
+              {expectedExpenseDisplay}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>Факт: {fmtMoney(overview.monthExpense)}</Text>
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                router.push('/finance-planned-expenses' as Href);
+              }}
+              style={{ marginTop: 8 }}
+            >
+              <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 12 }}>План расходов →</Text>
+            </Pressable>
+          </>,
+          'exp'
+        )}
+        {metricTileShell(
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>ДЕЛЬТА</Text>
+              <Ionicons name="analytics-outline" size={20} color={deltaPositive ? '#4ADE80' : '#FB7185'} />
             </View>
-          </View>
-        </BentoShell>
+            <Text
+              style={{
+                marginTop: 10,
+                fontSize: desktopBento ? 26 : 22,
+                fontWeight: '900',
+                color: deltaPositive ? '#BBF7D0' : '#FECDD3',
+                letterSpacing: -0.8,
+                fontVariant: ['tabular-nums'],
+              }}
+              numberOfLines={1}
+            >
+              {fmtMoney(expectedDelta)}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>Факт: {fmtMoney(actualDelta)}</Text>
+          </>,
+          'delta'
+        )}
       </View>
 
+      <FinanceSophiaHero />
+
       {desktopBento ? (
-        <View style={{ marginTop: colGap, flexDirection: 'row', gap: colGap, alignItems: 'stretch' }}>
-          <BentoShell style={{ flex: 1.7, minWidth: 0 }}>
-            <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 2.2, marginBottom: 8 }}>
-              ДИНАМИКА ПО МЕСЯЦАМ
-            </Text>
-            <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text, marginBottom: 10 }}>График</Text>
-            {chartTabs}
-            {chartBody}
-            {chartTab === 'expense' && expenseAnalyticsLoading ? (
-              <ActivityIndicator style={{ marginTop: 8 }} color={brand.primary} />
-            ) : null}
-            {chartTab === 'expense' && _expenseAnalytics && !expenseAnalyticsLoading ? (
-              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>
-                Детализация расходов по категориям — вкладка «Категории».
-              </Text>
-            ) : null}
-          </BentoShell>
-          <View style={{ flex: 1, minWidth: 260, gap: colGap }}>
-            <BentoShell>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '900', color: colors.text }}>Лимит трат на месяц</Text>
-                  <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
-                    Только «на жизнь» — те же категории, что в транзакциях
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
-                    setLimitModal(true);
-                  }}
-                  hitSlop={10}
-                  style={{ padding: 8, opacity: 0.45 }}
-                  accessibilityLabel="Задать лимит"
-                >
-                  <Ionicons name="pencil" size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View
-                  style={{
-                    height: 14,
-                    borderRadius: 8,
-                    backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.08)',
-                    overflow: 'hidden',
-                    borderWidth: lifeOver ? 1 : 0,
-                    borderColor: lifeOver ? 'rgba(251,113,133,0.85)' : 'transparent',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: `${Math.round(lifeProgress * 100)}%`,
-                      height: '100%',
-                      borderRadius: 8,
-                      backgroundColor: lifeOver ? '#FB7185' : '#4ADE80',
-                      ...(lifeOver && Platform.OS === 'web'
-                        ? ({ boxShadow: '0 0 18px rgba(251,113,133,0.55)' } as object)
-                        : {}),
-                    }}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>{fmtMoney(txStats.lifeExpense)}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>
-                    {lifeLimit > 0 ? fmtMoney(lifeLimit) : 'лимит не задан'}
-                  </Text>
-                </View>
-              </View>
-            </BentoShell>
-            <BentoShell>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={{ fontSize: 14, fontWeight: '900', color: colors.text }}>Ключевые категории</Text>
-                <Pressable onPress={() => setPinModal(true)} hitSlop={8}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: brand.primary }}>Настроить</Text>
-                </Pressable>
-              </View>
-              {pinnedLines.length === 0 ? (
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>Нет категорий в бюджете.</Text>
-              ) : (
-                pinnedLines.map((line) => (
-                  <View key={line.id} style={{ marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }} numberOfLines={1}>
-                        {line.title}
-                      </Text>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
-                        {fmtMoney(line.spent)}
-                        {line.expectedMonthly > 0 ? ` / ${fmtMoney(line.expectedMonthly)}` : ''}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        height: 8,
-                        borderRadius: 6,
-                        backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: `${Math.round(Math.min(1, line.progress01) * 100)}%`,
-                          height: '100%',
-                          borderRadius: 6,
-                          backgroundColor: line.overLimit ? '#FB7185' : brand.primarySoft,
-                        }}
-                      />
-                    </View>
-                  </View>
-                ))
-              )}
-            </BentoShell>
-          </View>
-        </View>
-      ) : (
         <>
-          <View style={{ marginTop: colGap }}>
-            <BentoShell>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Лимит трат на месяц</Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                    Только «на жизнь» — те же категории, что в транзакциях
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
-                    setLimitModal(true);
-                  }}
-                  hitSlop={10}
-                  style={{ padding: 8, opacity: 0.45 }}
-                  accessibilityLabel="Задать лимит"
-                >
-                  <Ionicons name="pencil" size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View
-                  style={{
-                    height: 14,
-                    borderRadius: 8,
-                    backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.08)',
-                    overflow: 'hidden',
-                    borderWidth: lifeOver ? 1 : 0,
-                    borderColor: lifeOver ? 'rgba(251,113,133,0.85)' : 'transparent',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: `${Math.round(lifeProgress * 100)}%`,
-                      height: '100%',
-                      borderRadius: 8,
-                      backgroundColor: lifeOver ? '#FB7185' : '#4ADE80',
-                      ...(lifeOver && Platform.OS === 'web'
-                        ? ({ boxShadow: '0 0 18px rgba(251,113,133,0.55)' } as object)
-                        : {}),
-                    }}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>{fmtMoney(txStats.lifeExpense)}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>
-                    {lifeLimit > 0 ? fmtMoney(lifeLimit) : 'лимит не задан'}
-                  </Text>
-                </View>
-              </View>
-            </BentoShell>
-          </View>
-
-          <View style={{ marginTop: colGap }}>
-            <BentoShell>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text }}>Траты по ключевым категориям</Text>
-                <Pressable onPress={() => setPinModal(true)} hitSlop={8}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: brand.primary }}>Настроить</Text>
-                </Pressable>
-              </View>
-              {pinnedLines.length === 0 ? (
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>Нет категорий в бюджете.</Text>
-              ) : (
-                pinnedLines.map((line) => (
-                  <View key={line.id} style={{ marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }} numberOfLines={1}>
-                        {line.title}
-                      </Text>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
-                        {fmtMoney(line.spent)}
-                        {line.expectedMonthly > 0 ? ` / ${fmtMoney(line.expectedMonthly)}` : ''}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        height: 8,
-                        borderRadius: 6,
-                        backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: `${Math.round(Math.min(1, line.progress01) * 100)}%`,
-                          height: '100%',
-                          borderRadius: 6,
-                          backgroundColor: line.overLimit ? '#FB7185' : brand.primarySoft,
-                        }}
-                      />
-                    </View>
-                  </View>
-                ))
-              )}
-            </BentoShell>
-          </View>
-
-          <View style={{ marginTop: colGap }}>
-            <BentoShell>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 2.2, marginBottom: 8 }}>
+          <View style={{ marginTop: colGap, flexDirection: 'row', gap: colGap, alignItems: 'stretch' }}>
+            <BentoShell style={{ flex: 1.2, minWidth: 0, paddingBottom: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.6, marginBottom: 6 }}>
                 ДИНАМИКА ПО МЕСЯЦАМ
               </Text>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text, marginBottom: 10 }}>График</Text>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text, marginBottom: 10 }}>График</Text>
               {chartTabs}
+              {chartVizTabs}
               {chartBody}
               {chartTab === 'expense' && expenseAnalyticsLoading ? (
                 <ActivityIndicator style={{ marginTop: 8 }} color={brand.primary} />
               ) : null}
-              {chartTab === 'expense' && _expenseAnalytics && !expenseAnalyticsLoading ? (
+              {chartTab === 'expense' && expenseAnalytics && !expenseAnalyticsLoading ? (
                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>
                   Детализация расходов по категориям — вкладка «Категории».
                 </Text>
               ) : null}
+              {chartTab === 'capital' ? (
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>
+                  Капитал (Δ): зелёный — плюс по снимку, красный — минус. Шкала с нулём на «Линия»; «Столбцы» — от нуля вверх/вниз.
+                </Text>
+              ) : null}
+            </BentoShell>
+            <BentoShell style={{ flex: 0.95, minWidth: 280, paddingVertical: 18 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.6, marginBottom: 6 }}>
+                ТРАТЫ ПО КАТЕГОРИЯМ
+              </Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 8 }}>Текущий месяц</Text>
+              {expenseAnalyticsLoading ? <ActivityIndicator color={brand.primary} style={{ marginTop: 24 }} /> : null}
+              {!expenseAnalyticsLoading ? (
+                <FinanceExpenseDonut segments={donutSegments} height={268} isLight={isLight} />
+              ) : null}
+            </BentoShell>
+          </View>
+
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ padding: 22, borderWidth: 2, borderColor: 'rgba(232,121,249,0.55)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЛИМИТ</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.text, marginTop: 8 }}>Траты «на жизнь»</Text>
+                  <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
+                    Те же категории, что в транзакциях. Нажми значок, чтобы задать лимит.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
+                    setLimitModal(true);
+                  }}
+                  hitSlop={10}
+                  style={{ padding: 10, borderRadius: 14, backgroundColor: 'rgba(168,85,247,0.2)' }}
+                  accessibilityLabel="Задать лимит"
+                >
+                  <Ionicons name="pencil" size={22} color="#E9D5FF" />
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, alignItems: 'baseline' }}>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                  {fmtMoney(txStats.lifeExpense)}
+                </Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                  {lifeLimit > 0 ? `из ${fmtMoney(lifeLimit)}` : 'лимит не задан'}
+                </Text>
+              </View>
+              <View style={{ marginTop: 18, height: 22, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                <LinearGradient
+                  colors={lifeOver ? (['#FB7185', '#F43F5E'] as const) : (['#C084FC', '#9333EA', '#6D28D9'] as const)}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{
+                    width: `${Math.round(lifeProgress * 100)}%`,
+                    height: '100%',
+                    borderRadius: 12,
+                  }}
+                />
+              </View>
+            </BentoShell>
+          </View>
+
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ padding: 22, borderWidth: 2, borderColor: 'rgba(167,139,250,0.5)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>КАТЕГОРИИ</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.text, marginTop: 6 }}>Ключевые траты</Text>
+                </View>
+                <Pressable onPress={() => setPinModal(true)} hitSlop={8} style={{ paddingVertical: 8, paddingHorizontal: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: brand.primary }}>Настроить</Text>
+                </Pressable>
+              </View>
+              {pinnedLines.length === 0 ? (
+                <Text style={{ color: colors.textMuted, fontSize: 15 }}>Нет категорий в бюджете.</Text>
+              ) : (
+                pinnedLines.map((line) => (
+                  <View key={line.id} style={{ marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text }} numberOfLines={2}>
+                        {line.title}
+                      </Text>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                        {fmtMoney(line.spent)}
+                        {line.expectedMonthly > 0 ? (
+                          <Text style={{ fontWeight: '700', color: colors.textMuted }}>{` / ${fmtMoney(line.expectedMonthly)}`}</Text>
+                        ) : null}
+                      </Text>
+                    </View>
+                    <View style={{ height: 16, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                      <LinearGradient
+                        colors={line.overLimit ? (['#FB7185', '#F43F5E'] as const) : (['#E879F9', '#A855F7'] as const)}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={{
+                          width: `${Math.round(Math.min(1, line.progress01) * 100)}%`,
+                          height: '100%',
+                          borderRadius: 10,
+                        }}
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </BentoShell>
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ paddingBottom: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.6, marginBottom: 6 }}>
+                ДИНАМИКА ПО МЕСЯЦАМ
+              </Text>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: colors.text, marginBottom: 10 }}>График</Text>
+              {chartTabs}
+              {chartVizTabs}
+              {chartBody}
+              {chartTab === 'expense' && expenseAnalyticsLoading ? (
+                <ActivityIndicator style={{ marginTop: 8 }} color={brand.primary} />
+              ) : null}
+              {chartTab === 'expense' && expenseAnalytics && !expenseAnalyticsLoading ? (
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>
+                  Детализация расходов по категориям — вкладка «Категории».
+                </Text>
+              ) : null}
+              {chartTab === 'capital' ? (
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }}>
+                  Капитал (Δ): зелёный — плюс, красный — минус; нулевая линия на «Линия».
+                </Text>
+              ) : null}
+            </BentoShell>
+          </View>
+
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ paddingVertical: 18 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 8 }}>Траты по категориям (месяц)</Text>
+              {expenseAnalyticsLoading ? <ActivityIndicator color={brand.primary} /> : null}
+              {!expenseAnalyticsLoading ? <FinanceExpenseDonut segments={donutSegments} height={260} isLight={isLight} /> : null}
+            </BentoShell>
+          </View>
+
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ padding: 20, borderWidth: 2, borderColor: 'rgba(232,121,249,0.55)' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЛИМИТ</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text, marginTop: 6 }}>Траты «на жизнь»</Text>
+                  <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>Категории как в транзакциях</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setLimitDraft(lifeLimit > 0 ? String(Math.round(lifeLimit)) : '');
+                    setLimitModal(true);
+                  }}
+                  style={{ padding: 10, borderRadius: 14, backgroundColor: 'rgba(168,85,247,0.2)' }}
+                >
+                  <Ionicons name="pencil" size={22} color="#E9D5FF" />
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 }}>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                  {fmtMoney(txStats.lifeExpense)}
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                  {lifeLimit > 0 ? `из ${fmtMoney(lifeLimit)}` : 'лимит не задан'}
+                </Text>
+              </View>
+              <View style={{ marginTop: 14, height: 20, borderRadius: 10, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                <LinearGradient
+                  colors={lifeOver ? (['#FB7185', '#F43F5E'] as const) : (['#C084FC', '#9333EA'] as const)}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{ width: `${Math.round(lifeProgress * 100)}%`, height: '100%', borderRadius: 10 }}
+                />
+              </View>
+            </BentoShell>
+          </View>
+
+          <View style={{ marginTop: colGap }}>
+            <BentoShell style={{ padding: 20, borderWidth: 2, borderColor: 'rgba(167,139,250,0.5)' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text }}>Ключевые траты</Text>
+                <Pressable onPress={() => setPinModal(true)}>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: brand.primary }}>Настроить</Text>
+                </Pressable>
+              </View>
+              {pinnedLines.length === 0 ? (
+                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Нет категорий в бюджете.</Text>
+              ) : (
+                pinnedLines.map((line) => (
+                  <View key={line.id} style={{ marginBottom: 18 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }} numberOfLines={2}>
+                        {line.title}
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textMuted, fontVariant: ['tabular-nums'] }}>
+                        {fmtMoney(line.spent)}
+                        {line.expectedMonthly > 0 ? ` / ${fmtMoney(line.expectedMonthly)}` : ''}
+                      </Text>
+                    </View>
+                    <View style={{ height: 14, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                      <LinearGradient
+                        colors={line.overLimit ? (['#FB7185', '#F43F5E'] as const) : (['#E879F9', '#A855F7'] as const)}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={{
+                          width: `${Math.round(Math.min(1, line.progress01) * 100)}%`,
+                          height: '100%',
+                          borderRadius: 8,
+                        }}
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
             </BentoShell>
           </View>
         </>
       )}
 
       <View style={{ marginTop: colGap }}>
-        <BentoShell>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text }}>Трекер целей</Text>
-            <Pressable onPress={() => router.push('/annual-goals' as Href)}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: brand.primary }}>Все цели</Text>
-            </Pressable>
-          </View>
-          {goalTrackerRows.length === 0 ? (
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Добавьте годовые цели в разделе «Цели».</Text>
-          ) : (
-            goalTrackerRows.map((row) => (
-              <Pressable
-                key={row.id}
-                onPress={() => router.push('/annual-goals' as Href)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  paddingVertical: 8,
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <View
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4 }}>ЦЕЛИ</Text>
+          <Pressable onPress={() => router.push('/annual-goals' as Href)}>
+            <Text style={{ fontSize: 14, fontWeight: '900', color: brand.primary }}>Все цели →</Text>
+          </Pressable>
+        </View>
+        {goalTrackerRows.length === 0 ? (
+          <Text style={{ color: colors.textMuted, fontSize: 14, marginBottom: 8 }}>
+            Добавьте годовые цели в разделе «Цели».
+          </Text>
+        ) : (
+          <View style={{ gap: 14 }}>
+            {goalTrackerRows.map((row, gi) => {
+              const st = GOAL_CARD_STYLES[gi % GOAL_CARD_STYLES.length]!;
+              return (
+                <Pressable
+                  key={row.id}
+                  onPress={() => router.push('/annual-goals' as Href)}
                   style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
+                    borderRadius: 26,
                     overflow: 'hidden',
-                    backgroundColor: 'rgba(168,85,247,0.15)',
+                    borderWidth: 2,
+                    borderColor: st.border,
+                    backgroundColor: '#0E0E12',
+                    paddingVertical: 18,
+                    paddingHorizontal: 18,
                   }}
                 >
-                  {row.imageUri ? (
-                    <Image source={{ uri: row.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-                  ) : (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="flag-outline" size={18} color={brand.primary} />
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={[st.glow0, st.glow1, 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <View
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 16,
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      {row.imageUri ? (
+                        <Image source={{ uri: row.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                      ) : (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="flag-outline" size={26} color="#E9D5FF" />
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }} numberOfLines={2}>
-                    {row.title}
-                  </Text>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginTop: 2 }}>{row.tag}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
-            ))
-          )}
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8, lineHeight: 16 }}>
-            Суммы целей и счёт «цель» синхронизируются в следующей итерации.
-          </Text>
-        </BentoShell>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.85)', letterSpacing: 1.2 }}>{row.tag}</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#FAFAFC', marginTop: 6 }} numberOfLines={3}>
+                        {row.title}
+                      </Text>
+                      <View style={{ marginTop: 14, height: 10, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                        <LinearGradient
+                          colors={st.bar}
+                          start={{ x: 0, y: 0.5 }}
+                          end={{ x: 1, y: 0.5 }}
+                          style={{ width: '72%', height: '100%', borderRadius: 999 }}
+                        />
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="rgba(250,250,252,0.45)" />
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 12, lineHeight: 16 }}>
+          Суммы целей и счёт «цель» синхронизируются в следующей итерации.
+        </Text>
       </View>
 
-      <View style={{ marginTop: colGap }}>
-        <Text style={[typography.title2, { fontWeight: '900', color: colors.text, marginBottom: 10 }]}>Счета</Text>
+      <View style={{ marginTop: colGap + 4 }}>
+        <Text style={{ fontSize: 11, fontWeight: '900', color: 'rgba(196,181,253,0.9)', letterSpacing: 1.4, marginBottom: 10 }}>СЧЕТА</Text>
         {(['available', 'frozen', 'reserve'] as const).map((bucket) => {
           const meta =
             bucket === 'available'
@@ -872,36 +885,41 @@ export function FinanceDashboardBento({
                 : { title: 'Цели и резервы', icon: 'flag-outline' as const, tint: brand.primary };
           const list = accountsByBucket[bucket];
           return (
-            <View key={bucket} style={{ marginBottom: colGap }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <View key={bucket} style={{ marginBottom: colGap + 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <Ionicons name={meta.icon} size={18} color={meta.tint} />
-                <Text style={{ fontSize: 14, fontWeight: '900', color: colors.text }}>{meta.title}</Text>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text }}>{meta.title}</Text>
               </View>
-              {list.map((acc) => (
-                <AccountQuickTile
-                  key={acc.id}
-                  account={acc}
-                  onSaveBalance={(bal) => updateAccMut.mutate({ id: acc.id, balance: bal })}
-                  pending={updateAccMut.isPending}
-                />
-              ))}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 8 }}>
+                {list.map((acc) => (
+                  <AccountPlaqueTile
+                    key={acc.id}
+                    account={acc}
+                    editing={editingAccountId === acc.id}
+                    onBeginEdit={() => setEditingAccountId(acc.id)}
+                    onEndEdit={() => setEditingAccountId(null)}
+                    onSaveBalance={(bal) => updateAccMut.mutate({ id: acc.id, balance: bal })}
+                    pending={updateAccMut.isPending}
+                  />
+                ))}
+              </ScrollView>
               <Pressable
                 onPress={() => {
                   setAddAccountBucket(bucket);
                   setNewAccountName('');
                 }}
                 style={{
-                  marginTop: 6,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
+                  marginTop: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
                   borderRadius: radius.lg,
                   borderWidth: 1,
                   borderStyle: 'dashed',
-                  borderColor: colors.border,
+                  borderColor: 'rgba(167,139,250,0.45)',
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ fontWeight: '800', color: brand.primary, fontSize: 13 }}>+ Счёт</Text>
+                <Text style={{ fontWeight: '900', color: brand.primary, fontSize: 14 }}>+ Счёт в группу</Text>
               </Pressable>
             </View>
           );
@@ -1021,42 +1039,50 @@ export function FinanceDashboardBento({
   );
 }
 
-function AccountQuickTile({
+function AccountPlaqueTile({
   account,
+  editing,
+  onBeginEdit,
+  onEndEdit,
   onSaveBalance,
   pending,
 }: {
   account: FinanceAccount;
+  editing: boolean;
+  onBeginEdit: () => void;
+  onEndEdit: () => void;
   onSaveBalance: (n: number) => void;
   pending: boolean;
 }) {
-  const { colors, radius, brand } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [draft, setDraft] = useState(String(Math.round(account.balance)));
   useEffect(() => {
     setDraft(String(Math.round(account.balance)));
   }, [account.balance, account.id]);
+
+  const fmt = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
+
   return (
-    <BentoShell style={{ marginBottom: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            backgroundColor: 'rgba(168,85,247,0.12)',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="layers-outline" size={20} color={brand.primary} />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, fontWeight: '900', color: colors.text }} numberOfLines={2}>
-            {account.name}
-          </Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{account.type}</Text>
-        </View>
+    <View
+      style={{
+        width: 168,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(167,139,250,0.45)',
+        backgroundColor: 'rgba(18,18,22,0.95)',
+        paddingVertical: 16,
+        paddingHorizontal: 14,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.2 }} numberOfLines={2}>
+        {account.name}
+      </Text>
+      <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }} numberOfLines={1}>
+        {account.type}
+      </Text>
+      {editing ? (
         <TextInput
+          autoFocus
           value={draft}
           onChangeText={setDraft}
           keyboardType="decimal-pad"
@@ -1065,24 +1091,31 @@ function AccountQuickTile({
             const n = Number(draft.replace(/\s/g, '').replace(',', '.'));
             if (!Number.isFinite(n)) {
               setDraft(String(Math.round(account.balance)));
+              onEndEdit();
               return;
             }
             if (Math.abs(n - account.balance) > 0.01) onSaveBalance(n);
+            onEndEdit();
           }}
           style={{
-            minWidth: 100,
-            paddingVertical: 8,
-            paddingHorizontal: 10,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: colors.border,
-            fontSize: 16,
+            marginTop: 10,
+            fontSize: 20,
             fontWeight: '900',
-            color: colors.text,
-            textAlign: 'right',
+            color: '#FAFAFC',
+            fontVariant: ['tabular-nums'],
+            borderBottomWidth: 2,
+            borderBottomColor: 'rgba(167,139,250,0.55)',
+            paddingVertical: 4,
           }}
         />
-      </View>
-    </BentoShell>
+      ) : (
+        <Pressable onPress={onBeginEdit} disabled={pending} style={{ marginTop: 10 }}>
+          <Text style={{ fontSize: 22, fontWeight: '900', color: '#FAFAFC', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+            {fmt(account.balance)}
+          </Text>
+          <Text style={{ fontSize: 10, color: 'rgba(196,181,253,0.65)', marginTop: 6 }}>тап по сумме — правка</Text>
+        </Pressable>
+      )}
+    </View>
   );
 }

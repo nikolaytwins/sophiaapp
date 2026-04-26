@@ -6,32 +6,85 @@ function fmtRub(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
 }
 
+const GREEN = '#4ADE80';
+const RED = '#FB7185';
+
 type Props = {
   values: number[];
   labels: string[];
   color: string;
   height: number;
   isLight: boolean;
+  /** Ось Y через ноль, сегменты: плюс — зелёный, минус — красный. */
+  signedDiverging?: boolean;
 };
 
+type Pt = { x: number; y: number; v: number };
+
+function lineSegmentsSigned(p0: Pt, p1: Pt): { x1: number; y1: number; x2: number; y2: number; stroke: string }[] {
+  const eps = 1e-9;
+  if (Math.abs(p1.x - p0.x) < eps && Math.abs(p1.y - p0.y) < eps) return [];
+
+  const bothPos = p0.v > 0 && p1.v > 0;
+  const bothNonNeg = p0.v >= 0 && p1.v >= 0 && !(p0.v === 0 && p1.v === 0);
+  const bothNeg = p0.v < 0 && p1.v < 0;
+  const bothNonPos = p0.v <= 0 && p1.v <= 0 && !(p0.v === 0 && p1.v === 0);
+
+  if (bothPos || (bothNonNeg && (p0.v > 0 || p1.v > 0))) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: GREEN }];
+  }
+  if (bothNeg || (bothNonPos && (p0.v < 0 || p1.v < 0))) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: RED }];
+  }
+  if (p0.v === 0 && p1.v === 0) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'rgba(148,163,184,0.55)' }];
+  }
+
+  const denom = p0.v - p1.v;
+  if (Math.abs(denom) < eps) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: p0.v > 0 ? GREEN : p0.v < 0 ? RED : 'rgba(148,163,184,0.55)' }];
+  }
+  const u = p0.v / denom;
+  if (!Number.isFinite(u) || u < 0 || u > 1) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: p0.v > 0 ? GREEN : p0.v < 0 ? RED : 'rgba(148,163,184,0.55)' }];
+  }
+  if (u <= 1e-6) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: p1.v > 0 ? GREEN : p1.v < 0 ? RED : 'rgba(148,163,184,0.55)' }];
+  }
+  if (u >= 1 - 1e-6) {
+    return [{ x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: p0.v > 0 ? GREEN : p0.v < 0 ? RED : 'rgba(148,163,184,0.55)' }];
+  }
+  const xz = p0.x + u * (p1.x - p0.x);
+  const yz = p0.y + u * (p1.y - p0.y);
+  const z: Pt = { x: xz, y: yz, v: 0 };
+  return [...lineSegmentsSigned(p0, z), ...lineSegmentsSigned(z, p1)];
+}
+
 /**
- * Линейный график с узлами: на web — наведение и подсказка с суммой в ₽;
- * на native — без hover, узлы видны как опоры линии.
+ * Линейный график с узлами: на web — hover и тултип;
+ * signedDiverging — шкала включает 0, линия нуля, зелёный/красный по знаку Δ капитала.
  */
-export function FinancePremiumChart({ values, labels, color, height, isLight }: Props) {
+export function FinancePremiumChart({ values, labels, color, height, isLight, signedDiverging }: Props) {
   const [width, setWidth] = useState(360);
   const [hover, setHover] = useState<number | null>(null);
 
-  const padL = 36;
+  const padL = 40;
   const padR = 12;
   const padT = 14;
   const padB = 28;
   const innerW = Math.max(1, width - padL - padR);
   const innerH = Math.max(1, height - padT - padB);
 
-  const { minV, maxV, points, baselineY } = useMemo(() => {
-    const minV = values.length ? Math.min(...values) : 0;
-    const maxV = values.length ? Math.max(...values) : 1;
+  const { minV, maxV, points, yZero, hasZeroInRange } = useMemo(() => {
+    if (!values.length) {
+      return { minV: 0, maxV: 1, points: [] as Pt[], yZero: padT + innerH, hasZeroInRange: false };
+    }
+    let minV = Math.min(...values);
+    let maxV = Math.max(...values);
+    if (signedDiverging) {
+      minV = Math.min(0, minV);
+      maxV = Math.max(0, maxV);
+    }
     const span = Math.max(maxV - minV, 1);
     const n = values.length;
     const step = n <= 1 ? innerW : innerW / (n - 1);
@@ -41,19 +94,46 @@ export function FinancePremiumChart({ values, labels, color, height, isLight }: 
       const y = padT + innerH - t * innerH;
       return { x, y, v };
     });
-    return { minV, maxV, points: pts, baselineY: padT + innerH };
-  }, [values, innerW, innerH, padL, padT]);
+    const t0 = (0 - minV) / span;
+    const yZero = padT + innerH - t0 * innerH;
+    const hasZeroInRange = signedDiverging && minV < 0 && maxV > 0;
+    return { minV, maxV, points: pts, yZero, hasZeroInRange };
+  }, [values, innerW, innerH, padL, padT, signedDiverging]);
 
-  const polylinePoints = useMemo(() => points.map((p) => `${p.x},${p.y}`).join(' '), [points]);
+  const segments = useMemo(() => {
+    if (!signedDiverging || points.length < 2) return [] as { x1: number; y1: number; x2: number; y2: number; stroke: string }[];
+    const out: { x1: number; y1: number; x2: number; y2: number; stroke: string }[] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      out.push(...lineSegmentsSigned(points[i]!, points[i + 1]!));
+    }
+    return out;
+  }, [points, signedDiverging]);
 
   const gridColor = isLight ? 'rgba(15,17,24,0.08)' : 'rgba(255,255,255,0.06)';
   const axisMuted = isLight ? 'rgba(15,17,24,0.45)' : 'rgba(196,181,253,0.45)';
-  const yMaxLabel = maxV >= 1_000_000 ? `${(maxV / 1_000_000).toFixed(1).replace('.', ',')} млн` : maxV >= 1000 ? `${Math.round(maxV / 1000)} тыс.` : `${Math.round(maxV)}`;
+  const zeroLineColor = isLight ? 'rgba(15,17,24,0.42)' : 'rgba(250,250,252,0.38)';
+  const yMaxLabel =
+    maxV >= 1_000_000 ? `${(maxV / 1_000_000).toFixed(1).replace('.', ',')} млн` : maxV >= 1000 ? `${Math.round(maxV / 1000)} тыс.` : `${Math.round(maxV)}`;
+  const yMinLabel =
+    minV <= -1_000_000
+      ? `${(minV / 1_000_000).toFixed(1).replace('.', ',')} млн`
+      : minV <= -1000
+        ? `${Math.round(minV / 1000)} тыс.`
+        : `${Math.round(minV)}`;
 
   const onLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w > 40) setWidth(w);
   };
+
+  const nodeColor = (v: number) => {
+    if (!signedDiverging) return color;
+    if (v > 0) return GREEN;
+    if (v < 0) return RED;
+    return axisMuted;
+  };
+
+  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ');
 
   const tooltip = hover != null && points[hover] != null && labels[hover] != null && (
     <View
@@ -76,7 +156,15 @@ export function FinancePremiumChart({ values, labels, color, height, isLight }: 
       }}
     >
       <Text style={{ fontSize: 10, fontWeight: '800', color: axisMuted, letterSpacing: 0.4 }}>{labels[hover]!}</Text>
-      <Text style={{ fontSize: 15, fontWeight: '900', color: isLight ? '#0F1118' : '#F5F3FF', marginTop: 2 }} numberOfLines={1}>
+      <Text
+        style={{
+          fontSize: 15,
+          fontWeight: '900',
+          color: isLight ? '#0F1118' : signedDiverging && values[hover]! < 0 ? '#FECDD3' : signedDiverging && values[hover]! > 0 ? '#BBF7D0' : '#F5F3FF',
+          marginTop: 2,
+        }}
+        numberOfLines={1}
+      >
         {fmtRub(values[hover]!)}
       </Text>
       <Text style={{ fontSize: 10, fontWeight: '700', color: axisMuted, marginTop: 2 }}>руб., по снимку месяца</Text>
@@ -88,12 +176,41 @@ export function FinancePremiumChart({ values, labels, color, height, isLight }: 
       <Svg width={width} height={height}>
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
           const y = padT + innerH * (1 - t);
+          if (signedDiverging && hasZeroInRange && Math.abs(y - yZero) < 2) return null;
           return <Line key={t} x1={padL} y1={y} x2={width - padR} y2={y} stroke={gridColor} strokeWidth={1} />;
         })}
-        <Line x1={padL} y1={baselineY} x2={width - padR} y2={baselineY} stroke={gridColor} strokeWidth={1.2} />
-        <Polyline points={polylinePoints} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {signedDiverging && hasZeroInRange ? (
+          <Line x1={padL} y1={yZero} x2={width - padR} y2={yZero} stroke={zeroLineColor} strokeWidth={2.2} />
+        ) : (
+          <Line x1={padL} y1={padT + innerH} x2={width - padR} y2={padT + innerH} stroke={gridColor} strokeWidth={1.2} />
+        )}
+        {signedDiverging && segments.length > 0
+          ? segments.map((s, i) => (
+              <Line
+                key={`seg-${i}`}
+                x1={s.x1}
+                y1={s.y1}
+                x2={s.x2}
+                y2={s.y2}
+                stroke={s.stroke}
+                strokeWidth={2.8}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))
+          : points.length > 0 ? (
+              <Polyline points={polylinePoints} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+            ) : null}
         {points.map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={hover === i ? 6 : 4} fill={color} stroke={isLight ? '#fff' : '#0c0a12'} strokeWidth={hover === i ? 2 : 1} />
+          <Circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={hover === i ? 6 : 4}
+            fill={nodeColor(p.v)}
+            stroke={isLight ? '#fff' : '#0c0a12'}
+            strokeWidth={hover === i ? 2 : 1}
+          />
         ))}
       </Svg>
       {Platform.OS === 'web'
@@ -121,16 +238,32 @@ export function FinancePremiumChart({ values, labels, color, height, isLight }: 
         style={{
           position: 'absolute',
           left: 0,
-          top: padT - 2,
+          top: padT,
           width: padL - 4,
+          height: innerH,
           alignItems: 'flex-end',
+          justifyContent: 'space-between',
         }}
         pointerEvents="none"
       >
-        <Text style={{ fontSize: 9, fontWeight: '700', color: axisMuted }} numberOfLines={1}>
-          {yMaxLabel}
-        </Text>
-        <Text style={{ fontSize: 8, fontWeight: '700', color: axisMuted, marginTop: 2 }}>₽</Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 9, fontWeight: '700', color: axisMuted }} numberOfLines={1}>
+            {yMaxLabel}
+          </Text>
+        </View>
+        {signedDiverging && hasZeroInRange ? (
+          <Text style={{ fontSize: 9, fontWeight: '900', color: zeroLineColor }} numberOfLines={1}>
+            0
+          </Text>
+        ) : (
+          <View />
+        )}
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 9, fontWeight: '700', color: axisMuted }} numberOfLines={1}>
+            {yMinLabel}
+          </Text>
+          <Text style={{ fontSize: 8, fontWeight: '700', color: axisMuted, marginTop: 2 }}>₽</Text>
+        </View>
       </View>
       <View
         style={{
