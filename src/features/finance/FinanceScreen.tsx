@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -53,74 +52,9 @@ type FinanceCategoryModalState =
 
 const CLOUD_HREF = '/cloud' as Href;
 
-/** Диффузное фиолетовое свечение (как rail календаря), слой под контентом — плашки таблицы выше. */
-function FinancePageGlow({ isLight }: { isLight: boolean }) {
-  if (isLight) {
-    return (
-      <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
-        <LinearGradient
-          pointerEvents="none"
-          colors={['transparent', 'rgba(124, 58, 237, 0.06)', 'rgba(167, 139, 250, 0.05)']}
-          locations={[0, 0.62, 1]}
-          start={{ x: 0.45, y: 0 }}
-          end={{ x: 0.55, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-    );
-  }
-  if (Platform.OS === 'web') {
-    const blur = { filter: 'blur(92px)', WebkitFilter: 'blur(92px)' } as const;
-    return (
-      <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
-        <View
-          style={{
-            position: 'absolute',
-            width: 620,
-            height: 460,
-            borderRadius: 310,
-            bottom: '-14%',
-            left: '-8%',
-            backgroundColor: 'rgba(123, 92, 255, 0.26)',
-            opacity: 0.75,
-            ...blur,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            width: 480,
-            height: 420,
-            borderRadius: 240,
-            bottom: '2%',
-            right: '-18%',
-            backgroundColor: 'rgba(167, 139, 250, 0.18)',
-            opacity: 0.65,
-            ...blur,
-          }}
-        />
-        <LinearGradient
-          pointerEvents="none"
-          colors={['transparent', 'rgba(99, 102, 241, 0.06)', 'transparent']}
-          start={{ x: 0.5, y: 0.35 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-    );
-  }
-  return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { zIndex: 0 }]}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', 'rgba(123, 92, 255, 0.1)', 'rgba(99, 102, 241, 0.05)']}
-        locations={[0, 0.72, 1]}
-        start={{ x: 0.35, y: 0.2 }}
-        end={{ x: 0.55, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-    </View>
-  );
+/** Фон без glow — спокойный canvas (редизайн финансов). */
+function FinancePageGlow(_props: { isLight: boolean }) {
+  return null;
 }
 
 function fmtMoney(n: number) {
@@ -180,9 +114,6 @@ function BudgetCard({
         padding: pad,
         marginBottom: nested || embedded ? 0 : 14,
         ...shell,
-        ...(over && !isLight
-          ? ({ boxShadow: '0 0 0 1px rgba(251,113,133,0.35), 0 8px 28px rgba(251,113,133,0.12)' } as object)
-          : {}),
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -530,7 +461,7 @@ export function FinanceScreen() {
           <SegmentedControl<MainTab>
             value={mainTab}
             onChange={setMainTab}
-            activeVariant="brandGlow"
+            activeVariant="default"
             options={[
               { value: 'dashboard', label: 'Дашборд' },
               { value: 'transactions', label: 'Транзакции' },
@@ -639,15 +570,13 @@ export function FinanceScreen() {
                     justifyContent: 'center',
                     gap: 10,
                     ...(Platform.OS === 'web'
-                      ? ({
-                          boxShadow: '0 0 28px rgba(168, 85, 247, 0.45), 0 10px 28px rgba(0,0,0,0.4)',
-                        } as object)
+                      ? ({ boxShadow: '0 4px 16px rgba(0,0,0,0.18)' } as object)
                       : {
                           shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 6 },
-                          shadowOpacity: 0.25,
-                          shadowRadius: 10,
-                          elevation: 6,
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 8,
+                          elevation: 4,
                         }),
                   }}
                 >
