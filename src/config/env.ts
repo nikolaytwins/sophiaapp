@@ -10,6 +10,17 @@ function trimBase(u: string) {
   return u.replace(/\/$/, '');
 }
 
+/** extra из app.config: на части билдов manifest2 дублирует поля, если expoConfig ещё пустой. */
+function readExtraString(key: string): string {
+  const fromExpo = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
+  const v1 = fromExpo?.[key];
+  if (v1 != null && String(v1).trim()) return String(v1).trim();
+  const m2 = Constants.manifest2 as { extra?: Record<string, unknown> } | null | undefined;
+  const v2 = m2?.extra?.[key];
+  if (v2 != null && String(v2).trim()) return String(v2).trim();
+  return '';
+}
+
 function isPrivateDevHost(hostname: string): boolean {
   if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
   if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
@@ -118,10 +129,8 @@ export const teamtrackerBaseUrl = (() => {
       : '';
   if (fromEnv) return trimBase(fromEnv);
 
-  const extra = Constants.expoConfig?.extra as { teamtrackerUrl?: string } | undefined;
-  if (extra?.teamtrackerUrl && String(extra.teamtrackerUrl).trim()) {
-    return trimBase(String(extra.teamtrackerUrl).trim());
-  }
+  const fromExtra = readExtraString('teamtrackerUrl');
+  if (fromExtra) return trimBase(fromExtra);
 
   return '';
 })();
@@ -133,10 +142,8 @@ export const teamtrackerIntegrationSecret = (() => {
       : '';
   if (fromEnv) return fromEnv;
 
-  const extra = Constants.expoConfig?.extra as { teamtrackerIntegrationSecret?: string } | undefined;
-  if (extra?.teamtrackerIntegrationSecret && String(extra.teamtrackerIntegrationSecret).trim()) {
-    return String(extra.teamtrackerIntegrationSecret).trim();
-  }
+  const fromExtra = readExtraString('teamtrackerIntegrationSecret');
+  if (fromExtra) return fromExtra;
 
   return '';
 })();

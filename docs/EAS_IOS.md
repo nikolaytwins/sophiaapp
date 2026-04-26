@@ -142,6 +142,23 @@ npx eas-cli secret:create --name EXPO_PUBLIC_ASTRO_API_URL --value "https://тв
 
 ---
 
+## Teamtracker (интеграция финансов)
+
+На устройстве и в **веб-сборке** URL и секрет читаются из `app.config.js` → `expo.extra` (они попадают туда из env **на момент `eas build`**). Локально достаточно `sophia.env`; для **TestFlight / production** без этих переменных интеграция будет отключена или падать.
+
+Задай в EAS те же имена, что в шаблоне `sophia.env.template`:
+
+```bash
+npx eas-cli secret:create --name EXPO_PUBLIC_TEAMTRACKER_URL --value "https://tt.twinlabs.ru" --type string
+npx eas-cli secret:create --name EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET --value "тот_же_секрет_что_TT_INTEGRATION_SECRET_на_VPS" --type string
+```
+
+На сервере Teamtracker в `/etc/team-tracker.env` должна быть строка **`TT_INTEGRATION_SECRET`** (длина ≥ 16), **совпадающая** с `EXPO_PUBLIC_TEAMTRACKER_INTEGRATION_SECRET`. После смены секрета перезапусти unit `team-tracker`.
+
+Для **веба** (Sophia в браузере с другого домена): на стороне Teamtracker middleware должен пропускать **OPTIONS** для `/api/integrations/sophia/*` (иначе CORS preflight получает 401). Это исправлено в актуальном `team-tracker` на GitHub.
+
+---
+
 ## Полезные команды
 
 ```bash
