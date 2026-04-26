@@ -9,6 +9,7 @@ import { StrategyHero } from '@/features/strategy/StrategyHero';
 import { StrategyAboutNotesPanel } from '@/features/strategy/StrategyAboutNotesPanel';
 import { StrategyGlobalVisionPanel } from '@/features/strategy/StrategyGlobalVisionPanel';
 import { StrategyInnerTabs } from '@/features/strategy/StrategyInnerTabs';
+import { StrategyNewStrategyPanel } from '@/features/strategy/StrategyNewStrategyPanel';
 import { StrategyStrategyTabPanel } from '@/features/strategy/StrategyStrategyTabPanel';
 import { getSupabase } from '@/lib/supabase';
 import { ensureStrategyCheckpointsHydrated, useStrategyCheckpointsStore } from '@/stores/strategyCheckpoints.store';
@@ -96,6 +97,9 @@ export function StrategyScreen() {
             ) : null}
             {mainTab === 'vision' ? <StrategyGlobalVisionPanel config={strategyPageConfig.globalVision} /> : null}
             {mainTab === 'notes' ? <StrategyAboutNotesPanel config={strategyPageConfig.aboutMeNotes} /> : null}
+            {mainTab === 'newStrategy' ? (
+              <StrategyNewStrategyPanel config={strategyPageConfig.newStrategySynastry} />
+            ) : null}
           </>
         )}
       </ScrollView>

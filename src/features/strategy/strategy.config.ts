@@ -4,6 +4,7 @@
  */
 
 import { EXTRA_STRATEGY_MONTHLY_PLANS } from '@/features/strategy/data/monthlyPlansExtra';
+import { newStrategyProjectsTab } from '@/features/strategy/data/newStrategyProjectsContent';
 
 export type StrategyPhaseBadgeVariant = 'now' | 'build' | 'growth' | 'launch' | 'scale' | 'muted';
 
@@ -121,13 +122,132 @@ export type PersonalBrandSectionDef = {
   narratives: PersonalBrandNarrativeDef[];
 };
 
-export const STRATEGY_MAIN_TABS = ['strategy', 'vision', 'notes'] as const;
+export const STRATEGY_MAIN_TABS = ['strategy', 'vision', 'notes', 'newStrategy'] as const;
 export type StrategyMainTabId = (typeof STRATEGY_MAIN_TABS)[number];
 
 export type StrategyTabsLabelsDef = {
   strategy: string;
   vision: string;
   notes: string;
+  newStrategy: string;
+};
+
+/** Фрагмент абзаца с акцентом (как strong/em в исходном HTML). */
+export type StrategyRichTextPart = {
+  text: string;
+  variant?: 'default' | 'strong' | 'emphasis';
+};
+
+export type StrategyRichParagraph = StrategyRichTextPart[];
+
+export type StrategySynastryMoneyPatternItem = {
+  title: string;
+  description: string;
+};
+
+export type StrategySynastryMoneyCardAccent = 'twilight' | 'mist' | 'aurora';
+
+export type StrategySynastryMoneyCard = {
+  id: string;
+  accent: StrategySynastryMoneyCardAccent;
+  overline: string;
+  title?: string;
+  paragraphs?: StrategyRichParagraph[];
+  patterns?: StrategySynastryMoneyPatternItem[];
+};
+
+export type StrategyNewSynastryMoneyTabDef = {
+  innerTabLabel: string;
+  screenTitle: string;
+  screenSubtitle: string;
+  cards: StrategySynastryMoneyCard[];
+};
+
+export type StrategyProjectsChannelBadge = 'free' | 'paid' | 'partner' | 'primary';
+
+export type StrategyProjectsChannelItem = {
+  icon: string;
+  badge: StrategyProjectsChannelBadge;
+  badgeLabel: string;
+  name: string;
+  typeLine: string;
+  body: StrategyRichParagraph;
+};
+
+export type StrategyProjectsChannelGroup = {
+  sectionCaps: string;
+  items: StrategyProjectsChannelItem[];
+};
+
+export type StrategyProjectsChannelsDef = {
+  sectionTitle: string;
+  sectionSubtitle: string;
+  leadBlock: { overline: string; body: StrategyRichParagraph };
+  groups: StrategyProjectsChannelGroup[];
+};
+
+export type StrategyProjectsValuationGridCell = { value: string; label: string };
+
+export type StrategyProjectsValuationProductAccent = 'twilight' | 'ocean' | 'aurora' | 'amber' | 'mist';
+
+export type StrategyProjectsValuationProduct = {
+  id: string;
+  accent: StrategyProjectsValuationProductAccent;
+  overline: string;
+  title: string;
+  grid: StrategyProjectsValuationGridCell[];
+  footnote: StrategyRichParagraph;
+};
+
+export type StrategyProjectsValuationDef = {
+  sectionTitle: string;
+  sectionSubtitle: string;
+  methodology: {
+    overline: string;
+    paragraphs: StrategyRichParagraph[];
+  };
+  products: StrategyProjectsValuationProduct[];
+  packageBlock: {
+    overline: string;
+    title: string;
+    paragraphs: StrategyRichParagraph[];
+  };
+  closingNote: StrategyRichParagraph;
+};
+
+export type StrategyProjectsGeoRow = {
+  lead: string;
+  body: StrategyRichParagraph;
+};
+
+export type StrategyProjectsGeoProduct = {
+  sectionCaps: string;
+  rows: StrategyProjectsGeoRow[];
+};
+
+export type StrategyProjectsGeoDef = {
+  sectionTitle: string;
+  sectionSubtitle: string;
+  ruleBlock: {
+    overline: string;
+    title: string;
+    body: StrategyRichParagraph;
+  };
+  products: StrategyProjectsGeoProduct[];
+  closingNote: StrategyRichParagraph;
+};
+
+export type StrategyNewSynastryProjectsDef = {
+  innerTabLabel: string;
+  channels: StrategyProjectsChannelsDef;
+  valuation: StrategyProjectsValuationDef;
+  geo: StrategyProjectsGeoDef;
+};
+
+/** Контент вкладки «Новая стратегия» (астро + рынки/проекты из HTML). */
+export type StrategyNewSynastryDef = {
+  money: StrategyNewSynastryMoneyTabDef;
+  projects: StrategyNewSynastryProjectsDef;
 };
 
 /** Стартовые побочные цели (id стабильны — прогресс в AsyncStorage). */
@@ -250,6 +370,7 @@ export type StrategyPageConfig = {
   globalVision: GlobalVisionDef;
   aboutMeNotes: AboutMeNotesDef;
   goalsTab: StrategyGoalsTabDef;
+  newStrategySynastry: StrategyNewSynastryDef;
 };
 
 /** Алиас для импорта: один объект данных страницы. */
@@ -936,6 +1057,87 @@ export const strategyData: StrategyPageConfig = {
     strategy: 'Стратегия',
     vision: 'Глобальное видение',
     notes: 'Важные заметки обо мне',
+    newStrategy: 'Новая стратегия',
+  },
+  newStrategySynastry: {
+    money: {
+      innerTabLabel: 'Деньги · 2й/8й',
+      screenTitle: 'Деньги · психология',
+      screenSubtitle: '2й дом Рыбы · 8й дом Дева · почему деньги утекают',
+      cards: [
+        {
+          id: 'money-water',
+          accent: 'twilight',
+          overline: '2й дом Рыбы · управитель Нептун в 1м доме',
+          title: 'Деньги как вода — приходят и уходят',
+          paragraphs: [
+            [
+              { text: '2й дом = личные финансы, ценности. Рыбы в 2м = ' },
+              { text: 'размытые границы с деньгами.', variant: 'strong' },
+              { text: ' Нептун управляет — растворяет всё к чему прикасается.' },
+            ],
+            [
+              {
+                text: 'Импульсивные траты в стрессе — это Нептун: реальность размывается, граница «могу/не могу» исчезает. Рестораны, компы, что-то ещё — Нептун ищет удовольствие и растворение прямо сейчас.',
+              },
+            ],
+            [
+              { text: 'Нептун в 1м доме', variant: 'strong' },
+              { text: ' — управитель 2го живёт в доме личности. ' },
+              { text: 'Твоя идентичность и деньги перемешаны.', variant: 'emphasis' },
+              { text: ' Когда денег нет — ощущение что и тебя нет.' },
+            ],
+          ],
+        },
+        {
+          id: 'money-patterns',
+          accent: 'mist',
+          overline: 'Конкретные паттерны',
+          patterns: [
+            {
+              title: 'Трата в стрессе как анестезия',
+              description:
+                'Нептун = побег от реальности. Когда тревожно — Рыбы в 2м дают разрешение потратить «просто чтобы почувствовать себя лучше». Это не слабость — это конфигурация карты.',
+            },
+            {
+              title: 'Плохо чувствуешь деньги в руках',
+              description:
+                'Рыбы — знак без границ. Трудно точно знать сколько есть, сколько уходит. Финансовый учёт даётся с усилием — он против природы 2го дома.',
+            },
+            {
+              title: 'Деньги приходят через интуицию и красоту',
+              description:
+                'Рыбы чувствуют что будет работать ещё до анализа. Лучшие финансовые решения — интуитивные, не рациональные.',
+            },
+          ],
+        },
+        {
+          id: 'money-actions',
+          accent: 'aurora',
+          overline: 'Что делать',
+          paragraphs: [
+            [
+              {
+                text: 'Не бороться с природой 2го дома — создать структуру которая работает вместо воли.',
+                variant: 'strong',
+              },
+            ],
+            [
+              {
+                text: 'Один стоп-лимит на карте (решить один раз, не думать каждый день). Разделить деньги физически: операционный счёт + подушка + цели. Когда деньги разделены — Рыбы не могут их «растворить» в кучу.',
+              },
+            ],
+            [
+              {
+                text: 'Самый важный инсайт: ты не «плохо управляешь деньгами». У тебя Нептун управляет 2м домом. Это требует системы — не дисциплины.',
+                variant: 'emphasis',
+              },
+            ],
+          ],
+        },
+      ],
+    },
+    projects: newStrategyProjectsTab,
   },
   globalVision: {
     whatIBuild: {
