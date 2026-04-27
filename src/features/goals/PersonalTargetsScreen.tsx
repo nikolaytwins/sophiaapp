@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Image as RNImage,
   Modal,
@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,8 +56,19 @@ function parseAmount(raw: string): number {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-/** Фото в попапе просмотра цели: полная ширина, исходные пропорции, без обрезки (`contain`). */
-function ViewGoalDetailPhoto({ uri, onPress }: { uri: string; onPress: () => void }) {
+/** Фото в попапе просмотра цели: вписывается в экран, без гигантской высоты у портретных снимков. */
+function ViewGoalDetailPhoto({
+  uri,
+  onPress,
+  photoCount,
+}: {
+  uri: string;
+  onPress: () => void;
+  /** Сколько фото в цели — делим лимит высоты, чтобы несколько превью не раздували модалку. */
+  photoCount: number;
+}) {
+  const { spacing } = useAppTheme();
+  const { width: winW, height: winH } = useWindowDimensions();
   const [aspectWH, setAspectWH] = useState<number | null>(null);
 
   const applySize = useCallback((w: number, h: number) => {
@@ -79,6 +91,15 @@ function ViewGoalDetailPhoto({ uri, onPress }: { uri: string; onPress: () => voi
     [applySize, uri]
   );
 
+  // Модалка: оставляем место под заголовок, описание и кнопки — фото не выше ~28% экрана (на фото делим бюджет).
+  const gutterX = spacing.lg * 4 + spacing.sm;
+  const maxContentW = Math.max(120, winW - gutterX);
+  const heightBudget = Math.max(120, winH * (photoCount > 1 ? 0.22 : 0.28));
+  const perPhotoCap = photoCount > 1 ? heightBudget / Math.min(photoCount, 3) : heightBudget;
+  const maxPhotoH = Math.min(winH * 0.3, Math.max(100, perPhotoCap));
+  const hAtFullWidth = maxContentW / Math.max(ratio, 0.02);
+  const boxH = Math.min(hAtFullWidth, maxPhotoH);
+
   return (
     <Pressable
       onPress={onPress}
@@ -96,7 +117,7 @@ function ViewGoalDetailPhoto({ uri, onPress }: { uri: string; onPress: () => voi
           borderColor: 'rgba(255,255,255,0.14)',
         }}
       >
-        <View style={{ width: '100%', aspectRatio: ratio }}>
+        <View style={{ width: '100%', height: boxH }}>
           <Image
             source={{ uri }}
             style={StyleSheet.absoluteFillObject}
@@ -177,6 +198,8 @@ function SideGoalsBoardBlock({
   nearestSlot?: ReactNode | null;
 }) {
   const { typography, spacing, colors } = useAppTheme();
+  const { height: winH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const goals = useSideGoalsStore((s) => s.goals);
   const addSideGoal = useSideGoalsStore((s) => s.addSideGoal);
   const updateSideGoal = useSideGoalsStore((s) => s.updateSideGoal);
@@ -356,30 +379,41 @@ function SideGoalsBoardBlock({
     updateSideGoal,
   ]);
 
+  const uploadPhotoUrisForEdit = useCallback(
+    async (uris: string[]) => {
+      if (!editId || uris.length === 0) return;
+      setPhotoBusy(true);
+      try {
+        const uploaded: string[] = [];
+        for (const uri of uris) {
+          try {
+            if (/^https?:\/\//i.test(uri)) {
+              uploaded.push(uri);
+              continue;
+            }
+            const res = await uploadSideGoalPhotoToSupabase(uri, editId);
+            if ('publicUrl' in res) uploaded.push(res.publicUrl);
+            else alertInfo('Фото', res.error);
+          } finally {
+            if (uri.startsWith('blob:')) URL.revokeObjectURL(uri);
+          }
+        }
+        if (uploaded.length > 0) {
+          appendSideGoalPhotos(editId, uploaded);
+          if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      } finally {
+        setPhotoBusy(false);
+      }
+    },
+    [appendSideGoalPhotos, editId]
+  );
+
   const addPhotos = useCallback(async () => {
     if (!editId) return;
-    setPhotoBusy(true);
-    try {
-      const uris = await pickVisionBoardImageUris();
-      if (uris.length === 0) return;
-      const uploaded: string[] = [];
-      for (const uri of uris) {
-        if (/^https?:\/\//i.test(uri)) {
-          uploaded.push(uri);
-          continue;
-        }
-        const res = await uploadSideGoalPhotoToSupabase(uri, editId);
-        if ('publicUrl' in res) uploaded.push(res.publicUrl);
-        else alertInfo('Фото', res.error);
-      }
-      if (uploaded.length > 0) {
-        appendSideGoalPhotos(editId, uploaded);
-        if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    } finally {
-      setPhotoBusy(false);
-    }
-  }, [appendSideGoalPhotos, editId]);
+    const uris = await pickVisionBoardImageUris();
+    await uploadPhotoUrisForEdit(uris);
+  }, [editId, uploadPhotoUrisForEdit]);
 
   const openAddForTab = (tab: SideGoalBoardTab) => {
     if (tab === 'done') return;
@@ -797,24 +831,79 @@ function SideGoalsBoardBlock({
               ) : null}
 
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Фото</Text>
-              <Pressable
-                disabled={photoBusy || !editId}
-                onPress={() => void addPhotos()}
-                style={{
-                  marginBottom: 12,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: 'rgba(232,121,249,0.4)',
-                  backgroundColor: 'rgba(232,121,249,0.1)',
-                  opacity: photoBusy ? 0.55 : 1,
-                }}
-              >
-                <Text style={{ fontWeight: '800', color: '#F0ABFC', textAlign: 'center' }}>
-                  {photoBusy ? 'Загрузка…' : 'Добавить фотографии (облако)'}
-                </Text>
-              </Pressable>
+              {Platform.OS === 'web' ? (
+                createElement(
+                  'div',
+                  {
+                    style: {
+                      marginBottom: 12,
+                      padding: 12,
+                      borderRadius: 14,
+                      border: '1px dashed rgba(232,121,249,0.45)',
+                      backgroundColor: 'rgba(232,121,249,0.08)',
+                      opacity: photoBusy || !editId ? 0.55 : 1,
+                    },
+                    onDragOver: (e: DragEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    },
+                    onDrop: (e: DragEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!editId || photoBusy) return;
+                      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'));
+                      if (files.length === 0) return;
+                      void uploadPhotoUrisForEdit(files.map((f) => URL.createObjectURL(f)));
+                    },
+                  },
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: 'rgba(248,250,252,0.45)',
+                      textAlign: 'center',
+                      marginBottom: 10,
+                    }}
+                  >
+                    Перетащите изображения сюда или нажмите кнопку ниже
+                  </Text>,
+                  <Pressable
+                    disabled={photoBusy || !editId}
+                    onPress={() => void addPhotos()}
+                    style={{
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: 'rgba(232,121,249,0.4)',
+                      backgroundColor: 'rgba(232,121,249,0.12)',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '800', color: '#F0ABFC', textAlign: 'center' }}>
+                      {photoBusy ? 'Загрузка…' : 'Добавить фотографии (облако)'}
+                    </Text>
+                  </Pressable>
+                )
+              ) : (
+                <Pressable
+                  disabled={photoBusy || !editId}
+                  onPress={() => void addPhotos()}
+                  style={{
+                    marginBottom: 12,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: 'rgba(232,121,249,0.4)',
+                    backgroundColor: 'rgba(232,121,249,0.1)',
+                    opacity: photoBusy ? 0.55 : 1,
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', color: '#F0ABFC', textAlign: 'center' }}>
+                    {photoBusy ? 'Загрузка…' : 'Добавить фотографии (облако)'}
+                  </Text>
+                </Pressable>
+              )}
 
               {editing && editing.photoUris.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
@@ -1156,7 +1245,13 @@ function SideGoalsBoardBlock({
               maxHeight: '90%',
             }}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={{
+                maxHeight: Math.max(320, winH - insets.top - insets.bottom - spacing.lg * 4),
+              }}
+            >
               {viewingGoal ? (
                 <>
                   <Text style={[typography.title2, { marginBottom: spacing.sm, color: colors.text, letterSpacing: -0.3 }]}>
@@ -1164,6 +1259,8 @@ function SideGoalsBoardBlock({
                   </Text>
                   {viewingGoal.description?.trim() ? (
                     <Text
+                      numberOfLines={10}
+                      ellipsizeMode="tail"
                       style={{
                         fontSize: 15,
                         lineHeight: 22,
@@ -1176,9 +1273,14 @@ function SideGoalsBoardBlock({
                     </Text>
                   ) : null}
                   {viewingGoal.photoUris.length > 0 ? (
-                    <View style={{ width: '100%', gap: 20, marginBottom: spacing.md }}>
+                    <View style={{ width: '100%', gap: spacing.sm, marginBottom: spacing.md }}>
                       {viewingGoal.photoUris.map((uri, i) => (
-                        <ViewGoalDetailPhoto key={`vd-${uri}-${i}`} uri={uri} onPress={() => setViewPhotoIdx(i)} />
+                        <ViewGoalDetailPhoto
+                          key={`vd-${uri}-${i}`}
+                          uri={uri}
+                          photoCount={viewingGoal.photoUris.length}
+                          onPress={() => setViewPhotoIdx(i)}
+                        />
                       ))}
                     </View>
                   ) : null}
@@ -1330,10 +1432,10 @@ export function PersonalTargetsScreen() {
             </Text>
           </AppSurfaceCard>
         ) : (
-          <>
+          <View style={{ gap: spacing.md }}>
             <GoalsBoardTabBar boardTab={boardTab} onBoardTab={setBoardTab} />
-            {boardTab === 'all' || boardTab === 'nearest' ? (
-              <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.xs }}>
+              {boardTab === 'all' || boardTab === 'nearest' ? (
                 <NikolayDayMoneyHeroCards
                   sprintId={activeSprint?.id ?? null}
                   chinaGoal={china}
@@ -1343,10 +1445,10 @@ export function PersonalTargetsScreen() {
                   financeUserId={userId}
                   onFinanceAccountsUpdated={invalidateFinance}
                 />
-              </View>
-            ) : null}
-            <SideGoalsBoardBlock config={cfg} boardTab={boardTab} nearestSlot={null} />
-          </>
+              ) : null}
+              <SideGoalsBoardBlock config={cfg} boardTab={boardTab} nearestSlot={null} />
+            </View>
+          </View>
         )}
       </ScrollView>
     </ScreenCanvas>

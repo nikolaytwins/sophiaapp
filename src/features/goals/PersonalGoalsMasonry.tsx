@@ -28,6 +28,16 @@ const GLASS_FILL = 'rgba(10, 10, 16, 0.78)';
 const NEON_START = '#22d3ee';
 const NEON_END = '#c084fc';
 
+/** Пробелы по разрядам (как 40 000 000 ₽); ₽ для сумм от 100, чтобы не цеплять мелкие счётчики вроде «5 / 10». */
+function formatSideGoalNumericCaption(goal: Pick<SideGoalPersisted, 'current' | 'target'>): string {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('ru-RU').format(Math.round(Number(n))).replace(/\u00A0/g, ' ');
+  const cur = fmt(goal.current);
+  const tgt = fmt(goal.target);
+  const moneyLike = goal.target >= 100;
+  return moneyLike ? `${cur} / ${tgt} ₽` : `${cur} / ${tgt}`;
+}
+
 function GlassShell({
   children,
   borderColor,
@@ -456,16 +466,14 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
         </Pressable>
       </View>
       {desc ? (
-        <Text numberOfLines={6} style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: 'rgba(248,250,252,0.55)' }}>
+        <Text numberOfLines={6} style={{ fontSize: 13, lineHeight: 18, fontWeight: '400', color: 'rgba(248,250,252,0.55)' }}>
           {desc}
         </Text>
       ) : null}
       {dateCap ? <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(248,250,252,0.5)' }}>{dateCap}</Text> : null}
       {showNumericBar ? (
         <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.55)', fontVariant: ['tabular-nums'] }}>
-          {goal.target >= 100_000
-            ? `${new Intl.NumberFormat('ru-RU').format(Math.round(goal.current))} / ${new Intl.NumberFormat('ru-RU').format(Math.round(goal.target))} ₽`
-            : `${goal.current} / ${goal.target}`}
+          {formatSideGoalNumericCaption(goal)}
         </Text>
       ) : null}
     </View>
