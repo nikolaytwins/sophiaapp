@@ -2,8 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Animated, Image as RNImage, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Animated,
+  Image as RNImage,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Image } from 'expo-image';
 
 import { formatSideGoalDateCaption } from '@/features/goals/sideGoals.logic';
@@ -70,7 +81,8 @@ function GlassShell({
 /** Грубая оценка высоты для Masonry (учёт 2-колоночной сетки для нескольких фото). */
 export function estimateGoalMasonryHeight(goal: SideGoalPersisted): number {
   const n = goal.photoUris?.length ?? 0;
-  const header = 130;
+  const descExtra = goal.description?.trim() ? 44 : 0;
+  const header = 130 + descExtra;
   if (n === 0) return header;
   if (n === 1) return header + 200;
   const rows = Math.ceil(n / 2);
@@ -98,7 +110,7 @@ export function distributeGoalsMasonryColumns(
 }
 
 /** Одно фото: ширина = родитель, высота по пропорциям, `contain` без crop. */
-function GoalPhotoNatural({ uri }: { uri: string }) {
+function GoalPhotoNatural({ uri, onOpen }: { uri: string; onOpen?: () => void }) {
   const [aspectWH, setAspectWH] = useState<number | null>(null);
 
   const applySize = useCallback((w: number, h: number) => {
@@ -121,7 +133,7 @@ function GoalPhotoNatural({ uri }: { uri: string }) {
     [applySize, uri]
   );
 
-  return (
+  const inner = (
     <View
       style={{
         width: '100%',
@@ -140,19 +152,42 @@ function GoalPhotoNatural({ uri }: { uri: string }) {
       </View>
     </View>
   );
+
+  if (!onOpen) return inner;
+  return (
+    <Pressable onPress={onOpen} accessibilityRole="imagebutton" accessibilityLabel="Увеличить фото">
+      {inner}
+    </Pressable>
+  );
 }
 
 /** Ряд из 1–2 фото на всю ширину родителя. */
-function GoalPhotoRow({ uris }: { uris: string[] }) {
+function GoalPhotoRow({
+  uris,
+  baseIndex,
+  onPhotoPress,
+}: {
+  uris: string[];
+  baseIndex: number;
+  onPhotoPress?: (index: number) => void;
+}) {
   if (uris.length === 0) return null;
   if (uris.length === 1) {
-    return <GoalPhotoNatural uri={uris[0]!} />;
+    return (
+      <GoalPhotoNatural
+        uri={uris[0]!}
+        onOpen={onPhotoPress ? () => onPhotoPress(baseIndex) : undefined}
+      />
+    );
   }
   return (
     <View style={{ flexDirection: 'row', gap: 8, width: '100%', alignItems: 'flex-start' }}>
       {uris.map((uri, i) => (
         <View key={`${uri}-${i}`} style={{ flex: 1, minWidth: 0 }}>
-          <GoalPhotoNatural uri={uri} />
+          <GoalPhotoNatural
+            uri={uri}
+            onOpen={onPhotoPress ? () => onPhotoPress(baseIndex + i) : undefined}
+          />
         </View>
       ))}
     </View>
@@ -163,10 +198,15 @@ function GoalPhotoRow({ uris }: { uris: string[] }) {
  * Динамика по числу фото:
  * - 1 — на всю ширину карточки;
  * - 2 — один ряд, две колонки на 100% ширины;
- * - 3+ — сетка 2 колонки в полосе ~68% ширины (компактнее по высоте, две фотки в строке).
+ * - 3+ — сетка 2 колонки на всю ширину карточки (галереи вроде сессий — без узких полей по бокам).
  */
-function GoalPhotosInCard({ uris }: { uris: string[] }) {
-  const { width: winW } = useWindowDimensions();
+function GoalPhotosInCard({
+  uris,
+  onPhotoPress,
+}: {
+  uris: string[];
+  onPhotoPress?: (index: number) => void;
+}) {
   if (uris.length === 0) return null;
 
   const rows: string[][] = [];
@@ -177,7 +217,7 @@ function GoalPhotosInCard({ uris }: { uris: string[] }) {
   if (uris.length === 1) {
     return (
       <View style={{ marginTop: 2, gap: 10 }}>
-        <GoalPhotoNatural uri={uris[0]!} />
+        <GoalPhotoNatural uri={uris[0]!} onOpen={onPhotoPress ? () => onPhotoPress(0) : undefined} />
       </View>
     );
   }
@@ -185,7 +225,7 @@ function GoalPhotosInCard({ uris }: { uris: string[] }) {
   if (uris.length === 2) {
     return (
       <View style={{ marginTop: 2 }}>
-        <GoalPhotoRow uris={uris} />
+        <GoalPhotoRow uris={uris} baseIndex={0} onPhotoPress={onPhotoPress} />
       </View>
     );
   }
@@ -193,41 +233,140 @@ function GoalPhotosInCard({ uris }: { uris: string[] }) {
   const grid = (
     <View style={{ gap: 10 }}>
       {rows.map((pair, ri) => (
-        <GoalPhotoRow key={`row-${pair[0]}-${ri}`} uris={pair} />
+        <GoalPhotoRow key={`row-${pair[0]}-${ri}`} uris={pair} baseIndex={ri * 2} onPhotoPress={onPhotoPress} />
       ))}
     </View>
   );
 
-  /** На узком экране / узкой колонке — 100% ширины; на шире — компактная полоса ~68%. */
-  const fullWidthGrid = winW < 640;
+  return <View style={{ marginTop: 2, width: '100%' }}>{grid}</View>;
+}
 
-  if (fullWidthGrid) {
-    return <View style={{ marginTop: 2, width: '100%' }}>{grid}</View>;
-  }
+const BAR_HEIGHT = 14;
+
+/** Полноэкранный просмотр фото цели со свайпом, если несколько. */
+export function SideGoalPhotoLightboxModal({
+  visible,
+  uris,
+  initialIndex,
+  onClose,
+}: {
+  visible: boolean;
+  uris: string[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const { width, height } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
+  const safeIndex = Math.max(0, Math.min(initialIndex, Math.max(0, uris.length - 1)));
+
+  useEffect(() => {
+    if (!visible || uris.length === 0) return;
+    const x = safeIndex * width;
+    const t = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x, animated: false });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [visible, safeIndex, width, uris.length]);
+
+  if (uris.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 2, width: '100%', alignItems: 'center' }}>
-      <View style={{ width: '68%', maxWidth: 420, alignSelf: 'center' }}>{grid}</View>
-    </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть просмотр"
+          onPress={onClose}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ flex: 1, justifyContent: 'center' }} pointerEvents="box-none">
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={uris.length > 1}
+            keyboardShouldPersistTaps="handled"
+            style={{ flexGrow: 0 }}
+          >
+            {uris.map((uri, i) => (
+              <View
+                key={`lb-${uri}-${i}`}
+                style={{
+                  width,
+                  minHeight: height * 0.72,
+                  justifyContent: 'center',
+                  paddingHorizontal: 12,
+                  paddingTop: 48,
+                  paddingBottom: 32,
+                }}
+              >
+                <Image
+                  source={{ uri }}
+                  style={{ width: width - 24, height: height * 0.58, alignSelf: 'center' }}
+                  contentFit="contain"
+                />
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={{
+              position: 'absolute',
+              top: 52,
+              right: 16,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.2)',
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>×</Text>
+          </Pressable>
+          {uris.length > 1 ? (
+            <Text
+              style={{
+                position: 'absolute',
+                bottom: 28,
+                alignSelf: 'center',
+                color: 'rgba(255,255,255,0.55)',
+                fontSize: 13,
+                fontWeight: '700',
+              }}
+            >
+              Свайп влево/вправо · {uris.length} фото
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
 type CardProps = {
   goal: SideGoalPersisted;
   onEdit: () => void;
+  onView: () => void;
   onToggleOneShot?: (id: string, done: boolean) => void;
 };
 
-export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps) {
+export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: CardProps) {
   const { spacing } = useAppTheme();
   const photos = goal.photoUris ?? [];
   const hasPhoto = photos.length > 0;
   const pct = Math.min(1, Math.max(0, goal.target > 0 ? goal.current / goal.target : 0));
-  const oneShot = goal.target <= 1;
-  const done = oneShot && goal.current >= goal.target;
+  const showNumericBar = goal.progressKind === 'numeric' && goal.target > 1;
+  const showCheckbox =
+    goal.progressKind === 'checkbox' || (goal.progressKind === 'numeric' && goal.target <= 1);
+  const done = showCheckbox && goal.current >= goal.target;
   const dateCap = formatSideGoalDateCaption(goal);
   const [hovered, setHovered] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const onHoverIn = useCallback(() => {
     if (Platform.OS !== 'web') return;
@@ -260,14 +399,29 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
     </View>
   );
 
+  const desc = goal.description?.trim();
+
   const titleBlock = (
     <View style={{ gap: 4 }}>
       {badges}
-      <Text numberOfLines={8} style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
-        {goal.title}
-      </Text>
+      <Pressable
+        onPress={() => {
+          if (Platform.OS !== 'web') void Haptics.selectionAsync();
+          onView();
+        }}
+        hitSlop={{ top: 4, bottom: 4 }}
+      >
+        <Text numberOfLines={8} style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
+          {goal.title}
+        </Text>
+      </Pressable>
+      {desc ? (
+        <Text numberOfLines={6} style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: 'rgba(248,250,252,0.55)' }}>
+          {desc}
+        </Text>
+      ) : null}
       {dateCap ? <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(248,250,252,0.5)' }}>{dateCap}</Text> : null}
-      {!oneShot ? (
+      {showNumericBar ? (
         <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.55)', fontVariant: ['tabular-nums'] }}>
           {goal.target >= 100_000
             ? `${new Intl.NumberFormat('ru-RU').format(Math.round(goal.current))} / ${new Intl.NumberFormat('ru-RU').format(Math.round(goal.target))} ₽`
@@ -277,23 +431,29 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
     </View>
   );
 
-  const footerProgress =
-    !oneShot && goal.target > 1 ? (
-      <View style={{ marginTop: 10, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-        <LinearGradient
-          colors={[NEON_START, NEON_END]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ width: `${Math.round(pct * 1000) / 10}%`, height: '100%' }}
-        />
-      </View>
-    ) : null;
+  const footerProgress = showNumericBar ? (
+    <View
+      style={{
+        marginTop: 12,
+        height: BAR_HEIGHT,
+        borderRadius: 999,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        overflow: 'hidden',
+      }}
+    >
+      <LinearGradient
+        colors={[NEON_START, NEON_END]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ width: `${Math.round(pct * 1000) / 10}%`, height: '100%', borderRadius: 999 }}
+      />
+    </View>
+  ) : null;
 
   const oneShotRow =
-    oneShot && onToggleOneShot ? (
+    showCheckbox && onToggleOneShot ? (
       <Pressable
-        onPress={(e) => {
-          e.stopPropagation?.();
+        onPress={() => {
           if (Platform.OS !== 'web') void Haptics.selectionAsync();
           onToggleOneShot(goal.id, !done);
         }}
@@ -303,31 +463,25 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
         <Ionicons name={done ? 'checkbox' : 'square-outline'} size={24} color={done ? '#a78bfa' : 'rgba(248,250,252,0.45)'} />
         <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(248,250,252,0.75)' }}>{done ? 'Сделано' : 'Отметить выполнение'}</Text>
       </Pressable>
-    ) : oneShot ? (
+    ) : showCheckbox ? (
       <Text style={{ marginTop: 8, fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.5)' }}>{done ? 'Выполнено' : 'В работе'}</Text>
     ) : null;
 
   return (
     <Pressable
-      onPress={() => {
-        if (Platform.OS !== 'web') void Haptics.selectionAsync();
-        onEdit();
-      }}
       onHoverIn={onHoverIn}
       onHoverOut={onHoverOut}
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.92 : 1,
+      style={{
         ...(Platform.OS === 'web' && hovered
           ? { shadowColor: '#f8fafc', shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } }
           : {}),
-      })}
+      }}
     >
       <GlassShell borderColor={borderColor} borderRadius={20} style={{ padding: spacing.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
           <Pressable
-            onPress={(e) => {
-              (e as { stopPropagation?: () => void }).stopPropagation?.();
+            onPress={() => {
               if (Platform.OS !== 'web') void Haptics.selectionAsync();
               onEdit();
             }}
@@ -350,10 +504,16 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
         {oneShotRow}
         {hasPhoto ? (
           <Animated.View style={{ marginTop: spacing.md, transform: [{ scale }] }}>
-            <GoalPhotosInCard uris={photos} />
+            <GoalPhotosInCard uris={photos} onPhotoPress={(i) => setLightboxIndex(i)} />
           </Animated.View>
         ) : null}
       </GlassShell>
+      <SideGoalPhotoLightboxModal
+        visible={lightboxIndex != null && photos.length > 0}
+        uris={photos}
+        initialIndex={lightboxIndex ?? 0}
+        onClose={() => setLightboxIndex(null)}
+      />
     </Pressable>
   );
 }
@@ -374,11 +534,12 @@ function pill(textColor: string, bg: string) {
 type GridProps = {
   goals: SideGoalPersisted[];
   onEditGoal: (id: string) => void;
+  onViewGoal: (id: string) => void;
   onToggleOneShot?: (id: string, done: boolean) => void;
 };
 
 /** Pinterest-style колонки (баланс по высоте). На web дополнительно можно включить CSS masonry через style.web. */
-export function PersonalGoalsMasonryGrid({ goals, onEditGoal, onToggleOneShot }: GridProps) {
+export function PersonalGoalsMasonryGrid({ goals, onEditGoal, onViewGoal, onToggleOneShot }: GridProps) {
   const { width } = useWindowDimensions();
   const gap = 12;
   const colCount = width >= 960 ? 3 : width >= 560 ? 2 : 1;
@@ -397,7 +558,13 @@ export function PersonalGoalsMasonryGrid({ goals, onEditGoal, onToggleOneShot }:
       {columns.map((col, ci) => (
         <View key={`col-${ci}`} style={{ flex: 1, minWidth: 0, gap }}>
           {col.map((g) => (
-            <SideGoalMasonryCard key={g.id} goal={g} onEdit={() => onEditGoal(g.id)} onToggleOneShot={onToggleOneShot} />
+            <SideGoalMasonryCard
+              key={g.id}
+              goal={g}
+              onEdit={() => onEditGoal(g.id)}
+              onView={() => onViewGoal(g.id)}
+              onToggleOneShot={onToggleOneShot}
+            />
           ))}
         </View>
       ))}

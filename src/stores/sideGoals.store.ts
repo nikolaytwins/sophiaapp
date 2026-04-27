@@ -6,11 +6,17 @@ import { createJSONStorage, persist } from '@/lib/zustandPersist';
 
 export type SideGoalDateMode = 'none' | 'single' | 'range';
 
+/** `numeric` — шкала и числа (при target ≤ 1 показывается одна галочка). `checkbox` — только галочка, без полосы прогресса. */
+export type SideGoalProgressKind = 'numeric' | 'checkbox';
+
 export type SideGoalPersisted = {
   id: string;
   title: string;
+  /** Текст под заголовком на карточке и в просмотре. */
+  description: string;
   current: number;
   target: number;
+  progressKind: SideGoalProgressKind;
   /** URL (https из Supabase) или устаревшие локальные uri — по возможности загрузить заново. */
   photoUris: string[];
   /** Галочка «на горизонте» — блок «Горизонт». */
@@ -33,6 +39,10 @@ function normalizeGoal(raw: unknown): SideGoalPersisted | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.id !== 'string' || typeof o.title !== 'string') return null;
+  const description =
+    typeof o.description === 'string' ? o.description.trim() : '';
+  const pkRaw = o.progressKind;
+  const progressKind: SideGoalProgressKind = pkRaw === 'checkbox' ? 'checkbox' : 'numeric';
   const target = typeof o.target === 'number' && Number.isFinite(o.target) ? Math.max(1, Math.round(o.target)) : 1;
   let current = typeof o.current === 'number' && Number.isFinite(o.current) ? Math.max(0, Math.round(o.current)) : 0;
   current = Math.min(current, target);
@@ -48,11 +58,13 @@ function normalizeGoal(raw: unknown): SideGoalPersisted | null {
   const dateFrom = typeof o.dateFrom === 'string' && o.dateFrom.trim() ? o.dateFrom.trim() : null;
   const dateTo = typeof o.dateTo === 'string' && o.dateTo.trim() ? o.dateTo.trim() : null;
   const title = o.title.trim() || 'Цель';
-  return {
+  let out: SideGoalPersisted = {
     id: o.id,
     title,
+    description,
     target,
     current,
+    progressKind,
     photoUris,
     isHorizon,
     isNearestPinned,
@@ -61,6 +73,10 @@ function normalizeGoal(raw: unknown): SideGoalPersisted | null {
     dateFrom,
     dateTo,
   };
+  if (out.progressKind === 'checkbox') {
+    out = { ...out, target: 1, current: out.current >= 1 ? 1 : 0 };
+  }
+  return out;
 }
 
 export function normalizeSideGoalsPayload(raw: unknown): SideGoalsSyncPayload {
@@ -80,15 +96,31 @@ type State = {
   payloadUpdatedAt: string;
   seedFromSeedsIfEmpty: (seeds: StrategySideGoalSeedDef[]) => void;
   /** Новая цель на доске (id генерируется внутри). */
-  addSideGoal: (defaults?: Partial<Pick<SideGoalPersisted, 'isHorizon' | 'isNearestPinned' | 'dateMode' | 'dateSingle' | 'dateFrom' | 'dateTo'>>) => string;
+  addSideGoal: (
+    defaults?: Partial<
+      Pick<
+        SideGoalPersisted,
+        | 'isHorizon'
+        | 'isNearestPinned'
+        | 'dateMode'
+        | 'dateSingle'
+        | 'dateFrom'
+        | 'dateTo'
+        | 'description'
+        | 'progressKind'
+      >
+    >
+  ) => string;
   updateSideGoal: (
     id: string,
     patch: Partial<
       Pick<
         SideGoalPersisted,
         | 'title'
+        | 'description'
         | 'current'
         | 'target'
+        | 'progressKind'
         | 'isHorizon'
         | 'isNearestPinned'
         | 'photoUris'
@@ -99,6 +131,7 @@ type State = {
       >
     >
   ) => void;
+  removeSideGoal: (id: string) => void;
   appendSideGoalPhotos: (id: string, uris: string[]) => void;
   removeSideGoalPhotoAt: (id: string, index: number) => void;
   replaceFromCloud: (payload: SideGoalsSyncPayload) => void;
@@ -138,8 +171,10 @@ export const useSideGoalsStore = create<State>()(
             goals: seeds.map((x) => ({
               id: x.id,
               title: x.title,
+              description: '',
               current: Math.max(0, Math.round(x.defaultCurrent ?? 0)),
               target: Math.max(1, Math.round(x.defaultTarget)),
+              progressKind: 'numeric' as const,
               photoUris: [],
               isHorizon: false,
               isNearestPinned: false,
@@ -154,11 +189,14 @@ export const useSideGoalsStore = create<State>()(
 
       addSideGoal: (defaults) => {
         const id = `sg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const pk = defaults?.progressKind === 'checkbox' ? 'checkbox' : 'numeric';
         const goal: SideGoalPersisted = {
           id,
           title: 'Новая цель',
+          description: (defaults?.description ?? '').trim(),
           current: 0,
-          target: 1000,
+          target: pk === 'checkbox' ? 1 : 1000,
+          progressKind: pk,
           photoUris: [],
           isHorizon: defaults?.isHorizon ?? false,
           isNearestPinned: defaults?.isNearestPinned ?? false,
@@ -175,10 +213,17 @@ export const useSideGoalsStore = create<State>()(
         set((s) => ({
           goals: s.goals.map((g) => {
             if (g.id !== id) return g;
-            const nextTarget = patch.target != null ? Math.max(1, Math.round(patch.target)) : g.target;
+            let nextProgressKind = patch.progressKind != null ? patch.progressKind : g.progressKind;
             const nextTitle = patch.title != null ? patch.title.trim() || g.title : g.title;
+            const nextDescription = patch.description != null ? patch.description.trim() : g.description;
+            let nextTarget = patch.target != null ? Math.max(1, Math.round(patch.target)) : g.target;
             let nextCurrent = patch.current != null ? Math.max(0, Math.round(patch.current)) : g.current;
-            nextCurrent = Math.min(nextCurrent, nextTarget);
+            if (nextProgressKind === 'checkbox') {
+              nextTarget = 1;
+              nextCurrent = nextCurrent >= 1 ? 1 : 0;
+            } else {
+              nextCurrent = Math.min(nextCurrent, nextTarget);
+            }
             const nextHorizon = patch.isHorizon != null ? patch.isHorizon : g.isHorizon;
             const nextNearest = patch.isNearestPinned != null ? patch.isNearestPinned : g.isNearestPinned;
             const nextPhotos =
@@ -192,6 +237,8 @@ export const useSideGoalsStore = create<State>()(
             return {
               ...g,
               title: nextTitle,
+              description: nextDescription,
+              progressKind: nextProgressKind,
               target: nextTarget,
               current: nextCurrent,
               isHorizon: nextHorizon,
@@ -203,6 +250,12 @@ export const useSideGoalsStore = create<State>()(
               dateTo: nextDateTo,
             };
           }),
+          payloadUpdatedAt: touchNow(),
+        })),
+
+      removeSideGoal: (id) =>
+        set((s) => ({
+          goals: s.goals.filter((g) => g.id !== id),
           payloadUpdatedAt: touchNow(),
         })),
 
@@ -230,7 +283,7 @@ export const useSideGoalsStore = create<State>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ goals: s.goals, payloadUpdatedAt: s.payloadUpdatedAt }),
       migrate: (persisted, fromVersion) => {

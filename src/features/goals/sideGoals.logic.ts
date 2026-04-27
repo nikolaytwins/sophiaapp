@@ -48,8 +48,15 @@ export function sideGoalDatedOutsideYear(g: SideGoalPersisted, year: number): bo
   return !sideGoalInCalendarYear(g, year);
 }
 
-/** `all` — все разделы подряд; остальные — фильтр одной вкладки. */
-export type SideGoalBoardTab = 'all' | 'nearest' | 'year' | 'wish' | 'horizon';
+/** Цель считается выполненной, если текущее значение достигло целевого (шкала или галочка). */
+export function isSideGoalCompleted(g: SideGoalPersisted): boolean {
+  const t = g.target;
+  if (!Number.isFinite(t) || t < 1) return false;
+  return g.current >= t;
+}
+
+/** `all` — все разделы подряд; `done` — только выполненные; остальные — активные цели одного раздела. */
+export type SideGoalBoardTab = 'all' | 'nearest' | 'year' | 'wish' | 'horizon' | 'done';
 
 export function normalizeDateKey(raw: string): string | null {
   const t = raw.trim();

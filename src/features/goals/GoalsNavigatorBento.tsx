@@ -16,6 +16,7 @@ export function GoalsNavigatorBento({
   otherYearGoals,
   nearestSlot = null,
   onEditGoal,
+  onViewGoal,
   onToggleOneShot,
 }: {
   calendarYear: number;
@@ -28,6 +29,7 @@ export function GoalsNavigatorBento({
   /** Блок накоплений (Китай/подушка) — опционально, если показан выше на странице. */
   nearestSlot?: ReactNode | null;
   onEditGoal: (id: string) => void;
+  onViewGoal: (id: string) => void;
   onToggleOneShot?: (id: string, done: boolean) => void;
 }) {
   const { spacing } = useAppTheme();
@@ -59,6 +61,7 @@ export function GoalsNavigatorBento({
       <PersonalGoalsMasonryGrid
         goals={mergedAll}
         onEditGoal={onEditGoal}
+        onViewGoal={onViewGoal}
         onToggleOneShot={onToggleOneShot}
       />
 

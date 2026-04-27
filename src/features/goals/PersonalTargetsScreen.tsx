@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Modal,
@@ -20,21 +19,31 @@ import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
 import { GoalsNavigatorBento, nearestCutoffForAugust } from '@/features/goals/GoalsNavigatorBento';
-import { PersonalGoalsMasonryGrid } from '@/features/goals/PersonalGoalsMasonry';
-import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
-import { normalizeDateKey, sideGoalDatedOutsideYear, sideGoalInCalendarYear, type SideGoalBoardTab } from '@/features/goals/sideGoals.logic';
+import { PersonalGoalsMasonryGrid, SideGoalPhotoLightboxModal } from '@/features/goals/PersonalGoalsMasonry';
+import {
+  isSideGoalCompleted,
+  normalizeDateKey,
+  sideGoalDatedOutsideYear,
+  sideGoalInCalendarYear,
+  type SideGoalBoardTab,
+} from '@/features/goals/sideGoals.logic';
 import { loadFinanceOverview } from '@/features/finance/financeApi';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { strategyPageConfig, type StrategyGoalsTabDef } from '@/features/strategy/strategy.config';
 import { getSupabase } from '@/lib/supabase';
 import { uploadSideGoalPhotoToSupabase } from '@/services/sideGoalsPhotoUpload';
-import { ensureSideGoalsHydrated, type SideGoalDateMode, type SideGoalPersisted, useSideGoalsStore } from '@/stores/sideGoals.store';
+import {
+  ensureSideGoalsHydrated,
+  type SideGoalDateMode,
+  type SideGoalProgressKind,
+  useSideGoalsStore,
+} from '@/stores/sideGoals.store';
 import { useSprintStore } from '@/stores/sprint.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
-import { alertInfo } from '@/shared/lib/confirmAction';
+import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
 
 function parseAmount(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
@@ -47,45 +56,90 @@ const BOARD_TABS: { id: SideGoalBoardTab; label: string }[] = [
   { id: 'year', label: 'Год' },
   { id: 'wish', label: 'Доска желаний' },
   { id: 'horizon', label: 'Горизонт' },
+  { id: 'done', label: 'Выполненные цели' },
 ];
+
+function GoalsBoardTabBar({
+  boardTab,
+  onBoardTab,
+}: {
+  boardTab: SideGoalBoardTab;
+  onBoardTab: (t: SideGoalBoardTab) => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}
+    >
+      {BOARD_TABS.map(({ id, label }) => {
+        const on = boardTab === id;
+        return (
+          <Pressable
+            key={id}
+            onPress={() => {
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              onBoardTab(id);
+            }}
+            style={{
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: on ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)',
+              backgroundColor: on ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: on ? '900' : '700', color: on ? '#FAFAFC' : colors.textMuted }}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
 
 function SideGoalsBoardBlock({
   config,
   boardTab,
-  onBoardTab,
   nearestSlot = null,
 }: {
   config: StrategyGoalsTabDef;
   boardTab: SideGoalBoardTab;
-  onBoardTab: (t: SideGoalBoardTab) => void;
   nearestSlot?: ReactNode | null;
 }) {
   const { typography, spacing, colors } = useAppTheme();
   const goals = useSideGoalsStore((s) => s.goals);
   const addSideGoal = useSideGoalsStore((s) => s.addSideGoal);
   const updateSideGoal = useSideGoalsStore((s) => s.updateSideGoal);
+  const removeSideGoal = useSideGoalsStore((s) => s.removeSideGoal);
   const appendSideGoalPhotos = useSideGoalsStore((s) => s.appendSideGoalPhotos);
   const removeSideGoalPhotoAt = useSideGoalsStore((s) => s.removeSideGoalPhotoAt);
 
   const calendarYear = new Date().getFullYear();
 
+  const activeGoals = useMemo(() => goals.filter((g) => !isSideGoalCompleted(g)), [goals]);
+  const completedGoals = useMemo(() => goals.filter(isSideGoalCompleted), [goals]);
+
   const pinnedGoals = useMemo(
-    () => goals.filter((g) => !g.isHorizon && g.isNearestPinned),
-    [goals]
+    () => activeGoals.filter((g) => !g.isHorizon && g.isNearestPinned),
+    [activeGoals]
   );
   const yearGoals = useMemo(
-    () => goals.filter((g) => !g.isHorizon && !g.isNearestPinned && sideGoalInCalendarYear(g, calendarYear)),
-    [goals, calendarYear]
+    () => activeGoals.filter((g) => !g.isHorizon && !g.isNearestPinned && sideGoalInCalendarYear(g, calendarYear)),
+    [activeGoals, calendarYear]
   );
   const otherYearGoals = useMemo(
-    () => goals.filter((g) => !g.isHorizon && !g.isNearestPinned && sideGoalDatedOutsideYear(g, calendarYear)),
-    [goals, calendarYear]
+    () => activeGoals.filter((g) => !g.isHorizon && !g.isNearestPinned && sideGoalDatedOutsideYear(g, calendarYear)),
+    [activeGoals, calendarYear]
   );
   const wishGoals = useMemo(
-    () => goals.filter((g) => !g.isHorizon && !g.isNearestPinned && g.dateMode === 'none'),
-    [goals]
+    () => activeGoals.filter((g) => !g.isHorizon && !g.isNearestPinned && g.dateMode === 'none'),
+    [activeGoals]
   );
-  const horizonGoals = useMemo(() => goals.filter((g) => g.isHorizon), [goals]);
+  const horizonGoals = useMemo(() => activeGoals.filter((g) => g.isHorizon), [activeGoals]);
 
   const [editId, setEditId] = useState<string | null>(null);
   const editing = editId ? goals.find((g) => g.id === editId) : null;
@@ -98,7 +152,14 @@ function SideGoalsBoardBlock({
   const [draftDateSingle, setDraftDateSingle] = useState('');
   const [draftDateFrom, setDraftDateFrom] = useState('');
   const [draftDateTo, setDraftDateTo] = useState('');
+  const [draftDescription, setDraftDescription] = useState('');
+  const [draftProgressKind, setDraftProgressKind] = useState<SideGoalProgressKind>('numeric');
+  const [draftCheckboxDone, setDraftCheckboxDone] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+
+  const [viewId, setViewId] = useState<string | null>(null);
+  const [viewPhotoIdx, setViewPhotoIdx] = useState<number | null>(null);
+  const viewingGoal = viewId ? goals.find((g) => g.id === viewId) ?? null : null;
 
   useEffect(() => {
     if (!editId) return;
@@ -108,6 +169,9 @@ function SideGoalsBoardBlock({
       return;
     }
     setDraftTitle(g.title);
+    setDraftDescription(g.description ?? '');
+    setDraftProgressKind(g.progressKind ?? 'numeric');
+    setDraftCheckboxDone(g.current >= g.target);
     setDraftCurrent(String(g.current));
     setDraftTarget(String(g.target));
     setDraftHorizon(g.isHorizon);
@@ -122,8 +186,9 @@ function SideGoalsBoardBlock({
 
   const save = useCallback(() => {
     if (!editId) return;
-    const t = Math.max(1, parseAmount(draftTarget));
-    const c = Math.max(0, parseAmount(draftCurrent));
+    const useCheckbox = draftProgressKind === 'checkbox';
+    const t = useCheckbox ? 1 : Math.max(1, parseAmount(draftTarget));
+    const c = useCheckbox ? (draftCheckboxDone ? 1 : 0) : Math.max(0, parseAmount(draftCurrent));
     let horizon = draftHorizon;
     let nearest = draftNearest;
     if (horizon) nearest = false;
@@ -167,6 +232,8 @@ function SideGoalsBoardBlock({
 
     updateSideGoal(editId, {
       title: draftTitle.trim(),
+      description: draftDescription.trim(),
+      progressKind: draftProgressKind,
       target: t,
       current: Math.min(c, t),
       isHorizon: horizon,
@@ -179,13 +246,16 @@ function SideGoalsBoardBlock({
     setEditId(null);
     if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [
+    draftCheckboxDone,
     draftCurrent,
     draftDateFrom,
     draftDateMode,
     draftDateSingle,
     draftDateTo,
+    draftDescription,
     draftHorizon,
     draftNearest,
+    draftProgressKind,
     draftTarget,
     draftTitle,
     editId,
@@ -218,6 +288,7 @@ function SideGoalsBoardBlock({
   }, [appendSideGoalPhotos, editId]);
 
   const openAddForTab = (tab: SideGoalBoardTab) => {
+    if (tab === 'done') return;
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const y = calendarYear;
     if (tab === 'all') {
@@ -254,76 +325,31 @@ function SideGoalsBoardBlock({
   const onToggleOneShot = useCallback(
     (id: string, done: boolean) => {
       const g = useSideGoalsStore.getState().goals.find((x) => x.id === id);
-      if (!g || g.target > 1) return;
-      updateSideGoal(id, { current: done ? Math.max(1, g.target) : 0 });
+      if (!g) return;
+      if (g.progressKind === 'checkbox' || g.target <= 1) {
+        updateSideGoal(id, { current: done ? 1 : 0, target: g.progressKind === 'checkbox' ? 1 : g.target });
+      }
     },
     [updateSideGoal]
   );
 
-  const tabIntro =
-    boardTab === 'all'
-      ? 'Режим «все»: одна Masonry-сетка — цели из всех разделов перемешаны; внизу блок накоплений. Остальные вкладки — фильтр по одному разделу.'
-      : boardTab === 'nearest'
-        ? 'Закреплённые «ближайшие» карточки + Китай и подушка.'
-        : boardTab === 'year'
-          ? `Цели с датой в ${calendarYear} году (один день или период).`
-          : boardTab === 'wish'
-            ? 'Цели без даты — доска желаний.'
-            : 'Дальний горизонт: отдельный список.';
+  const requestDeleteGoal = useCallback(() => {
+    if (!editId) return;
+    confirmDestructive({
+      title: 'Удалить цель?',
+      message: 'Цель исчезнет с доски. Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      onConfirm: () => {
+        removeSideGoal(editId);
+        setEditId(null);
+        setViewId((v) => (v === editId ? null : v));
+        if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      },
+    });
+  }, [editId, removeSideGoal]);
 
   return (
     <View style={{ gap: spacing.md }}>
-      <View style={{ gap: 6 }}>
-        <Text
-          style={{
-            fontSize: 11,
-            lineHeight: 15,
-            fontWeight: '700',
-            letterSpacing: 1.2,
-            textTransform: 'uppercase',
-            color: 'rgba(247,244,250,0.55)',
-          }}
-        >
-          {config.sideSectionTitle}
-        </Text>
-        <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.45)', fontWeight: '600' }}>
-          Фото загружаются в Supabase и не пропадают на вебе. По умолчанию видны все цели; вкладка — фильтр по одному разделу.
-        </Text>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}
-      >
-        {BOARD_TABS.map(({ id, label }) => {
-          const on = boardTab === id;
-          return (
-            <Pressable
-              key={id}
-              onPress={() => {
-                if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                onBoardTab(id);
-              }}
-              style={{
-                paddingVertical: 10,
-                paddingHorizontal: 14,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: on ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)',
-                backgroundColor: on ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: on ? '900' : '700', color: on ? '#FAFAFC' : colors.textMuted }}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(247,244,250,0.42)', lineHeight: 17 }}>{tabIntro}</Text>
-
       {boardTab === 'all' ? (
         <GoalsNavigatorBento
           calendarYear={calendarYear}
@@ -335,8 +361,37 @@ function SideGoalsBoardBlock({
           otherYearGoals={otherYearGoals}
           nearestSlot={nearestSlot}
           onEditGoal={setEditId}
+          onViewGoal={setViewId}
           onToggleOneShot={onToggleOneShot}
         />
+      ) : boardTab === 'done' ? (
+        <View style={{ gap: spacing.lg }}>
+          <Text
+            style={{
+              fontSize: 11,
+              lineHeight: 15,
+              fontWeight: '700',
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              color: 'rgba(167,243,208,0.85)',
+              marginBottom: 2,
+            }}
+          >
+            Выполненные цели
+          </Text>
+          {completedGoals.length === 0 ? (
+            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
+              Здесь появятся цели, у которых достигнут полный прогресс или отмечено «выполнено».
+            </Text>
+          ) : (
+            <PersonalGoalsMasonryGrid
+              goals={completedGoals}
+              onEditGoal={setEditId}
+              onViewGoal={setViewId}
+              onToggleOneShot={onToggleOneShot}
+            />
+          )}
+        </View>
       ) : (
         <>
           {boardTab === 'nearest' ? (
@@ -349,6 +404,7 @@ function SideGoalsBoardBlock({
                 <PersonalGoalsMasonryGrid
                   goals={pinnedGoals}
                   onEditGoal={setEditId}
+                  onViewGoal={setViewId}
                   onToggleOneShot={onToggleOneShot}
                 />
               )}
@@ -379,6 +435,7 @@ function SideGoalsBoardBlock({
                 <PersonalGoalsMasonryGrid
                   goals={yearGoals}
                   onEditGoal={setEditId}
+                  onViewGoal={setViewId}
                   onToggleOneShot={onToggleOneShot}
                 />
               )}
@@ -399,6 +456,7 @@ function SideGoalsBoardBlock({
                   <PersonalGoalsMasonryGrid
                     goals={otherYearGoals}
                     onEditGoal={setEditId}
+                    onViewGoal={setViewId}
                     onToggleOneShot={onToggleOneShot}
                   />
                 </View>
@@ -429,6 +487,7 @@ function SideGoalsBoardBlock({
                 <PersonalGoalsMasonryGrid
                   goals={wishGoals}
                   onEditGoal={setEditId}
+                  onViewGoal={setViewId}
                   onToggleOneShot={onToggleOneShot}
                 />
               )}
@@ -458,6 +517,7 @@ function SideGoalsBoardBlock({
                 <PersonalGoalsMasonryGrid
                   goals={horizonGoals}
                   onEditGoal={setEditId}
+                  onViewGoal={setViewId}
                   onToggleOneShot={onToggleOneShot}
                 />
               )}
@@ -466,27 +526,29 @@ function SideGoalsBoardBlock({
         </>
       )}
 
-      <Pressable
-        onPress={() => openAddForTab(boardTab)}
-        accessibilityRole="button"
-        accessibilityLabel="Добавить новую цель"
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 10,
-          marginTop: spacing.sm,
-          paddingVertical: 14,
-          paddingHorizontal: spacing.lg,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: 'rgba(232,121,249,0.45)',
-          backgroundColor: pressed ? 'rgba(232,121,249,0.16)' : 'rgba(232,121,249,0.08)',
-        })}
-      >
-        <Ionicons name="add-circle-outline" size={22} color="#F0ABFC" />
-        <Text style={{ fontSize: 15, fontWeight: '800', color: '#F5D0FE' }}>Добавить цель</Text>
-      </Pressable>
+      {boardTab !== 'done' ? (
+        <Pressable
+          onPress={() => openAddForTab(boardTab)}
+          accessibilityRole="button"
+          accessibilityLabel="Добавить новую цель"
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            marginTop: spacing.sm,
+            paddingVertical: 14,
+            paddingHorizontal: spacing.lg,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(232,121,249,0.45)',
+            backgroundColor: pressed ? 'rgba(232,121,249,0.16)' : 'rgba(232,121,249,0.08)',
+          })}
+        >
+          <Ionicons name="add-circle-outline" size={22} color="#F0ABFC" />
+          <Text style={{ fontSize: 15, fontWeight: '800', color: '#F5D0FE' }}>Добавить цель</Text>
+        </Pressable>
+      ) : null}
 
       <Modal visible={Boolean(editing)} animationType="fade" transparent onRequestClose={closeModal}>
         <Pressable
@@ -751,17 +813,18 @@ function SideGoalsBoardBlock({
                   paddingHorizontal: 14,
                   color: colors.text,
                   fontSize: 16,
-                  marginBottom: 16,
+                  marginBottom: 12,
                 }}
               />
 
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Цель (число)</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Описание</Text>
               <TextInput
-                value={draftTarget}
-                onChangeText={setDraftTarget}
-                keyboardType="numeric"
-                placeholder="1000"
+                value={draftDescription}
+                onChangeText={setDraftDescription}
+                placeholder="Коротко: зачем цель, что важно помнить"
                 placeholderTextColor="rgba(255,255,255,0.28)"
+                multiline
+                textAlignVertical="top"
                 style={{
                   borderWidth: 1,
                   borderColor: 'rgba(255,255,255,0.12)',
@@ -769,31 +832,144 @@ function SideGoalsBoardBlock({
                   paddingVertical: 12,
                   paddingHorizontal: 14,
                   color: colors.text,
-                  fontSize: 16,
+                  fontSize: 15,
+                  minHeight: 88,
                   marginBottom: 16,
-                  fontVariant: ['tabular-nums'],
                 }}
               />
 
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Сейчас</Text>
-              <TextInput
-                value={draftCurrent}
-                onChangeText={setDraftCurrent}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor="rgba(255,255,255,0.28)"
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>Как отмечать</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md }}>
+                {(
+                  [
+                    ['numeric', 'Шкала (числа и полоса)'] as const,
+                    ['checkbox', 'Только галочка'] as const,
+                  ] as const
+                ).map(([kind, label]) => {
+                  const on = draftProgressKind === kind;
+                  return (
+                    <Pressable
+                      key={kind}
+                      onPress={() => {
+                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                        if (kind === 'checkbox') {
+                          setDraftProgressKind('checkbox');
+                          const cur = parseAmount(draftCurrent);
+                          const tgt = Math.max(1, parseAmount(draftTarget));
+                          setDraftCheckboxDone(tgt > 0 && cur >= tgt);
+                        } else {
+                          setDraftProgressKind('numeric');
+                          if (parseAmount(draftTarget) <= 1) {
+                            setDraftTarget('1000');
+                            setDraftCurrent(draftCheckboxDone ? '1000' : '0');
+                          }
+                        }
+                      }}
+                      style={{
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: on ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.12)',
+                        backgroundColor: on ? 'rgba(168,85,247,0.15)' : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: on ? '#F5D0FE' : colors.textMuted }}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {draftProgressKind === 'numeric' ? (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Цель (число)</Text>
+                  <TextInput
+                    value={draftTarget}
+                    onChangeText={setDraftTarget}
+                    keyboardType="numeric"
+                    placeholder="1000"
+                    placeholderTextColor="rgba(255,255,255,0.28)"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.12)',
+                      borderRadius: 14,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      color: colors.text,
+                      fontSize: 16,
+                      marginBottom: 16,
+                      fontVariant: ['tabular-nums'],
+                    }}
+                  />
+
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Сейчас</Text>
+                  <TextInput
+                    value={draftCurrent}
+                    onChangeText={setDraftCurrent}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor="rgba(255,255,255,0.28)"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.12)',
+                      borderRadius: 14,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      color: colors.text,
+                      fontSize: 16,
+                      marginBottom: 20,
+                      fontVariant: ['tabular-nums'],
+                    }}
+                  />
+                </>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    setDraftCheckboxDone((v) => !v);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    marginBottom: 20,
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: draftCheckboxDone ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.12)',
+                    backgroundColor: draftCheckboxDone ? 'rgba(168,85,247,0.1)' : 'rgba(255,255,255,0.03)',
+                  }}
+                >
+                  <Ionicons
+                    name={draftCheckboxDone ? 'checkbox' : 'square-outline'}
+                    size={24}
+                    color={draftCheckboxDone ? '#E9D5FF' : 'rgba(255,255,255,0.45)'}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>Цель выполнена</Text>
+                    <Text style={{ fontSize: 12, marginTop: 3, color: colors.textMuted, lineHeight: 16 }}>
+                      Без числового прогресса — только факт сделано / не сделано.
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+
+              <Pressable
+                onPress={requestDeleteGoal}
                 style={{
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.12)',
+                  marginBottom: 14,
+                  minHeight: 48,
                   borderRadius: 14,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  color: colors.text,
-                  fontSize: 16,
-                  marginBottom: 20,
-                  fontVariant: ['tabular-nums'],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: 'rgba(248,113,113,0.55)',
+                  backgroundColor: 'rgba(248,113,113,0.08)',
                 }}
-              />
+              >
+                <Text style={{ fontWeight: '800', color: 'rgba(252,165,165,0.95)' }}>Удалить цель…</Text>
+              </Pressable>
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
@@ -828,6 +1004,130 @@ function SideGoalsBoardBlock({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={Boolean(viewingGoal)}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setViewId(null);
+          setViewPhotoIdx(null);
+        }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: spacing.lg }}
+          onPress={() => {
+            setViewId(null);
+            setViewPhotoIdx(null);
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              borderRadius: 20,
+              padding: spacing.lg,
+              backgroundColor: '#141418',
+              borderWidth: 1,
+              borderColor: 'rgba(139,92,246,0.45)',
+              maxHeight: '90%',
+            }}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {viewingGoal ? (
+                <>
+                  <Text style={[typography.title2, { marginBottom: spacing.sm, color: colors.text, letterSpacing: -0.3 }]}>
+                    {viewingGoal.title}
+                  </Text>
+                  {viewingGoal.description?.trim() ? (
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 22,
+                        fontWeight: '600',
+                        color: 'rgba(248,250,252,0.72)',
+                        marginBottom: spacing.md,
+                      }}
+                    >
+                      {viewingGoal.description.trim()}
+                    </Text>
+                  ) : null}
+                  {viewingGoal.photoUris.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator
+                      style={{ marginBottom: spacing.md }}
+                      contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+                    >
+                      {viewingGoal.photoUris.map((uri, i) => (
+                        <Pressable key={`vd-${uri}-${i}`} onPress={() => setViewPhotoIdx(i)}>
+                          <Image
+                            source={{ uri }}
+                            style={{
+                              width: 280,
+                              height: 200,
+                              borderRadius: 14,
+                              borderWidth: 1,
+                              borderColor: 'rgba(255,255,255,0.14)',
+                            }}
+                            contentFit="cover"
+                          />
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: spacing.sm }}>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                        const id = viewingGoal.id;
+                        setViewId(null);
+                        setViewPhotoIdx(null);
+                        setEditId(id);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: 120,
+                        minHeight: 48,
+                        borderRadius: 14,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#9333EA',
+                      }}
+                    >
+                      <Text style={{ fontWeight: '900', color: '#FAFAFC' }}>Редактировать</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setViewId(null);
+                        setViewPhotoIdx(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: 120,
+                        minHeight: 48,
+                        borderRadius: 14,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.14)',
+                      }}
+                    >
+                      <Text style={{ fontWeight: '800', color: colors.textMuted }}>Закрыть</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <SideGoalPhotoLightboxModal
+        visible={viewPhotoIdx != null && (viewingGoal?.photoUris.length ?? 0) > 0}
+        uris={viewingGoal?.photoUris ?? []}
+        initialIndex={viewPhotoIdx ?? 0}
+        onClose={() => setViewPhotoIdx(null)}
+      />
     </View>
   );
 }
@@ -906,32 +1206,8 @@ export function PersonalTargetsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {isNikolay ? (
-          <View style={{ gap: spacing.sm }}>
-            <Text
-              style={{
-                fontSize: 11,
-                lineHeight: 15,
-                fontWeight: '700',
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
-                color: 'rgba(247,244,250,0.55)',
-              }}
-            >
-              {cfg.nearestSectionTitle}
-            </Text>
-            <NikolayDayMoneyHeroCards
-              sprintId={activeSprint?.id ?? null}
-              chinaGoal={china}
-              cushionGoal={cushion}
-              financeAccounts={financeOverviewQ.data?.accounts ?? null}
-              financeUserId={userId}
-              onFinanceAccountsUpdated={invalidateFinance}
-            />
-          </View>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+          <Text style={[typography.title1, { letterSpacing: -0.2, flexShrink: 1 }]}>Цели</Text>
           <HeaderProfileAvatar />
         </View>
 
@@ -944,37 +1220,21 @@ export function PersonalTargetsScreen() {
           </AppSurfaceCard>
         ) : (
           <>
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[typography.title1, { letterSpacing: -0.2 }]}>{cfg.pageTitle}</Text>
-              <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
-                <Link href={'/annual-goals' as Href} asChild>
-                  <Pressable hitSlop={6}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: GOALS_ACCENT, textDecorationLine: 'underline' }}>
-                      Годовые цели (карточки)
-                    </Text>
-                  </Pressable>
-                </Link>
-                <Link href={'/global-vision' as Href} asChild>
-                  <Pressable hitSlop={6}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: GOALS_ACCENT, textDecorationLine: 'underline' }}>
-                      Глобальное видение
-                    </Text>
-                  </Pressable>
-                </Link>
+            <GoalsBoardTabBar boardTab={boardTab} onBoardTab={setBoardTab} />
+            {boardTab === 'nearest' ? (
+              <View style={{ gap: spacing.sm }}>
+                <NikolayDayMoneyHeroCards
+                  sprintId={activeSprint?.id ?? null}
+                  chinaGoal={china}
+                  cushionGoal={cushion}
+                  desktopTwoColumn
+                  financeAccounts={financeOverviewQ.data?.accounts ?? null}
+                  financeUserId={userId}
+                  onFinanceAccountsUpdated={invalidateFinance}
+                />
               </View>
-            </View>
-
-            <Text style={[typography.body, { fontSize: 14, lineHeight: 20, color: colors.textMuted }]}>
-              {cfg.nearestDeadlineLine}
-            </Text>
-
-            <SideGoalsBoardBlock
-              config={cfg}
-              boardTab={boardTab}
-              onBoardTab={setBoardTab}
-              nearestSlot={null}
-            />
+            ) : null}
+            <SideGoalsBoardBlock config={cfg} boardTab={boardTab} nearestSlot={null} />
           </>
         )}
       </ScrollView>
