@@ -477,7 +477,7 @@ function SideGoalsBoardBlock({
   }, [editId, removeSideGoal]);
 
   return (
-    <View style={{ gap: spacing.md }}>
+    <View style={{ gap: spacing.sm }}>
       {boardTab === 'all' ? (
         <GoalsNavigatorBento
           calendarYear={calendarYear}
@@ -523,7 +523,7 @@ function SideGoalsBoardBlock({
       ) : (
         <>
           {boardTab === 'nearest' ? (
-            <View style={{ gap: spacing.lg }}>
+            <View style={{ gap: spacing.sm }}>
               {pinnedGoals.length === 0 ? (
                 <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
                   Пока нет закреплённых целей. Нажми «Добавить цель» и включи «Ближайшая цель».
@@ -541,7 +541,7 @@ function SideGoalsBoardBlock({
           ) : null}
 
           {boardTab === 'year' ? (
-            <View style={{ gap: spacing.lg }}>
+            <View style={{ gap: spacing.sm }}>
               <Text
                 style={{
                   fontSize: 11,
@@ -568,7 +568,7 @@ function SideGoalsBoardBlock({
                 />
               )}
               {otherYearGoals.length > 0 ? (
-                <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
+                <View style={{ gap: spacing.sm, marginTop: 4 }}>
                   <Text
                     style={{
                       fontSize: 11,
@@ -1411,7 +1411,7 @@ export function PersonalTargetsScreen() {
           paddingTop: Math.max(insets.top, 12) + spacing.sm,
           paddingHorizontal: spacing.lg,
           paddingBottom: 120,
-          gap: spacing.xl + 8,
+          gap: spacing.md,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -1420,7 +1420,7 @@ export function PersonalTargetsScreen() {
           <HeaderProfileAvatar />
         </View>
 
-        <View style={{ overflow: 'visible', paddingBottom: 36 }}>
+        <View style={{ overflow: 'hidden', paddingBottom: 8 }}>
           <GoalsHero />
         </View>
 
@@ -1432,9 +1432,9 @@ export function PersonalTargetsScreen() {
             </Text>
           </AppSurfaceCard>
         ) : (
-          <View style={{ gap: spacing.md }}>
+          <View style={{ gap: spacing.sm }}>
             <GoalsBoardTabBar boardTab={boardTab} onBoardTab={setBoardTab} />
-            <View style={{ gap: spacing.xs }}>
+            <View style={{ gap: 4 }}>
               {boardTab === 'all' || boardTab === 'nearest' ? (
                 <NikolayDayMoneyHeroCards
                   sprintId={activeSprint?.id ?? null}

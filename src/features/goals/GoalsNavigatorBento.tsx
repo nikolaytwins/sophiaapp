@@ -64,7 +64,7 @@ export function GoalsNavigatorBento({
   }, [pinnedGoals, horizonGoals, yearNearest, yearTrack, otherYearGoals, wishGoals]);
 
   return (
-    <View style={{ gap: spacing.xl + 4 }}>
+    <View style={{ gap: spacing.md }}>
       <PersonalGoalsMasonryGrid
         goals={mergedAll}
         onEditGoal={onEditGoal}

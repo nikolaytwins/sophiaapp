@@ -4,71 +4,97 @@ import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-nat
 
 import { useAppTheme } from '@/theme';
 
-/** PNG с прозрачным фоном: девушка с доской «ЦЕЛИ». */
+/** PNG с прозрачным фоном: София с доской «ЦЕЛИ». */
 export const GOALS_HERO_VISION_IMAGE = require('../../assets/images/goals-hero-vision-board.png');
 
-const STACK_BREAKPOINT = 440;
+const STACK_BREAKPOINT = 420;
 
 /**
- * Hero для раздела «Цели»: плашка как на «День», крупное фото с alpha — «вылезает» за нижний край карточки.
+ * Hero «Цели»: та же сетка, что на экране «День» (HabitHero) — правая колонка, картинка в рамке без обрезки (`contain`).
  */
 export function GoalsHero() {
   const { radius, spacing } = useAppTheme();
   const cardRadius = radius.xl;
   const { width: windowWidth } = useWindowDimensions();
-  const stack = windowWidth < STACK_BREAKPOINT;
+  const stackLayout = windowWidth < STACK_BREAKPOINT;
 
   return (
-    <View style={[styles.root, { borderRadius: cardRadius, marginBottom: spacing.lg }]}>
+    <View style={[styles.banner, { borderRadius: cardRadius, marginBottom: spacing.sm }]}>
       <LinearGradient
         pointerEvents="none"
         colors={['#141018', '#0a090f', '#06060a']}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0.85, y: 1 }}
+        end={{ x: 0.9, y: 1 }}
         style={[StyleSheet.absoluteFillObject, { borderRadius: cardRadius }]}
       />
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(109,40,217,0.42)', 'rgba(20,16,28,0.2)', 'transparent']}
-        start={{ x: 0, y: 0.35 }}
-        end={{ x: 0.7, y: 0.55 }}
+        colors={['rgba(109,40,217,0.42)', 'rgba(20,16,28,0.22)', 'transparent']}
+        start={{ x: 0, y: 0.4 }}
+        end={{ x: 0.65, y: 0.6 }}
         style={[StyleSheet.absoluteFillObject, { borderRadius: cardRadius }]}
       />
       <LinearGradient
         pointerEvents="none"
-        colors={['transparent', 'rgba(167,139,250,0.18)']}
-        start={{ x: 0.35, y: 0 }}
+        colors={['transparent', 'rgba(109,40,217,0.12)', 'rgba(167,139,250,0.2)']}
+        start={{ x: 0.4, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[StyleSheet.absoluteFillObject, { borderRadius: cardRadius }]}
       />
 
-      <View style={[styles.row, stack && styles.rowStack]}>
-        <View style={[styles.copy, stack && styles.copyStack]}>
-          <Text style={styles.overline}>ЦЕЛИ</Text>
-          <Text style={styles.headline}>Визионборд</Text>
-          <Text style={styles.micro}>
-            Доска с фото и заметками — цели на виду, как на настоящем визионборде.
-          </Text>
+      <View style={[styles.contentRow, stackLayout && styles.contentRowStack]}>
+        <View style={[styles.copyZone, stackLayout && styles.copyZoneStack]}>
+          <Text style={styles.headline}>Цели и доска желаний</Text>
         </View>
 
-        <View style={[styles.figureSlot, stack && styles.figureSlotStack]} pointerEvents="none">
-          <Image
-            source={GOALS_HERO_VISION_IMAGE}
-            style={stack ? styles.figureImgStack : styles.figureImgRow}
-            contentFit="contain"
-            accessibilityIgnoresInvertColors
-            accessibilityLabel="Иллюстрация: девушка с доской целей"
+        <View style={[styles.figureZone, stackLayout && styles.figureZoneStack]}>
+          <View style={styles.figureImageFrame} collapsable={false}>
+            <Image
+              source={GOALS_HERO_VISION_IMAGE}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="contain"
+              contentPosition={{ right: '0%', bottom: '0%' }}
+              accessibilityIgnoresInvertColors
+              accessibilityLabel="Иллюстрация: доска желаний"
+            />
+          </View>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[
+              'rgba(8,8,14,0.9)',
+              'rgba(10,10,18,0.42)',
+              'rgba(14,12,22,0.1)',
+              'transparent',
+            ]}
+            locations={[0, 0.38, 0.72, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.figureBlendLeft}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(6,6,10,0.22)', 'transparent']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.42 }}
+            style={[StyleSheet.absoluteFillObject, styles.figureFeatherTop]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', 'rgba(6,6,10,0.5)', 'rgba(5,5,8,0.75)']}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.figureFeatherRight}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', 'rgba(55,20,90,0.22)']}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.figureTint]}
           />
         </View>
       </View>
-
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(8,8,14,0.35)', 'transparent']}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 0.45, y: 0.5 }}
-        style={[styles.leftFeather, { borderRadius: cardRadius }]}
-      />
 
       <View
         pointerEvents="none"
@@ -77,7 +103,7 @@ export function GoalsHero() {
           {
             borderRadius: cardRadius,
             borderWidth: 1,
-            borderColor: 'rgba(167,139,250,0.32)',
+            borderColor: 'rgba(167,139,250,0.28)',
           },
         ]}
       />
@@ -89,7 +115,7 @@ export function GoalsHero() {
             {
               borderRadius: cardRadius,
               boxShadow:
-                'inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 80px rgba(120,60,200,0.2), 0 20px 56px rgba(0,0,0,0.5)',
+                'inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 80px rgba(120,60,200,0.22), 0 20px 56px rgba(0,0,0,0.55)',
             } as object,
           ]}
         />
@@ -99,111 +125,101 @@ export function GoalsHero() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    marginTop: 4,
-    overflow: 'visible',
+  banner: {
+    marginTop: 0,
+    overflow: 'hidden',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.38)',
-    minHeight: 248,
+    borderColor: 'rgba(139,92,246,0.35)',
     ...(Platform.OS === 'web'
       ? {
           boxShadow:
-            'inset 0 0 0 1px rgba(255,255,255,0.05), 0 18px 52px rgba(0,0,0,0.55), 0 0 88px rgba(88,40,160,0.22)',
+            'inset 0 0 0 1px rgba(255,255,255,0.05), 0 18px 52px rgba(0,0,0,0.58), 0 0 88px rgba(88,40,160,0.24)',
         }
       : {
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 16 },
-          shadowOpacity: 0.5,
-          shadowRadius: 32,
-          elevation: 12,
+          shadowOffset: { width: 0, height: 18 },
+          shadowOpacity: 0.55,
+          shadowRadius: 36,
+          elevation: 14,
         }),
   },
-  row: {
+  contentRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    position: 'relative',
-    zIndex: 2,
-    minHeight: 248,
-    paddingLeft: 20,
-    paddingRight: 8,
-    paddingTop: 22,
-    paddingBottom: 20,
-  },
-  rowStack: {
-    flexDirection: 'column',
     alignItems: 'stretch',
-    minHeight: undefined,
-    paddingBottom: 8,
+    position: 'relative',
+    zIndex: 1,
+    minHeight: 280,
   },
-  copy: {
+  contentRowStack: {
+    flexDirection: 'column',
+    minHeight: undefined,
+  },
+  copyZone: {
     flex: 1,
     minWidth: 0,
-    maxWidth: '52%',
-    paddingRight: 8,
+    maxWidth: '54%',
+    paddingLeft: 22,
+    paddingRight: 14,
+    paddingVertical: 22,
     justifyContent: 'center',
-    paddingBottom: 8,
-    zIndex: 4,
   },
-  copyStack: {
+  copyZoneStack: {
+    width: '100%',
     maxWidth: '100%',
-    paddingBottom: 4,
-  },
-  overline: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2.4,
-    color: 'rgba(196,181,253,0.72)',
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   headline: {
-    marginTop: 10,
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '700',
     letterSpacing: -0.6,
     lineHeight: 30,
     color: '#FAFAFC',
   },
-  micro: {
-    marginTop: 10,
-    fontSize: 13,
-    lineHeight: 19,
-    color: 'rgba(255,255,255,0.5)',
-    maxWidth: 300,
-  },
-  figureSlot: {
-    width: '46%',
-    minWidth: 168,
-    maxWidth: 300,
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-    marginBottom: -40,
-    marginTop: -52,
+  figureZone: {
+    width: '48%',
+    minWidth: 200,
+    maxWidth: 340,
+    position: 'relative',
+    overflow: 'hidden',
     alignSelf: 'stretch',
-    zIndex: 3,
+    minHeight: 280,
   },
-  figureSlotStack: {
+  figureZoneStack: {
     width: '100%',
     maxWidth: '100%',
     minWidth: 0,
-    marginBottom: -28,
-    marginTop: -20,
-    minHeight: 220,
-    alignItems: 'center',
-    zIndex: 3,
+    minHeight: 244,
+    maxHeight: 252,
+    alignSelf: 'stretch',
   },
-  figureImgRow: {
-    width: 248,
-    height: 332,
-    marginRight: -16,
-  },
-  figureImgStack: {
-    width: '92%',
-    maxWidth: 300,
-    height: 288,
-  },
-  leftFeather: {
+  figureImageFrame: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  figureBlendLeft: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '78%',
+    zIndex: 2,
+  },
+  figureFeatherTop: {
+    zIndex: 2,
+  },
+  figureFeatherRight: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '36%',
+    zIndex: 2,
+  },
+  figureTint: {
     zIndex: 1,
-    pointerEvents: 'none',
   },
 });
