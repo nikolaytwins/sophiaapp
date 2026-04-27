@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Modal,
@@ -16,7 +17,9 @@ import { Image } from 'expo-image';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
-import { GoalsNavigatorBento, nearestCutoffForAugust, SideGoalBentoTile } from '@/features/goals/GoalsNavigatorBento';
+import { GoalsNavigatorBento, nearestCutoffForAugust } from '@/features/goals/GoalsNavigatorBento';
+import { PersonalGoalsMasonryGrid } from '@/features/goals/PersonalGoalsMasonry';
+import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
 import { normalizeDateKey, sideGoalDatedOutsideYear, sideGoalInCalendarYear, type SideGoalBoardTab } from '@/features/goals/sideGoals.logic';
 import { strategyPageConfig, type StrategyGoalsTabDef } from '@/features/strategy/strategy.config';
 import { getSupabase } from '@/lib/supabase';
@@ -244,9 +247,18 @@ function SideGoalsBoardBlock({
     setEditId(id);
   };
 
+  const onToggleOneShot = useCallback(
+    (id: string, done: boolean) => {
+      const g = useSideGoalsStore.getState().goals.find((x) => x.id === id);
+      if (!g || g.target > 1) return;
+      updateSideGoal(id, { current: done ? Math.max(1, g.target) : 0 });
+    },
+    [updateSideGoal]
+  );
+
   const tabIntro =
     boardTab === 'all'
-      ? 'Режим «все»: бенто-навигатор — ближайшие сверху, фото-доска в центре, горизонт внизу. Остальные вкладки показывают один раздел.'
+      ? 'Режим «все»: одна Masonry-сетка — цели из всех разделов перемешаны; внизу блок накоплений. Остальные вкладки — фильтр по одному разделу.'
       : boardTab === 'nearest'
         ? 'Закреплённые «ближайшие» карточки + Китай и подушка.'
         : boardTab === 'year'
@@ -319,6 +331,7 @@ function SideGoalsBoardBlock({
           otherYearGoals={otherYearGoals}
           nearestSlot={nearestSlot}
           onEditGoal={setEditId}
+          onToggleOneShot={onToggleOneShot}
         />
       ) : (
         <>
@@ -329,9 +342,11 @@ function SideGoalsBoardBlock({
                   Пока нет закреплённых целей. Нажми «Добавить цель» и включи «Ближайшая цель».
                 </Text>
               ) : (
-                pinnedGoals.map((g) => (
-                  <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />
-                ))
+                <PersonalGoalsMasonryGrid
+                  goals={pinnedGoals}
+                  onEditGoal={setEditId}
+                  onToggleOneShot={onToggleOneShot}
+                />
               )}
               {nearestSlot}
             </View>
@@ -357,7 +372,11 @@ function SideGoalsBoardBlock({
                   Пока пусто — добавь цель с датой в этом году.
                 </Text>
               ) : (
-                yearGoals.map((g) => <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />)
+                <PersonalGoalsMasonryGrid
+                  goals={yearGoals}
+                  onEditGoal={setEditId}
+                  onToggleOneShot={onToggleOneShot}
+                />
               )}
               {otherYearGoals.length > 0 ? (
                 <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
@@ -373,9 +392,11 @@ function SideGoalsBoardBlock({
                   >
                     Другие года
                   </Text>
-                  {otherYearGoals.map((g) => (
-                    <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />
-                  ))}
+                  <PersonalGoalsMasonryGrid
+                    goals={otherYearGoals}
+                    onEditGoal={setEditId}
+                    onToggleOneShot={onToggleOneShot}
+                  />
                 </View>
               ) : null}
             </View>
@@ -401,7 +422,11 @@ function SideGoalsBoardBlock({
                   Пока пусто — добавь цель и оставь режим даты «без даты».
                 </Text>
               ) : (
-                wishGoals.map((g) => <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />)
+                <PersonalGoalsMasonryGrid
+                  goals={wishGoals}
+                  onEditGoal={setEditId}
+                  onToggleOneShot={onToggleOneShot}
+                />
               )}
             </View>
           ) : null}
@@ -426,9 +451,11 @@ function SideGoalsBoardBlock({
                   Пока пусто — добавь цель и включи «На горизонте».
                 </Text>
               ) : (
-                horizonGoals.map((g) => (
-                  <SideGoalBentoTile key={g.id} goal={g} size="xlarge" onEdit={() => setEditId(g.id)} />
-                ))
+                <PersonalGoalsMasonryGrid
+                  goals={horizonGoals}
+                  onEditGoal={setEditId}
+                  onToggleOneShot={onToggleOneShot}
+                />
               )}
             </View>
           ) : null}
@@ -870,6 +897,22 @@ export function PersonalTargetsScreen() {
             <View style={{ gap: spacing.sm }}>
               <Text style={[typography.title1, { letterSpacing: -0.2 }]}>{cfg.pageTitle}</Text>
               <View style={{ height: 1, backgroundColor: 'rgba(139,92,246,0.35)', borderRadius: 1 }} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
+                <Link href={'/annual-goals' as Href} asChild>
+                  <Pressable hitSlop={6}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: GOALS_ACCENT, textDecorationLine: 'underline' }}>
+                      Годовые цели (карточки)
+                    </Text>
+                  </Pressable>
+                </Link>
+                <Link href={'/global-vision' as Href} asChild>
+                  <Pressable hitSlop={6}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: GOALS_ACCENT, textDecorationLine: 'underline' }}>
+                      Глобальное видение
+                    </Text>
+                  </Pressable>
+                </Link>
+              </View>
             </View>
 
             <View style={{ gap: spacing.md }}>

@@ -135,13 +135,14 @@ export function FinancePremiumChart({ values, labels, color, height, isLight, si
 
   const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ');
 
-  const tooltip = hover != null && points[hover] != null && labels[hover] != null && (
+  const hoverPt = hover != null ? points[hover] : null;
+  const tooltip = hover != null && hoverPt != null && labels[hover] != null && (
     <View
       pointerEvents="none"
       style={{
         position: 'absolute',
-        left: Math.min(width - 148, Math.max(8, points[hover]!.x - 72)),
-        top: Math.max(6, points[hover]!.y - 52),
+        left: Math.min(width - 148, Math.max(8, hoverPt.x - 72)),
+        top: Math.max(6, hoverPt.y - 52),
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: 12,

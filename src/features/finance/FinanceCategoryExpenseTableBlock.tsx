@@ -13,6 +13,7 @@ import Svg, { Line, Polyline } from 'react-native-svg';
 
 import { buildMatrixModels, FinanceCategoryMonthMatrix } from '@/features/finance/FinanceCategoryMonthMatrix';
 import type { FinanceExpenseAnalytics } from '@/features/finance/financeApi';
+import { expandCategoryBucketForMatching, normFinanceCatName } from '@/features/finance/financeBudgetTree';
 import { loadFinanceTxBucketLife, loadFinanceTxBucketWork } from '@/features/finance/financeTxDashboardStorage';
 import type { FinanceOverview } from '@/features/finance/finance.types';
 import { useAppTheme } from '@/theme';
@@ -23,19 +24,14 @@ type ChartTab = {
   amounts: number[];
 };
 
-function normName(s: string): string {
-  return s.trim().toLowerCase();
-}
-
-function aggregateByNames(
+function aggregateByMatchSet(
   series: { category: string; amounts: number[] }[],
-  names: Set<string>,
+  matchSet: Set<string>,
   len: number
 ): number[] {
   const out = new Array(len).fill(0);
-  const set = new Set([...names].map(normName));
   for (const s of series) {
-    if (!set.has(normName(s.category))) continue;
+    if (!matchSet.has(normFinanceCatName(s.category))) continue;
     for (let i = 0; i < len; i++) out[i] += s.amounts[i] ?? 0;
   }
   return out;
@@ -141,19 +137,19 @@ export function FinanceCategoryExpenseTableBlock({ overview, analytics, loading,
   const chartTabs = useMemo((): ChartTab[] => {
     if (!analytics) return [];
     const len = analytics.monthKeys.length;
-    const lifeSet = new Set(lifeNames.map(normName));
-    const workSet = new Set(workNames.map(normName));
+    const lifeMatch = expandCategoryBucketForMatching(overview.expenseCategories, lifeNames);
+    const workMatch = expandCategoryBucketForMatching(overview.expenseCategories, workNames);
     const tabs: ChartTab[] = [
       { key: 'all', label: 'Все', amounts: [...analytics.monthlyExpenseTotal] },
       {
         key: 'life',
         label: 'На жизнь',
-        amounts: aggregateByNames(analytics.categorySeries, lifeSet, len),
+        amounts: aggregateByMatchSet(analytics.categorySeries, lifeMatch, len),
       },
       {
         key: 'work',
         label: 'На работу',
-        amounts: aggregateByNames(analytics.categorySeries, workSet, len),
+        amounts: aggregateByMatchSet(analytics.categorySeries, workMatch, len),
       },
     ];
     const { roots, extras } = buildMatrixModels(analytics, overview.budgetLines.map((l) => l.title), overview.expenseCategories);

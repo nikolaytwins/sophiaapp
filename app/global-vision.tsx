@@ -3,13 +3,13 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnnualGoalsScreen } from '@/features/goals/AnnualGoalsScreen';
+import { GlobalVisionScreen } from '@/features/goals/GlobalVisionScreen';
 import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
-/** Годовые цели (карточки по сферам) — отдельный экран; основная вкладка «Цели» ведёт на персональную доску. */
-export default function AnnualGoalsRoute() {
+/** Глобальное видение — отдельный экран; вкладка «Цели» = персональная доска. */
+export default function GlobalVisionRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { spacing, typography } = useAppTheme();
@@ -35,7 +35,7 @@ export default function AnnualGoalsRoute() {
           <Text style={[typography.body, { fontWeight: '800', color: GOALS_ACCENT }]}>К целям</Text>
         </Pressable>
       </View>
-      <AnnualGoalsScreen />
+      <GlobalVisionScreen />
     </ScreenCanvas>
   );
 }

@@ -54,13 +54,30 @@ export function defaultAccountTypeForBucket(bucket: FinanceAccountBucket): strin
   }
 }
 
-function monthRangeISO(): { startISO: string; endISO: string; y: number; m: number } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
-  const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
-  const end = new Date(y, m, 0, 23, 59, 59, 999);
-  return { startISO: start.toISOString(), endISO: end.toISOString(), y, m };
+/** Безопасная пара год/месяц для UI и запросов (если с состоянием что-то пошло не так). */
+export function coerceFinanceViewMonth(vm: { y?: number; m?: number } | null | undefined): { y: number; m: number } {
+  const d = new Date();
+  const cy = d.getFullYear();
+  const cm = d.getMonth() + 1;
+  if (vm == null || typeof vm !== 'object') return { y: cy, m: cm };
+  const y = typeof vm.y === 'number' && Number.isFinite(vm.y) ? vm.y : cy;
+  const m = typeof vm.m === 'number' && Number.isFinite(vm.m) ? vm.m : cm;
+  return clampFinanceCalendarMonth(y, m);
+}
+
+/** Нормализация пары год/месяц (1–12) с переносом через границы года. */
+export function clampFinanceCalendarMonth(y: number, mo: number): { y: number; m: number } {
+  let yy = y;
+  let mm = mo;
+  while (mm < 1) {
+    mm += 12;
+    yy -= 1;
+  }
+  while (mm > 12) {
+    mm -= 12;
+    yy += 1;
+  }
+  return { y: yy, m: mm };
 }
 
 /** Границы календарного месяца в локальной TZ (для выборки транзакций). */
@@ -89,9 +106,11 @@ export async function loadFinanceTransactionsForMonth(
   return (data ?? []).map((r) => mapTransaction(r as Record<string, unknown>));
 }
 
-function daysLeftInMonthInclusive(): number {
+/** Дней с сегодня до конца выбранного календарного месяца (включая сегодня). Для прошлых/будущих месяцев — 0. */
+function daysLeftInSelectedMonth(year: number, month: number): number {
   const now = new Date();
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  if (now.getFullYear() !== year || now.getMonth() + 1 !== month) return 0;
+  const last = new Date(year, month, 0).getDate();
   return last - now.getDate() + 1;
 }
 
@@ -130,6 +149,15 @@ function mapCategory(row: Record<string, unknown>): FinanceExpenseCategory {
     parentId: row.parent_id != null && String(row.parent_id).trim() !== '' ? String(row.parent_id) : null,
     sortOrder: num(row.sort_order),
   };
+}
+
+/** Только дерево категорий расходов (для корзин жизнь/работа без полного обзора). */
+export async function loadFinanceExpenseCategories(userId: string): Promise<FinanceExpenseCategory[]> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase не настроен');
+  const { data, error } = await sb.from('finance_expense_categories').select('*').eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []).map((r) => mapCategory(r as Record<string, unknown>));
 }
 
 export function compareExpenseCategories(a: FinanceExpenseCategory, b: FinanceExpenseCategory): number {
@@ -224,11 +252,19 @@ export function expenseCategorySelectOptions(categories: FinanceExpenseCategory[
     }));
 }
 
-export async function loadFinanceOverview(userId: string): Promise<FinanceOverview> {
+export type FinanceOverviewMonth = { year: number; month: number };
+
+export async function loadFinanceOverview(userId: string, viewMonth?: FinanceOverviewMonth): Promise<FinanceOverview> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
 
-  const { startISO, endISO, y, m } = monthRangeISO();
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const { y, m } = viewMonth
+    ? clampFinanceCalendarMonth(viewMonth.year, viewMonth.month)
+    : { y: curY, m: curM };
+  const { startISO, endISO } = monthDateBoundsISO(y, m);
 
   const [
     accountsRes,
@@ -314,7 +350,7 @@ export async function loadFinanceOverview(userId: string): Promise<FinanceOvervi
   }
 
   const oneTimeUnpaidTotal = oneTime.filter((o) => !o.paid).reduce((s, o) => s + o.amount, 0);
-  const daysLeft = daysLeftInMonthInclusive();
+  const daysLeft = daysLeftInSelectedMonth(y, m);
   const burnReserve = expenseSettings.dailyExpenseLimit * daysLeft;
   const forecastEndOfMonth = totalBalance - oneTimeUnpaidTotal - burnReserve;
 

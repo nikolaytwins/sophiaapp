@@ -22,6 +22,7 @@ import { useTeamtrackerAgencyIncomeConfigured } from '@/config/env';
 import {
   accountBucketFromType,
   compareExpenseCategories,
+  coerceFinanceViewMonth,
   createFinanceAccount,
   updateFinanceAccount,
   updateFinanceExpenseCategory,
@@ -33,7 +34,18 @@ import {
   saveFinanceDashboardPrefs,
   type FinanceDashboardPrefs,
 } from '@/features/finance/financeDashboardStorage';
-import { loadFinanceTxBucketLife, loadFinanceTxBucketWork } from '@/features/finance/financeTxDashboardStorage';
+import {
+  canonicalizeBucketSelectionNames,
+  expandCategoryBucketForMatching,
+  normFinanceCatName,
+  rollupExpenseCategoryToRootName,
+} from '@/features/finance/financeBudgetTree';
+import {
+  loadFinanceTxBucketLife,
+  loadFinanceTxBucketWork,
+  saveFinanceTxBucketLife,
+  saveFinanceTxBucketWork,
+} from '@/features/finance/financeTxDashboardStorage';
 import { computeExpectedMonthlyExpense } from '@/features/finance/financeExpectedExpensePlan';
 import { computeFinanceMonthTxStats } from '@/features/finance/financeMonthTxStats';
 import type { FinanceAccount, FinanceBudgetLine, FinanceOverview } from '@/features/finance/finance.types';
@@ -120,6 +132,7 @@ export function FinanceDashboardBento({
   const { width: winW } = useWindowDimensions();
   const colGap = 16;
   const desktopBento = Platform.OS === 'web' && winW >= WEB_NAV_LG_MIN;
+  const calendarMonthSafe = coerceFinanceViewMonth(calendarMonth);
 
   const [prefs, setPrefs] = useState<FinanceDashboardPrefs>({ ...DEFAULT_FINANCE_DASHBOARD_PREFS });
   const [lifeNames, setLifeNames] = useState<string[]>([]);
@@ -143,15 +156,28 @@ export function FinanceDashboardBento({
   const [expectedIncomeDraft, setExpectedIncomeDraft] = useState('');
 
   const reloadLocalPrefs = useCallback(async () => {
-    const [p, life, work] = await Promise.all([
+    const [p, lifeRaw, workRaw] = await Promise.all([
       loadFinanceDashboardPrefs(),
       loadFinanceTxBucketLife(),
       loadFinanceTxBucketWork(),
     ]);
     setPrefs(p);
+    const cats = overview?.expenseCategories ?? [];
+    const life = cats.length > 0 ? canonicalizeBucketSelectionNames(cats, lifeRaw) : lifeRaw;
+    const work = cats.length > 0 ? canonicalizeBucketSelectionNames(cats, workRaw) : workRaw;
     setLifeNames(life);
     setWorkNames(work);
-  }, []);
+    if (cats.length > 0) {
+      const pack = (a: string[]) =>
+        [...a]
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .sort((x, y) => x.localeCompare(y, 'ru'))
+          .join('\x1e');
+      if (pack(life) !== pack(lifeRaw)) await saveFinanceTxBucketLife(life);
+      if (pack(work) !== pack(workRaw)) await saveFinanceTxBucketWork(work);
+    }
+  }, [overview?.expenseCategories]);
 
   useFocusEffect(
     useCallback(() => {
@@ -166,36 +192,46 @@ export function FinanceDashboardBento({
   }, [prefs]);
 
   const txStats = useMemo(
-    () => computeFinanceMonthTxStats(overview.transactionsThisMonth, lifeNames, workNames),
-    [overview.transactionsThisMonth, lifeNames, workNames]
+    () => computeFinanceMonthTxStats(overview.transactionsThisMonth, lifeNames, workNames, overview.expenseCategories),
+    [overview.transactionsThisMonth, lifeNames, workNames, overview.expenseCategories]
+  );
+
+  const lifeExpandedSet = useMemo(
+    () => expandCategoryBucketForMatching(overview.expenseCategories, lifeNames),
+    [overview.expenseCategories, lifeNames]
+  );
+  const workExpandedSet = useMemo(
+    () => expandCategoryBucketForMatching(overview.expenseCategories, workNames),
+    [overview.expenseCategories, workNames]
   );
 
   const ttIncomeQ = useQuery({
-    queryKey: teamtrackerAgencyProfitKey(calendarMonth.y, calendarMonth.m),
-    queryFn: () => fetchTeamtrackerAgencyProfitForMonth(calendarMonth.y, calendarMonth.m),
+    queryKey: teamtrackerAgencyProfitKey(calendarMonthSafe.y, calendarMonthSafe.m),
+    queryFn: () => fetchTeamtrackerAgencyProfitForMonth(calendarMonthSafe.y, calendarMonthSafe.m),
     enabled: useTeamtrackerAgencyIncomeConfigured,
     staleTime: 60_000,
     retry: 1,
   });
 
   const ttIncomeOk = useTeamtrackerAgencyIncomeConfigured && ttIncomeQ.isSuccess;
-  const expectedIncomeForDelta = ttIncomeOk ? ttIncomeQ.data.expectedRevenue : prefs.expectedIncomeMonthly;
-  const expectedIncomeDisplay = ttIncomeOk
-    ? fmtMoney(ttIncomeQ.data.expectedRevenue)
+  /** Плитка «Прибыль»: ожидаемая прибыль TT или то же поле вручную, если интеграции нет. */
+  const expectedProfitForDelta = ttIncomeOk ? ttIncomeQ.data.expectedProfit : prefs.expectedIncomeMonthly;
+  const expectedProfitDisplay = ttIncomeOk
+    ? fmtMoney(ttIncomeQ.data.expectedProfit)
     : prefs.expectedIncomeMonthly > 0
       ? fmtMoney(prefs.expectedIncomeMonthly)
       : '—';
-  const incomeSub = ttIncomeOk
-    ? 'ожидаемый (агентство, Teamtracker)'
+  const profitSub = ttIncomeOk
+    ? 'ожидаемая (агентство, Teamtracker)'
     : prefs.expectedIncomeMonthly > 0
-      ? 'ожидаемый (задано вручную)'
+      ? 'ожидаемая (задано вручную)'
       : useTeamtrackerAgencyIncomeConfigured
-        ? 'ожидаемый (Teamtracker или вручную)'
-        : 'ожидаемый (вручную — тап по блоку)';
-  const incomeTiny = ttIncomeOk
-    ? `реально (выручка агентства): ${fmtMoney(ttIncomeQ.data.actualRevenue)}`
+        ? 'ожидаемая (Teamtracker или вручную)'
+        : 'ожидаемая (вручную — тап по блоку)';
+  const profitTiny = ttIncomeOk
+    ? `факт прибыль: ${fmtMoney(ttIncomeQ.data.actualProfit)} · выручка: ${fmtMoney(ttIncomeQ.data.actualRevenue)}`
     : useTeamtrackerAgencyIncomeConfigured && ttIncomeQ.isError
-      ? `факт по счетам: ${fmtMoney(overview.monthIncome)} · TT не ответил — укажите ожидаемый доход тапом`
+      ? `факт по счетам: ${fmtMoney(overview.monthIncome)} · TT не ответил — укажите ожидаемую прибыль тапом`
       : `факт по счетам: ${fmtMoney(overview.monthIncome)}`;
 
   const lifeLimit = prefs.lifeSpendLimitMonthly;
@@ -294,11 +330,6 @@ export function FinanceDashboardBento({
     };
   }, [chartRowsAsc, chartTab, brand.primary]);
 
-  const workSetDonut = useMemo(
-    () => new Set(workNames.map((n) => n.trim().toLowerCase()).filter(Boolean)),
-    [workNames]
-  );
-
   const donutMonthCount = expenseAnalytics?.monthKeys?.length ?? 0;
   const donutLastIdx = Math.max(0, donutMonthCount - 1);
   const donutIdxSafe =
@@ -310,9 +341,23 @@ export function FinanceDashboardBento({
   const donutSegments = useMemo((): DonutSegment[] => {
     if (!expenseAnalytics?.monthKeys?.length) return [];
     const idx = donutIdxSafe;
-    const rows = expenseAnalytics.categorySeries
+    const cats = overview.expenseCategories;
+    const rowsRaw = expenseAnalytics.categorySeries
       .map((s) => ({ label: s.category, value: s.amounts[idx] ?? 0 }))
-      .filter((r) => r.value > 0 && !workSetDonut.has(r.label.trim().toLowerCase()))
+      .filter(
+        (r) =>
+          r.value > 0 &&
+          lifeExpandedSet.has(normFinanceCatName(r.label)) &&
+          !workExpandedSet.has(normFinanceCatName(r.label))
+      );
+    const rolled = new Map<string, number>();
+    for (const r of rowsRaw) {
+      const rootKey =
+        cats.length > 0 ? rollupExpenseCategoryToRootName(cats, r.label) : r.label.trim();
+      rolled.set(rootKey, (rolled.get(rootKey) ?? 0) + r.value);
+    }
+    const rows = [...rolled.entries()]
+      .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
     const top = rows.slice(0, 6);
     const restSum = rows.slice(6).reduce((a, r) => a + r.value, 0);
@@ -329,40 +374,42 @@ export function FinanceDashboardBento({
       });
     }
     return out;
-  }, [expenseAnalytics, donutIdxSafe, workSetDonut]);
+  }, [expenseAnalytics, donutIdxSafe, lifeExpandedSet, workExpandedSet, overview.expenseCategories]);
 
   const lifeSpendByCategory = useMemo(() => {
-    const lifeSet = new Set(lifeNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
     const m = new Map<string, number>();
+    const cats = overview.expenseCategories;
     for (const t of overview.transactionsThisMonth) {
       if (t.type !== 'expense') continue;
       const key = (t.category ?? '').trim();
       if (!key) continue;
-      if (!lifeSet.has(key.toLowerCase())) continue;
-      m.set(key, (m.get(key) ?? 0) + t.amount);
+      if (!lifeExpandedSet.has(normFinanceCatName(key))) continue;
+      const rootKey = cats.length > 0 ? rollupExpenseCategoryToRootName(cats, key) : key;
+      m.set(rootKey, (m.get(rootKey) ?? 0) + t.amount);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [overview.transactionsThisMonth, lifeNames]);
+  }, [overview.transactionsThisMonth, lifeExpandedSet, overview.expenseCategories]);
 
   const hasExpensePlan = prefs.plannedFixedMonthlyRub > 0 || prefs.plannedDailyAllowanceRub > 0;
   const expectedExpenseMonthly = useMemo(
     () => computeExpectedMonthlyExpense(prefs.plannedFixedMonthlyRub, prefs.plannedDailyAllowanceRub),
     [prefs.plannedFixedMonthlyRub, prefs.plannedDailyAllowanceRub]
   );
-  const actualExpenseDisplay = fmtMoney(overview.monthExpense);
+  const actualExpenseDisplay = fmtMoney(txStats.lifeExpense);
   const expenseSubline = hasExpensePlan
-    ? `План расходов: ${fmtMoney(expectedExpenseMonthly)}`
-    : 'По операциям за выбранный месяц';
+    ? `План расходов: ${fmtMoney(expectedExpenseMonthly)} · факт «на жизнь»: ${fmtMoney(txStats.lifeExpense)}`
+    : 'Фактические расходы только «на жизнь» (без рабочих категорий)';
 
-  /** Ожидаемый доход (TT или вручную) минус фактические расходы за месяц. */
-  const plannedIncomeMinusActualExpense = expectedIncomeForDelta - overview.monthExpense;
-  const actualDelta = overview.monthIncome - overview.monthExpense;
+  /** Ожидаемая прибыль (TT или вручную) минус факт «на жизнь». */
+  const plannedProfitMinusLifeExpense = expectedProfitForDelta - txStats.lifeExpense;
+  const factProfitOrAccountIncome = ttIncomeOk ? ttIncomeQ.data.actualProfit : overview.monthIncome;
+  const actualDelta = factProfitOrAccountIncome - txStats.lifeExpense;
 
   const chartTabs = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
       {(
         [
-          { id: 'income' as const, label: 'Доходы' },
+          { id: 'income' as const, label: 'Выручка' },
           { id: 'expense' as const, label: 'Расходы' },
           { id: 'capital' as const, label: 'Капитал (Δ)' },
         ] as const
@@ -449,7 +496,7 @@ export function FinanceDashboardBento({
       />
     );
 
-  const deltaPositive = plannedIncomeMinusActualExpense >= 0;
+  const deltaPositive = plannedProfitMinusLifeExpense >= 0;
 
   const metricTileShell = (child: ReactNode, key: string) => (
     <BentoShell
@@ -511,10 +558,10 @@ export function FinanceDashboardBento({
               setExpectedIncomeModal(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Задать ожидаемый доход в месяц"
+            accessibilityLabel="Задать ожидаемую прибыль в месяц"
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>ДОХОД</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.8 }}>ПРИБЫЛЬ</Text>
               <Ionicons name="trending-up-outline" size={20} color="#4ADE80" />
             </View>
             <Text
@@ -528,12 +575,12 @@ export function FinanceDashboardBento({
               }}
               numberOfLines={1}
             >
-              {expectedIncomeDisplay}
+              {expectedProfitDisplay}
             </Text>
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8 }} numberOfLines={4}>
-              {incomeSub} · {incomeTiny}
+              {profitSub} · {profitTiny}
             </Text>
-            <Text style={{ fontSize: 10, fontWeight: '800', color: brand.primary, marginTop: 6 }}>Тап — ожидаемый доход, ₽</Text>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: brand.primary, marginTop: 6 }}>Тап — ожидаемая прибыль, ₽</Text>
           </Pressable>,
           'inc'
         )}
@@ -588,13 +635,13 @@ export function FinanceDashboardBento({
               }}
               numberOfLines={1}
             >
-              {fmtMoney(plannedIncomeMinusActualExpense)}
+              {fmtMoney(plannedProfitMinusLifeExpense)}
             </Text>
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }} numberOfLines={2}>
-              Ожидаемый доход минус факт расходов (по операциям).
+              Ожидаемая прибыль минус факт расходов «на жизнь».
             </Text>
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
-              Факт доход−расход: {fmtMoney(actualDelta)}
+              Факт (прибыль TT или доход по счетам) − жизнь: {fmtMoney(actualDelta)}
             </Text>
           </>,
           'delta'
@@ -633,7 +680,7 @@ export function FinanceDashboardBento({
                 ТРАТЫ ПО КАТЕГОРИЯМ
               </Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>
-                Только «на жизнь» — рабочие категории из графика исключены.
+                Только корзина «на жизнь» (родитель покрывает подкатегории); суммы по корню без двойного счёта; работа исключена.
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Pressable
@@ -842,7 +889,7 @@ export function FinanceDashboardBento({
             <BentoShell style={{ paddingVertical: 18 }}>
               <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 4 }}>Траты по категориям</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>
-                Только «на жизнь»; рабочие категории скрыты.
+                Корзина «на жизнь» по дереву категорий; сегменты свёрнуты в родителя.
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Pressable
@@ -1108,9 +1155,9 @@ export function FinanceDashboardBento({
               ...(Platform.OS === 'web' ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } as object) : {}),
             }}
           >
-            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 8 }}>Ожидаемый доход в месяц, ₽</Text>
+            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 8 }}>Ожидаемая прибыль в месяц, ₽</Text>
             <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 12 }}>
-              Используется в плитке «Доход» и в «Дельте», если Teamtracker недоступен.
+              Для плитки «Прибыль» и «Дельты», если Teamtracker недоступен (по смыслу — ожидаемая прибыль агентства).
             </Text>
             <TextInput
               value={expectedIncomeDraft}

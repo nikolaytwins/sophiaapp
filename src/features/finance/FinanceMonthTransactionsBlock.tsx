@@ -13,9 +13,14 @@ import {
   View,
 } from 'react-native';
 
+import { canonicalizeBucketSelectionNames } from '@/features/finance/financeBudgetTree';
 import { FinanceBucketEditModal } from '@/features/finance/FinanceBucketEditModal';
 import { computeFinanceMonthTxStats } from '@/features/finance/financeMonthTxStats';
-import { loadFinanceTransactionsForMonth } from '@/features/finance/financeApi';
+import {
+  clampFinanceCalendarMonth,
+  coerceFinanceViewMonth,
+  loadFinanceTransactionsForMonth,
+} from '@/features/finance/financeApi';
 import {
   DEFAULT_FINANCE_LIFE_BUCKET_NAMES,
   DEFAULT_FINANCE_WORK_BUCKET_NAMES,
@@ -41,20 +46,6 @@ function monthTitleRu(y: number, m: number): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function clampMonth(y: number, mo: number): { y: number; m: number } {
-  let yy = y;
-  let mm = mo;
-  while (mm < 1) {
-    mm += 12;
-    yy -= 1;
-  }
-  while (mm > 12) {
-    mm -= 12;
-    yy += 1;
-  }
-  return { y: yy, m: mm };
-}
-
 const MONTH_NAMES_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] as const;
 
 type Props = {
@@ -62,33 +53,59 @@ type Props = {
   overview: FinanceOverview;
   onSaved: () => void;
   prefillCategoryName?: string | null;
+  /** Выбранный месяц (общий с дашбордом и обзором). */
+  viewMonth: { y: number; m: number };
+  onViewMonthChange: (next: { y: number; m: number }) => void;
 };
 
-export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefillCategoryName }: Props) {
+export function FinanceMonthTransactionsBlock({
+  userId,
+  overview,
+  onSaved,
+  prefillCategoryName,
+  viewMonth,
+  onViewMonthChange,
+}: Props) {
   const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
-  const now = useMemo(() => new Date(), []);
-  const [y, setY] = useState(() => now.getFullYear());
-  const [m, setM] = useState(() => now.getMonth() + 1);
+  const { y, m } = coerceFinanceViewMonth(viewMonth);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerYearDraft, setPickerYearDraft] = useState(String(now.getFullYear()));
+  const [pickerYearDraft, setPickerYearDraft] = useState(String(coerceFinanceViewMonth(viewMonth).y));
   const [lifeNames, setLifeNames] = useState<string[]>(() => [...DEFAULT_FINANCE_LIFE_BUCKET_NAMES]);
   const [workNames, setWorkNames] = useState<string[]>(() => [...DEFAULT_FINANCE_WORK_BUCKET_NAMES]);
   const [lifeEditOpen, setLifeEditOpen] = useState(false);
   const [workEditOpen, setWorkEditOpen] = useState(false);
 
   useEffect(() => {
+    const { y: vy } = coerceFinanceViewMonth(viewMonth);
+    setPickerYearDraft(String(vy));
+  }, [viewMonth?.y, viewMonth?.m]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [life, work] = await Promise.all([loadFinanceTxBucketLife(), loadFinanceTxBucketWork()]);
+      const [lifeRaw, workRaw] = await Promise.all([loadFinanceTxBucketLife(), loadFinanceTxBucketWork()]);
+      const cats = overview.expenseCategories;
+      const life = cats.length > 0 ? canonicalizeBucketSelectionNames(cats, lifeRaw) : lifeRaw;
+      const work = cats.length > 0 ? canonicalizeBucketSelectionNames(cats, workRaw) : workRaw;
       if (!cancelled) {
         setLifeNames(life);
         setWorkNames(work);
+        if (cats.length > 0) {
+          const pack = (a: string[]) =>
+            [...a]
+              .map((x) => x.trim())
+              .filter(Boolean)
+              .sort((x, y) => x.localeCompare(y, 'ru'))
+              .join('\x1e');
+          if (pack(life) !== pack(lifeRaw)) await saveFinanceTxBucketLife(life);
+          if (pack(work) !== pack(workRaw)) await saveFinanceTxBucketWork(work);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [overview.expenseCategories]);
 
   const txQ = useQuery({
     queryKey: financeTransactionsMonthKey(userId, y, m),
@@ -97,20 +114,19 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
   });
 
   const transactions = txQ.data ?? [];
-  const stats = useMemo(() => computeFinanceMonthTxStats(transactions, lifeNames, workNames), [transactions, lifeNames, workNames]);
-
-  const allCategoryNames = useMemo(
-    () => overview.expenseCategories.map((c) => c.name).filter(Boolean),
-    [overview.expenseCategories]
+  const stats = useMemo(
+    () => computeFinanceMonthTxStats(transactions, lifeNames, workNames, overview.expenseCategories),
+    [transactions, lifeNames, workNames, overview.expenseCategories]
   );
 
-  const shiftMonth = useCallback((delta: number) => {
-    if (Platform.OS !== 'web') void Haptics.selectionAsync();
-    const nm = m + delta;
-    const c = clampMonth(y, nm);
-    setY(c.y);
-    setM(c.m);
-  }, [m, y]);
+  const shiftMonth = useCallback(
+    (delta: number) => {
+      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+      const nm = m + delta;
+      onViewMonthChange(clampFinanceCalendarMonth(y, nm));
+    },
+    [m, y, onViewMonthChange]
+  );
 
   const openPicker = useCallback(() => {
     setPickerYearDraft(String(y));
@@ -121,12 +137,10 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
     (month: number) => {
       const year = Number.parseInt(pickerYearDraft.replace(/\D/g, ''), 10);
       if (!Number.isFinite(year) || year < 1970 || year > 2100) return;
-      const c = clampMonth(year, month);
-      setY(c.y);
-      setM(c.m);
+      onViewMonthChange(clampFinanceCalendarMonth(year, month));
       setPickerOpen(false);
     },
-    [pickerYearDraft]
+    [pickerYearDraft, onViewMonthChange]
   );
 
   const title = monthTitleRu(y, m);
@@ -379,7 +393,7 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
       <FinanceBucketEditModal
         visible={lifeEditOpen}
         title="Категории «на жизнь»"
-        allCategoryNames={allCategoryNames}
+        expenseCategories={overview.expenseCategories}
         initialSelected={lifeNames}
         onClose={() => setLifeEditOpen(false)}
         onSave={async (names) => {
@@ -390,7 +404,7 @@ export function FinanceMonthTransactionsBlock({ userId, overview, onSaved, prefi
       <FinanceBucketEditModal
         visible={workEditOpen}
         title="Категории «на работу»"
-        allCategoryNames={allCategoryNames}
+        expenseCategories={overview.expenseCategories}
         initialSelected={workNames}
         onClose={() => setWorkEditOpen(false)}
         onSave={async (names) => {

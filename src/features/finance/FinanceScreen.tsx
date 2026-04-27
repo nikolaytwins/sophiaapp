@@ -17,13 +17,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useSupabaseConfigured } from '@/config/env';
+import { useSupabaseConfigured, useTeamtrackerAgencyIncomeConfigured } from '@/config/env';
+import { tryAutoSealPreviousMonthSnapshot } from '@/features/finance/financeAutoSealPreviousMonth';
 import {
+  clampFinanceCalendarMonth,
+  coerceFinanceViewMonth,
   deleteFinanceExpenseCategory,
   loadFinanceExpenseAnalytics,
   loadFinanceOverview,
   type FinanceCategoryInput,
 } from '@/features/finance/financeApi';
+import { loadFinanceTxBucketLife, loadFinanceTxBucketWork } from '@/features/finance/financeTxDashboardStorage';
+import { fetchTeamtrackerAgencyProfitForMonth } from '@/features/finance/teamtrackerAgencyProfit';
 import { confirmFinanceDestructive } from '@/features/finance/financeConfirm';
 import { FinanceCategoryExpenseTableBlock } from '@/features/finance/FinanceCategoryExpenseTableBlock';
 import { FinanceAddTransactionModal } from '@/features/finance/FinanceAddTransactionModal';
@@ -101,6 +106,17 @@ function fmtMoney(n: number) {
 }
 
 type MainTab = 'dashboard' | 'transactions' | 'categories' | 'history';
+
+function financeMonthTitleRu(y: number, mo: number): string {
+  const s = new Date(y, mo - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+  if (!s) return `${mo}.${y}`;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function isCurrentCalendarMonth(y: number, mo: number): boolean {
+  const d = new Date();
+  return d.getFullYear() === y && d.getMonth() + 1 === mo;
+}
 
 function BudgetCard({
   line,
@@ -378,10 +394,37 @@ export function FinanceScreen() {
   const supabaseOn = useSupabaseConfigured;
   const [userId, setUserId] = useState<string | null>(null);
   const [mainTab, setMainTab] = useState<MainTab>('dashboard');
+  const [financeMonth, setFinanceMonth] = useState(() => {
+    const d = new Date();
+    return { y: d.getFullYear(), m: d.getMonth() + 1 };
+  });
   const [catModal, setCatModal] = useState<FinanceCategoryModalState>(null);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [addTxPrefill, setAddTxPrefill] = useState<string | null>(null);
   const [historyViewMode, setHistoryViewMode] = useState<MonthHistoryViewMode>('table');
+
+  const financeMonthSafe = useMemo(() => coerceFinanceViewMonth(financeMonth), [financeMonth]);
+
+  useEffect(() => {
+    if (financeMonth == null || typeof financeMonth !== 'object') {
+      setFinanceMonth(financeMonthSafe);
+      return;
+    }
+    if (financeMonthSafe.y !== financeMonth.y || financeMonthSafe.m !== financeMonth.m) {
+      setFinanceMonth(financeMonthSafe);
+    }
+  }, [financeMonth, financeMonthSafe]);
+
+  const setFinanceMonthSafe = useCallback((next: { y: number; m: number } | ((prev: { y: number; m: number }) => { y: number; m: number })) => {
+    if (typeof next === 'function') {
+      setFinanceMonth((prev) => {
+        const base = coerceFinanceViewMonth(prev);
+        return next(base);
+      });
+    } else if (next && typeof next.y === 'number' && typeof next.m === 'number') {
+      setFinanceMonth(clampFinanceCalendarMonth(next.y, next.m));
+    }
+  }, []);
 
   const padH = spacing.xl;
   useEffect(() => {
@@ -400,8 +443,8 @@ export function FinanceScreen() {
   }, []);
 
   const q = useQuery({
-    queryKey: [...FINANCE_QUERY_KEY, 'overview', userId],
-    queryFn: () => loadFinanceOverview(userId!),
+    queryKey: [...FINANCE_QUERY_KEY, 'overview', userId, financeMonthSafe.y, financeMonthSafe.m],
+    queryFn: () => loadFinanceOverview(userId!, { year: financeMonthSafe.y, month: financeMonthSafe.m }),
     enabled: Boolean(supabaseOn && userId),
   });
 
@@ -421,6 +464,29 @@ export function FinanceScreen() {
   const invalidateFinance = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
   }, [qc]);
+
+  useEffect(() => {
+    if (!userId || !supabaseOn) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [life, work] = await Promise.all([loadFinanceTxBucketLife(), loadFinanceTxBucketWork()]);
+        const fetchTt = useTeamtrackerAgencyIncomeConfigured
+          ? async (y: number, m: number) => {
+              const d = await fetchTeamtrackerAgencyProfitForMonth(y, m);
+              return { actualRevenue: d.actualRevenue, actualProfit: d.actualProfit };
+            }
+          : undefined;
+        const r = await tryAutoSealPreviousMonthSnapshot(userId, life, work, fetchTt);
+        if (!cancelled && r === 'created') invalidateFinance();
+      } catch {
+        /* не блокируем экран */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, supabaseOn, invalidateFinance, useTeamtrackerAgencyIncomeConfigured]);
 
   const delCatMut = useMutation({
     mutationFn: (id: string) => deleteFinanceExpenseCategory(userId!, id),
@@ -513,6 +579,87 @@ export function FinanceScreen() {
           />
         </View>
 
+        {supabaseOn && userId ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              marginBottom: spacing.md,
+              paddingVertical: 10,
+              paddingHorizontal: 8,
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: isLight ? colors.border : 'rgba(255,255,255,0.1)',
+              backgroundColor: isLight ? colors.surface2 : 'rgba(255,255,255,0.04)',
+            }}
+          >
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                setFinanceMonthSafe((prev) => clampFinanceCalendarMonth(prev.y, prev.m - 1));
+              }}
+              hitSlop={10}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isLight ? colors.surface : 'rgba(255,255,255,0.06)',
+              }}
+              accessibilityLabel="Предыдущий месяц"
+            >
+              <Ionicons name="chevron-back" size={22} color={brand.primary} />
+            </Pressable>
+            <View style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '900',
+                  color: colors.text,
+                  textAlign: 'center',
+                }}
+                numberOfLines={2}
+              >
+                {financeMonthTitleRu(financeMonthSafe.y, financeMonthSafe.m)}
+              </Text>
+              {!isCurrentCalendarMonth(financeMonthSafe.y, financeMonthSafe.m) ? (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    const d = new Date();
+                    setFinanceMonthSafe({ y: d.getFullYear(), m: d.getMonth() + 1 });
+                  }}
+                  hitSlop={6}
+                  style={{ marginTop: 4, paddingVertical: 2, paddingHorizontal: 8 }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: brand.primary }}>К текущему месяцу</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                setFinanceMonthSafe((prev) => clampFinanceCalendarMonth(prev.y, prev.m + 1));
+              }}
+              hitSlop={10}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isLight ? colors.surface : 'rgba(255,255,255,0.06)',
+              }}
+              accessibilityLabel="Следующий месяц"
+            >
+              <Ionicons name="chevron-forward" size={22} color={brand.primary} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {!supabaseOn || !userId ? (
           <View
             style={{
@@ -555,6 +702,7 @@ export function FinanceScreen() {
               <FinanceDashboardBento
                 overview={overview}
                 userId={userId}
+                calendarMonth={financeMonthSafe}
                 monthHistoryRows={monthHistoryRows}
                 expenseAnalytics={expenseAnalyticsQ.data}
                 expenseAnalyticsLoading={expenseAnalyticsQ.isLoading}
@@ -569,6 +717,8 @@ export function FinanceScreen() {
                 overview={overview}
                 onSaved={invalidateFinance}
                 prefillCategoryName={addTxPrefill}
+                viewMonth={financeMonthSafe}
+                onViewMonthChange={setFinanceMonthSafe}
               />
             ) : null}
 

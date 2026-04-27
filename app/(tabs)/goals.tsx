@@ -1,5 +1,6 @@
-import { GoalsScreen } from '@/features/goals/GoalsScreen';
+import { PersonalTargetsScreen } from '@/features/goals/PersonalTargetsScreen';
 
-export default function GoalsTab() {
-  return <GoalsScreen />;
+/** Вкладка «Цели» — персональная доска (боковые цели, фото, Китай/подушка). То же содержимое, что `/personal-targets`. */
+export default function GoalsTabScreen() {
+  return <PersonalTargetsScreen />;
 }

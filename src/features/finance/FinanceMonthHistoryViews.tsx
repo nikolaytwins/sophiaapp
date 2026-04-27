@@ -351,9 +351,10 @@ function MonthHistoryCapitalLineChart({ rows, width: viewportW }: { rows: Enrich
 
   if (viewportW < 40 || values.length === 0) return null;
 
+  const hoverPt = hover != null ? points[hover] : null;
   const tooltip =
     hover != null &&
-    points[hover] != null &&
+    hoverPt != null &&
     labels[hover] != null && (
       <View
         pointerEvents="none"
@@ -361,9 +362,9 @@ function MonthHistoryCapitalLineChart({ rows, width: viewportW }: { rows: Enrich
           position: 'absolute',
           left: Math.min(
             contentWidth - 156,
-            Math.max(padL, points[hover]!.x - 78)
+            Math.max(padL, hoverPt.x - 78)
           ),
-          top: Math.max(6, points[hover]!.y - 58),
+          top: Math.max(6, hoverPt.y - 58),
           paddingHorizontal: 12,
           paddingVertical: 10,
           borderRadius: 12,
@@ -698,8 +699,8 @@ export function MonthHistoryTableTwin({
           {head('Всего на счетах', 1.1, 'right')}
           {head('Динамика капитала', 1.15, 'right')}
           {head('Доход', 1, 'right')}
-          {head('Расход', 1, 'right')}
-          {head('Прибыль', 0.95, 'right', true)}
+          {head('Прибыль', 0.95, 'right')}
+          {head('Расход', 1, 'right', true)}
         </View>
         {rows.map(({ snapshot: s, capitalDelta }, i) => (
           <View
@@ -777,13 +778,32 @@ export function MonthHistoryTableTwin({
             ) : (
               cellMoney(s.totalRevenue, 1, 'right', false, false)
             )}
+            {editable && onCommitProfit ? (
+              <InlineSnapshotMoneyCell
+                snapshot={s}
+                field="profit"
+                editable
+                flexGrow={0.95}
+                last={false}
+                line={line}
+                lineColor={lineColor}
+                typography={typography}
+                colors={colors}
+                brand={brand}
+                isLight={isLight}
+                isPending={Boolean(isPending)}
+                onCommit={onCommitProfit}
+              />
+            ) : (
+              cellMoney(s.projectProfit, 0.95, 'right', false, true)
+            )}
             {editable && onCommitExpenseTotal ? (
               <InlineSnapshotMoneyCell
                 snapshot={s}
                 field="expenseTotal"
                 editable
                 flexGrow={1}
-                last={false}
+                last
                 line={line}
                 lineColor={lineColor}
                 typography={typography}
@@ -796,26 +816,7 @@ export function MonthHistoryTableTwin({
                 }}
               />
             ) : (
-              cellMoney(expenseSum(s), 1, 'right', false, false)
-            )}
-            {editable && onCommitProfit ? (
-              <InlineSnapshotMoneyCell
-                snapshot={s}
-                field="profit"
-                editable
-                flexGrow={0.95}
-                last
-                line={line}
-                lineColor={lineColor}
-                typography={typography}
-                colors={colors}
-                brand={brand}
-                isLight={isLight}
-                isPending={Boolean(isPending)}
-                onCommit={onCommitProfit}
-              />
-            ) : (
-              cellMoney(s.projectProfit, 0.95, 'right', true, true)
+              cellMoney(expenseSum(s), 1, 'right', true, false)
             )}
           </View>
         ))}
@@ -874,7 +875,7 @@ export function MonthHistoryCards({ rows }: { rows: EnrichedMonthRow[] }) {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14 }}>
             <View style={{ flex: 1, minWidth: 140 }}>
               <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '700', marginBottom: 4 }]}>
-                Общая выручка
+                Доход (выручка TT)
               </Text>
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
                 {s.totalRevenue == null ? '—' : fmtMoneyPlain(s.totalRevenue)}
@@ -1051,8 +1052,9 @@ export function FinanceMonthHistorySection({
 
       <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.md, lineHeight: 20 }]}>
         История по месяцам. Динамика капитала — разница баланса к предыдущему месяцу в списке (считается автоматически).
-        В таблице тап по сумме открывает ввод в ячейке: баланс, доход, расход, прибыль — без модального окна; расход
-        сохраняется как «личные» (бизнес-расход в этой колонке обнуляется). Значения пишутся в finance_month_snapshots.
+        Колонка «Доход» — выручка агентства (Teamtracker), «Прибыль» — прибыль по Teamtracker; «Расход» — личные траты
+        (при автозакрытии месяца — только «на жизнь»). Тап по сумме — правка в ячейке; расход сохраняется как личные
+        (бизнес-обнуляется). Данные в Supabase: finance_month_snapshots.
       </Text>
 
       {canEdit && !hasCurrentMonth ? (
