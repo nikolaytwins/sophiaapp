@@ -241,7 +241,7 @@ function GoalPhotosInCard({
   return <View style={{ marginTop: 2, width: '100%' }}>{grid}</View>;
 }
 
-const BAR_HEIGHT = 14;
+const BAR_HEIGHT = 18;
 
 /** Полноэкранный просмотр фото цели со свайпом, если несколько. */
 export function SideGoalPhotoLightboxModal({
@@ -270,6 +270,16 @@ export function SideGoalPhotoLightboxModal({
 
   if (uris.length === 0) return null;
 
+  const baseW = width - 24;
+  const baseH = height * 0.58;
+  const targetW = baseW * 1.5;
+  const targetH = baseH * 1.5;
+  const maxW = width - 8;
+  const maxH = height * 0.8;
+  const shrink = Math.min(1, maxW / targetW, maxH / targetH);
+  const imgW = targetW * shrink;
+  const imgH = targetH * shrink;
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)' }}>
@@ -293,16 +303,16 @@ export function SideGoalPhotoLightboxModal({
                 key={`lb-${uri}-${i}`}
                 style={{
                   width,
-                  minHeight: height * 0.72,
+                  minHeight: height * 0.82,
                   justifyContent: 'center',
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 8,
                   paddingTop: 48,
                   paddingBottom: 32,
                 }}
               >
                 <Image
                   source={{ uri }}
-                  style={{ width: width - 24, height: height * 0.58, alignSelf: 'center' }}
+                  style={{ width: imgW, height: imgH, alignSelf: 'center' }}
                   contentFit="contain"
                 />
               </View>

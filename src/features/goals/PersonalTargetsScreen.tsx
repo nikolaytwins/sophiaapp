@@ -3,10 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  Image as RNImage,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -48,6 +50,60 @@ import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
 function parseAmount(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+/** Фото в попапе просмотра цели: полная ширина, исходные пропорции, без обрезки (`contain`). */
+function ViewGoalDetailPhoto({ uri, onPress }: { uri: string; onPress: () => void }) {
+  const [aspectWH, setAspectWH] = useState<number | null>(null);
+
+  const applySize = useCallback((w: number, h: number) => {
+    if (w > 0 && h > 0) setAspectWH(w / h);
+  }, []);
+
+  const ratio = aspectWH && aspectWH > 0 ? aspectWH : 4 / 3;
+
+  const onLoadMeta = useCallback(
+    (e: { source?: unknown }) => {
+      const src = e.source;
+      if (src && typeof src === 'object' && 'width' in src && 'height' in src) {
+        const sw = Number((src as { width?: number }).width);
+        const sh = Number((src as { height?: number }).height);
+        if (sw > 0 && sh > 0) applySize(sw, sh);
+      } else if (Platform.OS !== 'web') {
+        RNImage.getSize(uri, (iw, ih) => applySize(iw, ih), () => {});
+      }
+    },
+    [applySize, uri]
+  );
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Увеличить фото"
+      style={{ width: '100%' }}
+    >
+      <View
+        style={{
+          width: '100%',
+          borderRadius: 16,
+          overflow: 'hidden',
+          backgroundColor: 'rgba(0,0,0,0.28)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.14)',
+        }}
+      >
+        <View style={{ width: '100%', aspectRatio: ratio }}>
+          <Image
+            source={{ uri }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="contain"
+            onLoad={onLoadMeta}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
 }
 
 const BOARD_TABS: { id: SideGoalBoardTab; label: string }[] = [
@@ -1032,7 +1088,7 @@ function SideGoalsBoardBlock({
               maxHeight: '90%',
             }}
           >
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               {viewingGoal ? (
                 <>
                   <Text style={[typography.title2, { marginBottom: spacing.sm, color: colors.text, letterSpacing: -0.3 }]}>
@@ -1052,28 +1108,11 @@ function SideGoalsBoardBlock({
                     </Text>
                   ) : null}
                   {viewingGoal.photoUris.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator
-                      style={{ marginBottom: spacing.md }}
-                      contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
-                    >
+                    <View style={{ width: '100%', gap: 20, marginBottom: spacing.md }}>
                       {viewingGoal.photoUris.map((uri, i) => (
-                        <Pressable key={`vd-${uri}-${i}`} onPress={() => setViewPhotoIdx(i)}>
-                          <Image
-                            source={{ uri }}
-                            style={{
-                              width: 280,
-                              height: 200,
-                              borderRadius: 14,
-                              borderWidth: 1,
-                              borderColor: 'rgba(255,255,255,0.14)',
-                            }}
-                            contentFit="cover"
-                          />
-                        </Pressable>
+                        <ViewGoalDetailPhoto key={`vd-${uri}-${i}`} uri={uri} onPress={() => setViewPhotoIdx(i)} />
                       ))}
-                    </ScrollView>
+                    </View>
                   ) : null}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: spacing.sm }}>
                     <Pressable
@@ -1221,7 +1260,7 @@ export function PersonalTargetsScreen() {
         ) : (
           <>
             <GoalsBoardTabBar boardTab={boardTab} onBoardTab={setBoardTab} />
-            {boardTab === 'nearest' ? (
+            {boardTab === 'all' || boardTab === 'nearest' ? (
               <View style={{ gap: spacing.sm }}>
                 <NikolayDayMoneyHeroCards
                   sprintId={activeSprint?.id ?? null}
