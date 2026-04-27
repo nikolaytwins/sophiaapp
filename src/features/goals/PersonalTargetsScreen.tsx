@@ -23,11 +23,13 @@ import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
 import { GoalsNavigatorBento, nearestCutoffForAugust } from '@/features/goals/GoalsNavigatorBento';
 import { PersonalGoalsMasonryGrid, SideGoalPhotoLightboxModal } from '@/features/goals/PersonalGoalsMasonry';
 import {
+  getSideGoalPlacementKind,
   isSideGoalCompleted,
   normalizeDateKey,
   sideGoalDatedOutsideYear,
   sideGoalInCalendarYear,
   type SideGoalBoardTab,
+  type SideGoalPlacementKind,
 } from '@/features/goals/sideGoals.logic';
 import { loadFinanceOverview } from '@/features/finance/financeApi';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
@@ -113,6 +115,13 @@ const BOARD_TABS: { id: SideGoalBoardTab; label: string }[] = [
   { id: 'wish', label: 'Доска желаний' },
   { id: 'horizon', label: 'Горизонт' },
   { id: 'done', label: 'Выполненные цели' },
+];
+
+const GOAL_PLACEMENT_OPTIONS: { id: SideGoalPlacementKind; label: string }[] = [
+  { id: 'nearest', label: 'Ближайшая цель' },
+  { id: 'wish', label: 'Доска желаний' },
+  { id: 'horizon', label: 'Горизонт' },
+  { id: 'year', label: 'Год' },
 ];
 
 function GoalsBoardTabBar({
@@ -202,8 +211,8 @@ function SideGoalsBoardBlock({
   const [draftTitle, setDraftTitle] = useState('');
   const [draftCurrent, setDraftCurrent] = useState('');
   const [draftTarget, setDraftTarget] = useState('');
-  const [draftHorizon, setDraftHorizon] = useState(false);
-  const [draftNearest, setDraftNearest] = useState(false);
+  const [draftPlacement, setDraftPlacement] = useState<SideGoalPlacementKind>('wish');
+  const [placementPickerOpen, setPlacementPickerOpen] = useState(false);
   const [draftDateMode, setDraftDateMode] = useState<SideGoalDateMode>('none');
   const [draftDateSingle, setDraftDateSingle] = useState('');
   const [draftDateFrom, setDraftDateFrom] = useState('');
@@ -230,60 +239,89 @@ function SideGoalsBoardBlock({
     setDraftCheckboxDone(g.current >= g.target);
     setDraftCurrent(String(g.current));
     setDraftTarget(String(g.target));
-    setDraftHorizon(g.isHorizon);
-    setDraftNearest(g.isNearestPinned);
+    setDraftPlacement(getSideGoalPlacementKind(g));
     setDraftDateMode(g.dateMode);
     setDraftDateSingle(g.dateSingle ?? '');
     setDraftDateFrom(g.dateFrom ?? '');
     setDraftDateTo(g.dateTo ?? '');
   }, [editId]);
 
-  const closeModal = useCallback(() => setEditId(null), []);
+  const closeModal = useCallback(() => {
+    setEditId(null);
+    setPlacementPickerOpen(false);
+  }, []);
 
   const save = useCallback(() => {
     if (!editId) return;
     const useCheckbox = draftProgressKind === 'checkbox';
     const t = useCheckbox ? 1 : Math.max(1, parseAmount(draftTarget));
     const c = useCheckbox ? (draftCheckboxDone ? 1 : 0) : Math.max(0, parseAmount(draftCurrent));
-    let horizon = draftHorizon;
-    let nearest = draftNearest;
-    if (horizon) nearest = false;
-    if (nearest) horizon = false;
-
+    let horizon = false;
+    let nearest = false;
     let dateMode: SideGoalDateMode = draftDateMode;
     let dateSingle: string | null = draftDateSingle.trim() || null;
     let dateFrom: string | null = draftDateFrom.trim() || null;
     let dateTo: string | null = draftDateTo.trim() || null;
 
-    if (dateMode === 'single' && !dateSingle) dateMode = 'none';
-    if (dateMode === 'range' && (!dateFrom || !dateTo)) dateMode = 'none';
-    if (dateMode === 'none') {
+    if (draftPlacement === 'nearest') {
+      horizon = false;
+      nearest = true;
+      dateMode = 'none';
       dateSingle = null;
       dateFrom = null;
       dateTo = null;
-    }
-    if (dateMode === 'single' && dateSingle) {
-      const norm = normalizeDateKey(dateSingle);
-      if (!norm) {
+    } else if (draftPlacement === 'horizon') {
+      horizon = true;
+      nearest = false;
+      dateMode = 'none';
+      dateSingle = null;
+      dateFrom = null;
+      dateTo = null;
+    } else if (draftPlacement === 'wish') {
+      horizon = false;
+      nearest = false;
+      dateMode = 'none';
+      dateSingle = null;
+      dateFrom = null;
+      dateTo = null;
+    } else {
+      horizon = false;
+      nearest = false;
+      if (dateMode === 'none') {
+        alertInfo('Дата', 'Для типа «Год» выбери один день или период.');
+        return;
+      }
+      if (dateMode === 'single' && !dateSingle) {
         alertInfo('Дата', 'Введи дату в формате ГГГГ-ММ-ДД, например 2026-08-14.');
         return;
       }
-      dateSingle = norm;
-    }
-    if (dateMode === 'range' && dateFrom && dateTo) {
-      const nf = normalizeDateKey(dateFrom);
-      const nt = normalizeDateKey(dateTo);
-      if (!nf || !nt) {
-        alertInfo('Дата', 'Проверь обе даты в формате ГГГГ-ММ-ДД.');
+      if (dateMode === 'range' && (!dateFrom || !dateTo)) {
+        alertInfo('Дата', 'Укажи начало и конец периода в формате ГГГГ-ММ-ДД.');
         return;
       }
-      dateFrom = nf;
-      dateTo = nt;
-    }
-    if (dateMode === 'range' && dateFrom && dateTo && dateFrom > dateTo) {
-      const x = dateFrom;
-      dateFrom = dateTo;
-      dateTo = x;
+      if (dateMode === 'single' && dateSingle) {
+        const norm = normalizeDateKey(dateSingle);
+        if (!norm) {
+          alertInfo('Дата', 'Введи дату в формате ГГГГ-ММ-ДД, например 2026-08-14.');
+          return;
+        }
+        dateSingle = norm;
+      }
+      if (dateMode === 'range' && dateFrom && dateTo) {
+        const nf = normalizeDateKey(dateFrom);
+        const nt = normalizeDateKey(dateTo);
+        if (!nf || !nt) {
+          alertInfo('Дата', 'Проверь обе даты в формате ГГГГ-ММ-ДД.');
+          return;
+        }
+        dateFrom = nf;
+        dateTo = nt;
+      }
+      if (dateMode === 'range' && dateFrom && dateTo && dateFrom > dateTo) {
+        const x = dateFrom;
+        dateFrom = dateTo;
+        dateTo = x;
+      }
     }
 
     updateSideGoal(editId, {
@@ -309,8 +347,7 @@ function SideGoalsBoardBlock({
     draftDateSingle,
     draftDateTo,
     draftDescription,
-    draftHorizon,
-    draftNearest,
+    draftPlacement,
     draftProgressKind,
     draftTarget,
     draftTitle,
@@ -625,178 +662,137 @@ function SideGoalsBoardBlock({
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[typography.title2, { marginBottom: spacing.md, color: colors.text }]}>Цель</Text>
 
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>Тип цели</Text>
               <Pressable
                 onPress={() => {
                   if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                  setDraftHorizon((v) => {
-                    const next = !v;
-                    if (next) setDraftNearest(false);
-                    return next;
-                  });
+                  setPlacementPickerOpen(true);
                 }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 12,
-                  marginBottom: spacing.sm,
-                  paddingVertical: 12,
-                  paddingHorizontal: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: draftHorizon ? 'rgba(251,191,36,0.45)' : 'rgba(255,255,255,0.12)',
-                  backgroundColor: draftHorizon ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)',
-                }}
-              >
-                <Ionicons
-                  name={draftHorizon ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color={draftHorizon ? 'rgba(253,224,71,0.95)' : 'rgba(255,255,255,0.45)'}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>На горизонте</Text>
-                  <Text style={{ fontSize: 12, marginTop: 3, color: colors.textMuted, lineHeight: 16 }}>
-                    Отдельная вкладка «Горизонт». Несовместимо с «ближайшая».
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                  setDraftNearest((v) => {
-                    const next = !v;
-                    if (next) setDraftHorizon(false);
-                    return next;
-                  });
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
+                  gap: 10,
                   marginBottom: spacing.md,
-                  paddingVertical: 12,
-                  paddingHorizontal: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 14,
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: draftNearest ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.12)',
-                  backgroundColor: draftNearest ? 'rgba(168,85,247,0.1)' : 'rgba(255,255,255,0.03)',
+                  borderColor: 'rgba(255,255,255,0.14)',
+                  backgroundColor: 'rgba(255,255,255,0.04)',
                 }}
               >
-                <Ionicons
-                  name={draftNearest ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color={draftNearest ? '#E9D5FF' : 'rgba(255,255,255,0.45)'}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>Ближайшая цель</Text>
-                  <Text style={{ fontSize: 12, marginTop: 3, color: colors.textMuted, lineHeight: 16 }}>
-                    Крупная карточка во вкладке «Ближайшие» (вместе с Китаем и подушкой).
-                  </Text>
-                </View>
+                <Text style={{ flex: 1, fontSize: 16, fontWeight: '800', color: colors.text }}>
+                  {GOAL_PLACEMENT_OPTIONS.find((o) => o.id === draftPlacement)?.label ?? '—'}
+                </Text>
+                <Ionicons name="chevron-down" size={22} color="rgba(248,250,252,0.55)" />
               </Pressable>
 
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>Дата</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
-                {(
-                  [
-                    ['none', 'Без даты'],
-                    ['single', 'Один день'],
-                    ['range', 'Период'],
-                  ] as const
-                ).map(([mode, label]) => {
-                  const on = draftDateMode === mode;
-                  return (
-                    <Pressable
-                      key={mode}
-                      onPress={() => {
-                        setDraftDateMode(mode);
-                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                      }}
-                      style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: on ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.12)',
-                        backgroundColor: on ? 'rgba(168,85,247,0.12)' : 'transparent',
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: on ? '#F5D0FE' : colors.textMuted }}>
-                        {label}
+              {draftPlacement === 'year' ? (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8 }}>Дата</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
+                    {(
+                      [
+                        ['none', 'Без даты'],
+                        ['single', 'Один день'],
+                        ['range', 'Период'],
+                      ] as const
+                    ).map(([mode, label]) => {
+                      const on = draftDateMode === mode;
+                      return (
+                        <Pressable
+                          key={mode}
+                          onPress={() => {
+                            setDraftDateMode(mode);
+                            if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                          }}
+                          style={{
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: on ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.12)',
+                            backgroundColor: on ? 'rgba(168,85,247,0.12)' : 'transparent',
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: on ? '#F5D0FE' : colors.textMuted }}>
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {draftDateMode === 'single' ? (
+                    <View style={{ marginBottom: spacing.md }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>
+                        Формат ГГГГ-ММ-ДД
                       </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                      <TextInput
+                        value={draftDateSingle}
+                        onChangeText={setDraftDateSingle}
+                        placeholder={`${calendarYear}-08-14`}
+                        placeholderTextColor="rgba(255,255,255,0.28)"
+                        autoCapitalize="none"
+                        style={{
+                          borderWidth: 1,
+                          borderColor: 'rgba(255,255,255,0.12)',
+                          borderRadius: 14,
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          color: colors.text,
+                          fontSize: 16,
+                          fontVariant: ['tabular-nums'],
+                        }}
+                      />
+                    </View>
+                  ) : null}
 
-              {draftDateMode === 'single' ? (
-                <View style={{ marginBottom: spacing.md }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>
-                    Формат ГГГГ-ММ-ДД
-                  </Text>
-                  <TextInput
-                    value={draftDateSingle}
-                    onChangeText={setDraftDateSingle}
-                    placeholder={`${calendarYear}-08-14`}
-                    placeholderTextColor="rgba(255,255,255,0.28)"
-                    autoCapitalize="none"
-                    style={{
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.12)',
-                      borderRadius: 14,
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      color: colors.text,
-                      fontSize: 16,
-                      fontVariant: ['tabular-nums'],
-                    }}
-                  />
-                </View>
-              ) : null}
-
-              {draftDateMode === 'range' ? (
-                <View style={{ marginBottom: spacing.md, gap: 10 }}>
-                  <View>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>С даты</Text>
-                    <TextInput
-                      value={draftDateFrom}
-                      onChangeText={setDraftDateFrom}
-                      placeholder={`${calendarYear}-01-01`}
-                      placeholderTextColor="rgba(255,255,255,0.28)"
-                      autoCapitalize="none"
-                      style={{
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.12)',
-                        borderRadius: 14,
-                        paddingVertical: 12,
-                        paddingHorizontal: 14,
-                        color: colors.text,
-                        fontSize: 16,
-                        fontVariant: ['tabular-nums'],
-                      }}
-                    />
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>По дату</Text>
-                    <TextInput
-                      value={draftDateTo}
-                      onChangeText={setDraftDateTo}
-                      placeholder={`${calendarYear}-12-31`}
-                      placeholderTextColor="rgba(255,255,255,0.28)"
-                      autoCapitalize="none"
-                      style={{
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.12)',
-                        borderRadius: 14,
-                        paddingVertical: 12,
-                        paddingHorizontal: 14,
-                        color: colors.text,
-                        fontSize: 16,
-                        fontVariant: ['tabular-nums'],
-                      }}
-                    />
-                  </View>
-                </View>
+                  {draftDateMode === 'range' ? (
+                    <View style={{ marginBottom: spacing.md, gap: 10 }}>
+                      <View>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>С даты</Text>
+                        <TextInput
+                          value={draftDateFrom}
+                          onChangeText={setDraftDateFrom}
+                          placeholder={`${calendarYear}-01-01`}
+                          placeholderTextColor="rgba(255,255,255,0.28)"
+                          autoCapitalize="none"
+                          style={{
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.12)',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            color: colors.text,
+                            fontSize: 16,
+                            fontVariant: ['tabular-nums'],
+                          }}
+                        />
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 6 }}>По дату</Text>
+                        <TextInput
+                          value={draftDateTo}
+                          onChangeText={setDraftDateTo}
+                          placeholder={`${calendarYear}-12-31`}
+                          placeholderTextColor="rgba(255,255,255,0.28)"
+                          autoCapitalize="none"
+                          style={{
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.12)',
+                            borderRadius: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            color: colors.text,
+                            fontSize: 16,
+                            fontVariant: ['tabular-nums'],
+                          }}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                </>
               ) : null}
 
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 6 }}>Фото</Text>
@@ -1057,6 +1053,77 @@ function SideGoalsBoardBlock({
                 </Pressable>
               </View>
             </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={placementPickerOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPlacementPickerOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+          onPress={() => setPlacementPickerOpen(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View
+              style={{
+                paddingTop: spacing.md,
+                paddingBottom: spacing.lg + 12,
+                paddingHorizontal: spacing.lg,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                backgroundColor: '#16161c',
+                borderWidth: 1,
+                borderColor: 'rgba(139,92,246,0.35)',
+              }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: '900', marginBottom: spacing.sm, color: colors.text }}>Тип цели</Text>
+              {GOAL_PLACEMENT_OPTIONS.map((opt) => {
+                const sel = draftPlacement === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                      setDraftPlacement(opt.id);
+                      if (opt.id === 'year') {
+                        setDraftDateMode((dm) => (dm === 'none' ? 'single' : dm));
+                        setDraftDateSingle((s) => (s.trim() ? s : `${calendarYear}-06-01`));
+                      } else {
+                        setDraftDateMode('none');
+                        setDraftDateSingle('');
+                        setDraftDateFrom('');
+                        setDraftDateTo('');
+                      }
+                      setPlacementPickerOpen(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 14,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor: sel ? 'rgba(168,85,247,0.15)' : 'transparent',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 16,
+                        fontWeight: sel ? '900' : '700',
+                        color: sel ? '#F5D0FE' : colors.text,
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                    {sel ? <Ionicons name="checkmark-circle" size={22} color="#E879F9" /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

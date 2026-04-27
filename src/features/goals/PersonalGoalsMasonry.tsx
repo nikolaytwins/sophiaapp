@@ -414,17 +414,47 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
   const titleBlock = (
     <View style={{ gap: 4 }}>
       {badges}
-      <Pressable
-        onPress={() => {
-          if (Platform.OS !== 'web') void Haptics.selectionAsync();
-          onView();
-        }}
-        hitSlop={{ top: 4, bottom: 4 }}
-      >
-        <Text numberOfLines={8} style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
-          {goal.title}
-        </Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        {showCheckbox && onToggleOneShot ? (
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              onToggleOneShot(goal.id, !done);
+            }}
+            hitSlop={10}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: done }}
+            accessibilityLabel={done ? 'Выполнено' : 'Отметить выполненным'}
+            style={{ paddingTop: 2 }}
+          >
+            <Ionicons
+              name={done ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={done ? '#a78bfa' : 'rgba(248,250,252,0.45)'}
+            />
+          </Pressable>
+        ) : showCheckbox ? (
+          <View style={{ paddingTop: 2 }} pointerEvents="none">
+            <Ionicons
+              name={done ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={done ? '#a78bfa' : 'rgba(248,250,252,0.35)'}
+            />
+          </View>
+        ) : null}
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') void Haptics.selectionAsync();
+            onView();
+          }}
+          hitSlop={{ top: 4, bottom: 4 }}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          <Text numberOfLines={8} style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
+            {goal.title}
+          </Text>
+        </Pressable>
+      </View>
       {desc ? (
         <Text numberOfLines={6} style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: 'rgba(248,250,252,0.55)' }}>
           {desc}
@@ -460,23 +490,6 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
     </View>
   ) : null;
 
-  const oneShotRow =
-    showCheckbox && onToggleOneShot ? (
-      <Pressable
-        onPress={() => {
-          if (Platform.OS !== 'web') void Haptics.selectionAsync();
-          onToggleOneShot(goal.id, !done);
-        }}
-        hitSlop={8}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}
-      >
-        <Ionicons name={done ? 'checkbox' : 'square-outline'} size={24} color={done ? '#a78bfa' : 'rgba(248,250,252,0.45)'} />
-        <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(248,250,252,0.75)' }}>{done ? 'Сделано' : 'Отметить выполнение'}</Text>
-      </Pressable>
-    ) : showCheckbox ? (
-      <Text style={{ marginTop: 8, fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.5)' }}>{done ? 'Выполнено' : 'В работе'}</Text>
-    ) : null;
-
   return (
     <Pressable
       onHoverIn={onHoverIn}
@@ -511,7 +524,6 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
           </Pressable>
         </View>
         {footerProgress}
-        {oneShotRow}
         {hasPhoto ? (
           <Animated.View style={{ marginTop: spacing.md, transform: [{ scale }] }}>
             <GoalPhotosInCard uris={photos} onPhotoPress={(i) => setLightboxIndex(i)} />

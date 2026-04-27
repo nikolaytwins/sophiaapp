@@ -55,6 +55,17 @@ export function isSideGoalCompleted(g: SideGoalPersisted): boolean {
   return g.current >= t;
 }
 
+/** Куда относится цель во вкладке «Все цели» (порядок секций сверху вниз). */
+export type SideGoalPlacementKind = 'nearest' | 'horizon' | 'year' | 'wish';
+
+/** Определить тип размещения по полям цели. */
+export function getSideGoalPlacementKind(g: SideGoalPersisted): SideGoalPlacementKind {
+  if (g.isHorizon) return 'horizon';
+  if (g.isNearestPinned) return 'nearest';
+  if (sideGoalHasAnyDate(g)) return 'year';
+  return 'wish';
+}
+
 /** `all` — все разделы подряд; `done` — только выполненные; остальные — активные цели одного раздела. */
 export type SideGoalBoardTab = 'all' | 'nearest' | 'year' | 'wish' | 'horizon' | 'done';
 

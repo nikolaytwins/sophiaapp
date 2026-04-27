@@ -1,7 +1,7 @@
 import { type ReactNode, useMemo } from 'react';
 import { Text, View } from 'react-native';
 
-import { mergeGoalsRoundRobin, PersonalGoalsMasonryGrid } from '@/features/goals/PersonalGoalsMasonry';
+import { PersonalGoalsMasonryGrid } from '@/features/goals/PersonalGoalsMasonry';
 import { sideGoalDeadlineOnOrBefore } from '@/features/goals/sideGoals.logic';
 import type { SideGoalPersisted } from '@/stores/sideGoals.store';
 import { useAppTheme } from '@/theme';
@@ -43,18 +43,25 @@ export function GoalsNavigatorBento({
     [yearGoals, nearestDeadlineCutoffKey]
   );
 
-  const mergedAll = useMemo(
-    () =>
-      mergeGoalsRoundRobin([
-        pinnedGoals,
-        yearNearest,
-        yearTrack,
-        wishGoals,
-        horizonGoals,
-        otherYearGoals,
-      ]),
-    [pinnedGoals, yearNearest, yearTrack, wishGoals, horizonGoals, otherYearGoals]
-  );
+  /** Порядок: ближайшие → горизонт → год (внутри года: до дедлайна / после / другие года) → доска желаний. */
+  const mergedAll = useMemo(() => {
+    const seen = new Set<string>();
+    const out: SideGoalPersisted[] = [];
+    const push = (list: SideGoalPersisted[]) => {
+      for (const g of list) {
+        if (seen.has(g.id)) continue;
+        seen.add(g.id);
+        out.push(g);
+      }
+    };
+    push(pinnedGoals);
+    push(horizonGoals);
+    push(yearNearest);
+    push(yearTrack);
+    push(otherYearGoals);
+    push(wishGoals);
+    return out;
+  }, [pinnedGoals, horizonGoals, yearNearest, yearTrack, otherYearGoals, wishGoals]);
 
   return (
     <View style={{ gap: spacing.xl + 4 }}>
