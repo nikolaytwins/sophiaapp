@@ -11,12 +11,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 import type { Habit } from '@/entities/models';
 import { GenZFinanceReservePlaque } from '@/features/accounts/nikolayFinanceReservePlaque';
 import { pickNikolayMoneyReserveAccounts } from '@/features/accounts/nikolayFinanceReserveAccounts';
+import { fmtFinanceAccountMoney } from '@/features/finance/FinanceAccountPlaqueTile';
 import type { FinanceAccount } from '@/features/finance/finance.types';
 import type { SprintGoal } from '@/features/sprint/sprint.types';
 import { useSprintStore } from '@/stores/sprint.store';
@@ -123,6 +125,7 @@ function GenZMoneyGoalPlaque({
   goal,
   sprintId,
   fallbackHint,
+  presentation = 'genz',
 }: {
   variant: MoneyPlaqueVariant;
   overline: string;
@@ -130,8 +133,11 @@ function GenZMoneyGoalPlaque({
   goal: SprintGoal | null;
   sprintId: string | null;
   fallbackHint: string;
+  presentation?: 'genz' | 'accountTile';
 }) {
-  const { colors, spacing } = useAppTheme();
+  const { colors, spacing, radius } = useAppTheme();
+  const { width: windowW } = useWindowDimensions();
+  const narrowTitle = windowW < 440;
   const theme = PLAQUE_THEME[variant];
   const setProgressGoalNumbers = useSprintStore((s) => s.setProgressGoalNumbers);
   const updateGoalTitle = useSprintStore((s) => s.updateGoalTitle);
@@ -208,13 +214,13 @@ function GenZMoneyGoalPlaque({
             <Text
               style={{
                 marginTop: overline.trim() ? 8 : 0,
-                fontSize: 21,
+                fontSize: narrowTitle ? 19 : 21,
                 fontWeight: '900',
                 color: '#FAFAFC',
                 letterSpacing: -0.8,
-                lineHeight: 26,
+                lineHeight: narrowTitle ? 24 : 26,
               }}
-              numberOfLines={2}
+              numberOfLines={narrowTitle ? 4 : 2}
             >
               {goal?.title ?? defaultTitle}
             </Text>
@@ -306,28 +312,109 @@ function GenZMoneyGoalPlaque({
     </View>
   );
 
-  return (
-    <>
-      <LinearGradient
-        colors={[theme.border, 'rgba(255,255,255,0.04)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+  const accountTileGoal =
+    presentation === 'accountTile' ? (
+      <View
         style={{
-          borderRadius: CARD_RADIUS + 2,
-          padding: 2,
-          ...(Platform.OS === 'web'
-            ? {}
-            : {
-                shadowColor: '#A855F7',
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.25,
-                shadowRadius: 20,
-                elevation: 8,
-              }),
+          width: '100%',
+          minWidth: 160,
+          minHeight: 118,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: 'rgba(167,139,250,0.45)',
+          backgroundColor: 'rgba(18,18,22,0.95)',
+          paddingVertical: 16,
+          paddingHorizontal: 14,
         }}
       >
-        {inner}
-      </LinearGradient>
+        {overline.trim() ? (
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '800',
+              letterSpacing: 2,
+              color: 'rgba(196,181,253,0.65)',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
+            {overline}
+          </Text>
+        ) : null}
+        <Text style={{ fontSize: 15, fontWeight: '800', color: '#F4F4F5', letterSpacing: -0.2 }} numberOfLines={2}>
+          {goal?.title ?? defaultTitle}
+        </Text>
+        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }} numberOfLines={1}>
+          Цель спринта
+        </Text>
+        {hasNumbers ? (
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              setEditOpen(true);
+            }}
+            style={{ marginTop: 10 }}
+          >
+            <Text style={{ fontSize: 22, fontWeight: '900', color: '#FAFAFC', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+              {fmtFinanceAccountMoney(Math.round(current))}
+            </Text>
+            <Text style={{ fontSize: 11, color: 'rgba(248,250,252,0.42)', marginTop: 6, fontWeight: '600' }}>
+              Цель {fmtFinanceAccountMoney(Math.round(target))}
+            </Text>
+            <Text style={{ fontSize: 10, color: 'rgba(196,181,253,0.65)', marginTop: 6 }}>тап — править цель</Text>
+          </Pressable>
+        ) : (
+          <View style={{ marginTop: 10 }}>
+            <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(248,250,252,0.45)' }} numberOfLines={5}>
+              {fallbackHint}
+            </Text>
+            <Link href={SPRINT_HREF} asChild>
+              <Pressable
+                style={({ pressed }) => ({
+                  marginTop: 12,
+                  alignSelf: 'flex-start',
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  backgroundColor: pressed ? theme.chipBg : 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(167,139,250,0.35)',
+                })}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: 'rgba(196,181,253,0.95)' }}>Настроить в спринте →</Text>
+              </Pressable>
+            </Link>
+          </View>
+        )}
+      </View>
+    ) : null;
+
+  return (
+    <>
+      {presentation === 'accountTile' ? (
+        accountTileGoal
+      ) : (
+        <LinearGradient
+          colors={[theme.border, 'rgba(255,255,255,0.04)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: CARD_RADIUS + 2,
+            padding: 2,
+            ...(Platform.OS === 'web'
+              ? {}
+              : {
+                  shadowColor: '#A855F7',
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 20,
+                  elevation: 8,
+                }),
+          }}
+        >
+          {inner}
+        </LinearGradient>
+      )}
 
       <Modal visible={editOpen} animationType="fade" transparent onRequestClose={() => setEditOpen(false)}>
         <Pressable
@@ -458,6 +545,7 @@ function NikolayMoneyHeroSlot({
   sprintGoal,
   sprintId,
   fallbackHint,
+  presentation = 'genz',
 }: {
   variant: MoneyPlaqueVariant;
   overline: string;
@@ -468,6 +556,7 @@ function NikolayMoneyHeroSlot({
   sprintGoal: SprintGoal | null;
   sprintId: string | null;
   fallbackHint: string;
+  presentation?: 'genz' | 'accountTile';
 }) {
   if (financeAccount && financeUserId) {
     return (
@@ -478,6 +567,7 @@ function NikolayMoneyHeroSlot({
         account={financeAccount}
         userId={financeUserId}
         onSaved={() => onFinanceUpdated?.()}
+        presentation={presentation}
       />
     );
   }
@@ -489,6 +579,7 @@ function NikolayMoneyHeroSlot({
       goal={sprintGoal}
       sprintId={sprintId}
       fallbackHint={fallbackHint}
+      presentation={presentation}
     />
   );
 }
@@ -506,6 +597,7 @@ export function NikolayDayMoneyHeroCards({
   financeAccounts,
   financeUserId,
   onFinanceAccountsUpdated,
+  presentation = 'genz',
 }: {
   sprintId: string | null;
   chinaGoal: SprintGoal | null;
@@ -515,6 +607,8 @@ export function NikolayDayMoneyHeroCards({
   financeAccounts?: FinanceAccount[] | null;
   financeUserId?: string | null;
   onFinanceAccountsUpdated?: () => void;
+  /** Как плитки «Счета» на дашборде финансов — только для экрана «Финансы». */
+  presentation?: 'genz' | 'accountTile';
 }) {
   const { spacing } = useAppTheme();
   const desktopGap = 24;
@@ -545,6 +639,7 @@ export function NikolayDayMoneyHeroCards({
           sprintGoal={chinaGoal}
           sprintId={sprintId}
           fallbackHint={HINT_CHINA_FINANCE}
+          presentation={presentation}
         />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -558,11 +653,12 @@ export function NikolayDayMoneyHeroCards({
           sprintGoal={cushionGoal}
           sprintId={sprintId}
           fallbackHint={HINT_CUSHION_FINANCE}
+          presentation={presentation}
         />
       </View>
     </View>
   ) : (
-    <View style={{ marginBottom: spacing.md, gap: spacing.lg }}>
+    <View style={{ marginBottom: spacing.md, gap: spacing.md }}>
       <NikolayMoneyHeroSlot
         variant="china"
         overline={overline}
@@ -573,6 +669,7 @@ export function NikolayDayMoneyHeroCards({
         sprintGoal={chinaGoal}
         sprintId={sprintId}
         fallbackHint={HINT_CHINA_FINANCE}
+        presentation={presentation}
       />
       <NikolayMoneyHeroSlot
         variant="cushion"
@@ -584,6 +681,7 @@ export function NikolayDayMoneyHeroCards({
         sprintGoal={cushionGoal}
         sprintId={sprintId}
         fallbackHint={HINT_CUSHION_FINANCE}
+        presentation={presentation}
       />
     </View>
   );

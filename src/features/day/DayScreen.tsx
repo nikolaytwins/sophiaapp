@@ -40,7 +40,7 @@ import { repos } from '@/services/repositories';
 import { useDayJournalStore } from '@/stores/dayJournal.store';
 import { useSprintStore } from '@/stores/sprint.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
@@ -368,15 +368,8 @@ export function DayScreen() {
               : {}),
           }}
         >
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: spacing.md,
-          }}
-        >
-          <View style={{ flex: 1, paddingRight: spacing.md }}>
+        <ScreenHeaderChrome marginBottom={spacing.md} avatarMarginTop={4}>
+          <View>
             <Text
               style={{
                 fontSize: 11,
@@ -414,8 +407,7 @@ export function DayScreen() {
               {isViewingToday ? ' · сегодня' : ''}
             </Text>
           </View>
-          <HeaderProfileAvatar marginTop={4} />
-        </View>
+        </ScreenHeaderChrome>
 
         <View
           style={{

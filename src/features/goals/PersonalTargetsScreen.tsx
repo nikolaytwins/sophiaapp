@@ -46,7 +46,7 @@ import {
 } from '@/stores/sideGoals.store';
 import { useSprintStore } from '@/stores/sprint.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
@@ -1344,6 +1344,7 @@ function SideGoalsBoardBlock({
 /** Вкладка «Цели»: Китай/подушка + побочные цели с прогрессом (локально + облако). */
 export function PersonalTargetsScreen() {
   const { typography, spacing, colors } = useAppTheme();
+  const { width: layoutWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const supabaseOn = useSupabaseConfigured;
@@ -1415,10 +1416,7 @@ export function PersonalTargetsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-          <Text style={[typography.title1, { letterSpacing: -0.2, flexShrink: 1 }]}>Цели</Text>
-          <HeaderProfileAvatar />
-        </View>
+        <ScreenHeaderChrome marginBottom={spacing.sm} />
 
         <View style={{ overflow: 'hidden', paddingBottom: 8 }}>
           <GoalsHero />
@@ -1440,7 +1438,7 @@ export function PersonalTargetsScreen() {
                   sprintId={activeSprint?.id ?? null}
                   chinaGoal={china}
                   cushionGoal={cushion}
-                  desktopTwoColumn
+                  desktopTwoColumn={layoutWidth >= 560}
                   financeAccounts={financeOverviewQ.data?.accounts ?? null}
                   financeUserId={userId}
                   onFinanceAccountsUpdated={invalidateFinance}

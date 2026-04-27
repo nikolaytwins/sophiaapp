@@ -15,7 +15,7 @@ import { getSupabase } from '@/lib/supabase';
 import { ensureStrategyCheckpointsHydrated, useStrategyCheckpointsStore } from '@/stores/strategyCheckpoints.store';
 import { ensureStrategyMonthlyPlansHydrated } from '@/stores/strategyMonthlyPlans.store';
 import { AppSurfaceCard } from '@/shared/ui/AppSurfaceCard';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
@@ -71,9 +71,7 @@ export function StrategyScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-          <HeaderProfileAvatar />
-        </View>
+        <ScreenHeaderChrome marginBottom={spacing.sm} avatarMarginTop={2} />
 
         {!isNikolay ? (
           <AppSurfaceCard glow style={{ borderRadius: STRATEGY.cardRadiusLg }}>

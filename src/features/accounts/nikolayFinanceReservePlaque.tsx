@@ -19,6 +19,7 @@ import {
   mergeNotesWithGoalTarget,
   parseFinanceAccountGoalTarget,
 } from '@/features/accounts/nikolayFinanceReserveAccounts';
+import { fmtFinanceAccountMoney } from '@/features/finance/FinanceAccountPlaqueTile';
 import { updateFinanceAccount } from '@/features/finance/financeApi';
 import type { FinanceAccount } from '@/features/finance/finance.types';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
@@ -65,11 +66,21 @@ type Props = {
   userId: string;
   /** Дополнительно к инвалидации кэша финансов внутри компонента. */
   onSaved?: () => void;
+  /** Плитка как у счетов на дашборде «Финансы» (только этот экран). */
+  presentation?: 'genz' | 'accountTile';
 };
 
 /** Плашка накопления из счёта «резервы» (баланс + цель в notes `target:…`). Редактирование пишет в те же счета, что и раздел Финансы. */
-export function GenZFinanceReservePlaque({ variant, overline = '', defaultTitle, account, userId, onSaved }: Props) {
-  const { colors, spacing } = useAppTheme();
+export function GenZFinanceReservePlaque({
+  variant,
+  overline = '',
+  defaultTitle,
+  account,
+  userId,
+  onSaved,
+  presentation = 'genz',
+}: Props) {
+  const { colors, spacing, radius } = useAppTheme();
   const theme = PLAQUE_THEME[variant];
   const qc = useQueryClient();
 
@@ -245,28 +256,87 @@ export function GenZFinanceReservePlaque({ variant, overline = '', defaultTitle,
     </View>
   );
 
-  return (
-    <>
-      <LinearGradient
-        colors={[theme.border, 'rgba(255,255,255,0.04)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+  const accountTileShell =
+    presentation === 'accountTile' ? (
+      <View
         style={{
-          borderRadius: CARD_RADIUS + 2,
-          padding: 2,
-          ...(Platform.OS === 'web'
-            ? {}
-            : {
-                shadowColor: '#A855F7',
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.25,
-                shadowRadius: 20,
-                elevation: 8,
-              }),
+          width: '100%',
+          minWidth: 160,
+          minHeight: 118,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: 'rgba(167,139,250,0.45)',
+          backgroundColor: 'rgba(18,18,22,0.95)',
+          paddingVertical: 16,
+          paddingHorizontal: 14,
         }}
       >
-        {inner}
-      </LinearGradient>
+        {overline.trim() ? (
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '800',
+              letterSpacing: 2,
+              color: 'rgba(196,181,253,0.65)',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
+            {overline}
+          </Text>
+        ) : null}
+        <Text style={{ fontSize: 15, fontWeight: '800', color: '#F4F4F5', letterSpacing: -0.2 }} numberOfLines={2}>
+          {account.name || defaultTitle}
+        </Text>
+        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }} numberOfLines={1}>
+          {account.type}
+        </Text>
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') void Haptics.selectionAsync();
+            setEditOpen(true);
+          }}
+          style={{ marginTop: 10 }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: '900', color: '#FAFAFC', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+            {fmtFinanceAccountMoney(Math.round(current))}
+          </Text>
+          {hasNumbers ? (
+            <Text style={{ fontSize: 11, color: 'rgba(248,250,252,0.42)', marginTop: 6, fontWeight: '600' }}>
+              Цель {fmtFinanceAccountMoney(Math.round(target))}
+            </Text>
+          ) : null}
+          <Text style={{ fontSize: 10, color: 'rgba(196,181,253,0.65)', marginTop: 6 }}>тап — править счёт и цель</Text>
+        </Pressable>
+      </View>
+    ) : null;
+
+  return (
+    <>
+      {presentation === 'accountTile' ? (
+        accountTileShell
+      ) : (
+        <LinearGradient
+          colors={[theme.border, 'rgba(255,255,255,0.04)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: CARD_RADIUS + 2,
+            padding: 2,
+            ...(Platform.OS === 'web'
+              ? {}
+              : {
+                  shadowColor: '#A855F7',
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 20,
+                  elevation: 8,
+                }),
+          }}
+        >
+          {inner}
+        </LinearGradient>
+      )}
 
       <Modal visible={editOpen} animationType="fade" transparent onRequestClose={() => setEditOpen(false)}>
         <Pressable

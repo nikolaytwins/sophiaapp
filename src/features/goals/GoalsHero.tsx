@@ -9,14 +9,18 @@ export const GOALS_HERO_VISION_IMAGE = require('../../assets/images/goals-hero-v
 
 const STACK_BREAKPOINT = 420;
 
+const GOALS_IMG_POS_ROW = { right: '0%', bottom: '0%' } as const;
+const GOALS_IMG_POS_STACK = { right: '0%', bottom: '0%' } as const;
+
 /**
- * Hero «Цели»: та же сетка, что на экране «День» (HabitHero) — правая колонка, картинка в рамке без обрезки (`contain`).
+ * Hero «Цели»: сетка как на «День» — картинка заполняет правую колонку (cover), без градиентного затемнения поверх фото.
  */
 export function GoalsHero() {
   const { radius, spacing } = useAppTheme();
   const cardRadius = radius.xl;
   const { width: windowWidth } = useWindowDimensions();
   const stackLayout = windowWidth < STACK_BREAKPOINT;
+  const imgPos = stackLayout ? GOALS_IMG_POS_STACK : GOALS_IMG_POS_ROW;
 
   return (
     <View style={[styles.banner, { borderRadius: cardRadius, marginBottom: spacing.sm }]}>
@@ -52,47 +56,12 @@ export function GoalsHero() {
             <Image
               source={GOALS_HERO_VISION_IMAGE}
               style={StyleSheet.absoluteFillObject}
-              contentFit="contain"
-              contentPosition={{ right: '0%', bottom: '0%' }}
+              contentFit="cover"
+              contentPosition={imgPos}
               accessibilityIgnoresInvertColors
               accessibilityLabel="Иллюстрация: доска желаний"
             />
           </View>
-          <LinearGradient
-            pointerEvents="none"
-            colors={[
-              'rgba(8,8,14,0.9)',
-              'rgba(10,10,18,0.42)',
-              'rgba(14,12,22,0.1)',
-              'transparent',
-            ]}
-            locations={[0, 0.38, 0.72, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.figureBlendLeft}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(6,6,10,0.22)', 'transparent']}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 0.42 }}
-            style={[StyleSheet.absoluteFillObject, styles.figureFeatherTop]}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={['transparent', 'rgba(6,6,10,0.5)', 'rgba(5,5,8,0.75)']}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.figureFeatherRight}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={['transparent', 'rgba(55,20,90,0.22)']}
-            start={{ x: 0.15, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, styles.figureTint]}
-          />
         </View>
       </View>
 
@@ -199,27 +168,5 @@ const styles = StyleSheet.create({
   figureImageFrame: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
-  },
-  figureBlendLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: '78%',
-    zIndex: 2,
-  },
-  figureFeatherTop: {
-    zIndex: 2,
-  },
-  figureFeatherRight: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: '36%',
-    zIndex: 2,
-  },
-  figureTint: {
-    zIndex: 1,
   },
 });

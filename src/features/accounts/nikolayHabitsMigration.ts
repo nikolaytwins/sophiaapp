@@ -4,7 +4,7 @@ import type { HabitsPersistSlice } from '@/features/habits/habitsPersistReducer'
 import { normalizeHabitsSlice } from '@/features/habits/habitsPersistReducer';
 
 /** Поднимите версию, если меняете набор привычек / правила миграции. */
-export const NIKOLAY_HABITS_PROFILE_VERSION = 3;
+export const NIKOLAY_HABITS_PROFILE_VERSION = 4;
 
 const REMOVE_IDS = new Set([
   'seed_steps_10k',
@@ -42,14 +42,11 @@ function blueprintRows(): HabitPersisted[] {
       name: '3–5 действий на привлечение клиентов (будни; в выходной — по желанию)',
       icon: 'megaphone-outline',
       cadence: 'daily',
-      checkInKind: 'counter',
-      dailyTarget: 3,
-      counterUnit: 'действий',
+      checkInKind: 'binary',
       section: 'money',
       required: false,
       createdAt: t,
       completionDates: [],
-      countsByDate: {},
     },
     {
       id: 'nikolay_journal_braindump',
@@ -94,6 +91,24 @@ function patchNikolaySections(h: HabitPersisted): HabitPersisted {
   return h;
 }
 
+/** Был счётчик 3/день — делаем простую галочку; дни, где набрали цель, переносим в completionDates. */
+function migrateClientOutreachFromCounter(h: HabitPersisted): HabitPersisted {
+  if (h.id !== 'nikolay_client_outreach') return h;
+  const merged = new Set<string>(h.completionDates ?? []);
+  if (h.checkInKind === 'counter' && h.countsByDate) {
+    const target = h.dailyTarget ?? 3;
+    for (const [dk, n] of Object.entries(h.countsByDate)) {
+      if (typeof n === 'number' && n >= target) merged.add(dk);
+    }
+  }
+  const { dailyTarget: _dt, counterIncrementStep: _cis, countsByDate: _cbd, counterUnit: _cu, checkInKind: _ck, ...rest } = h;
+  return {
+    ...rest,
+    checkInKind: 'binary',
+    completionDates: [...merged].sort(),
+  };
+}
+
 /**
  * Удаляет старые медийные/шаговые цели, добавляет ритуалы по профилю, проставляет секции.
  */
@@ -114,18 +129,7 @@ export function applyNikolayHabitsProfile(
       ids.add(row.id);
     }
   }
-  habits = habits.map((h) => {
-    const patched = patchNikolaySections(h);
-    if (patched.id !== 'nikolay_client_outreach') return patched;
-    if (patched.checkInKind === 'counter' && patched.dailyTarget != null) return patched;
-    return {
-      ...patched,
-      checkInKind: 'counter' as const,
-      dailyTarget: 3,
-      counterUnit: 'действий',
-      countsByDate: patched.countsByDate ?? {},
-    };
-  });
+  habits = habits.map((h) => migrateClientOutreachFromCounter(patchNikolaySections(h)));
 
   return normalizeHabitsSlice({
     ...slice,

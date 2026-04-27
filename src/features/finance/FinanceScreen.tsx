@@ -47,7 +47,7 @@ import { buildSpendByCategoryName, categoryToBudgetLine, childrenForRoot } from 
 import type { FinanceBudgetLine, FinanceExpenseCategory, FinanceTransaction } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
 import { useSprintStore } from '@/stores/sprint.store';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { useAppTheme } from '@/theme';
@@ -564,8 +564,8 @@ export function FinanceScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: spacing.md }}>
+        <ScreenHeaderChrome avatarMarginTop={4}>
+          <View>
             <Text
               style={[
                 typography.caption,
@@ -576,8 +576,7 @@ export function FinanceScreen() {
             </Text>
             <Text style={[typography.hero, { fontSize: 32, letterSpacing: -0.8, color: colors.text }]}>Финансы</Text>
           </View>
-          <HeaderProfileAvatar marginTop={4} />
-        </View>
+        </ScreenHeaderChrome>
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>
           <SegmentedControl<MainTab>
@@ -726,17 +725,15 @@ export function FinanceScreen() {
                 {isNikolay ? (
                   <View style={{ marginTop: spacing.xl + 8, gap: spacing.sm }}>
                     <Text
-                      style={[
-                        typography.caption,
-                        {
-                          color: colors.textMuted,
-                          letterSpacing: 1.6,
-                          textTransform: 'uppercase',
-                          marginBottom: 4,
-                        },
-                      ]}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '900',
+                        color: 'rgba(196,181,253,0.9)',
+                        letterSpacing: 1.4,
+                        marginBottom: 10,
+                      }}
                     >
-                      Накопления · Китай и подушка (счета резерва)
+                      НАКОПЛЕНИЯ · КИТАЙ И ПОДУШКА
                     </Text>
                     <NikolayDayMoneyHeroCards
                       sprintId={activeSprint?.id ?? null}
@@ -745,6 +742,7 @@ export function FinanceScreen() {
                       financeAccounts={overview.accounts}
                       financeUserId={userId}
                       onFinanceAccountsUpdated={invalidateFinance}
+                      presentation="accountTile"
                     />
                   </View>
                 ) : null}

@@ -14,7 +14,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   const insets = useSafeAreaInsets();
   const { colors, isLight, typography, shadows } = useAppTheme();
   const screenW = Dimensions.get('window').width;
-  const tabMinW = screenW < 340 ? 42 : screenW < 380 ? 50 : screenW < 420 ? 56 : 62;
+  /** На узких экранах только иконки — подписи в шапке (бургер). */
+  const iconsOnlyTabs = screenW < 480;
+  const tabMinW = iconsOnlyTabs ? 44 : screenW < 340 ? 42 : screenW < 380 ? 50 : screenW < 420 ? 56 : 62;
   const iconSize = screenW < 340 ? 22 : screenW < 380 ? 24 : 28;
   const labelSize = screenW < 340 ? 9 : screenW < 380 ? 10 : 11;
 
@@ -56,17 +58,17 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           flexDirection: 'row',
           alignItems: 'flex-end',
           justifyContent: 'center',
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          gap: 10,
+          paddingVertical: iconsOnlyTabs ? 10 : 12,
+          paddingHorizontal: iconsOnlyTabs ? 6 : 12,
+          gap: iconsOnlyTabs ? 4 : 10,
         },
         tab: {
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: 54,
+          minHeight: iconsOnlyTabs ? 48 : 54,
           minWidth: tabMinW,
-          paddingHorizontal: 4,
-          paddingVertical: 6,
+          paddingHorizontal: iconsOnlyTabs ? 2 : 4,
+          paddingVertical: iconsOnlyTabs ? 4 : 6,
         },
         label: {
           ...typography.caption,
@@ -78,7 +80,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           letterSpacing: -0.15,
         },
       }),
-    [colors, isLight, shadows, typography, tabMinW, labelSize, screenW]
+    [colors, isLight, shadows, typography, tabMinW, labelSize, screenW, iconsOnlyTabs]
   );
 
   const visibleRoutes = TAB_BAR_ROUTE_ORDER.map((name) => state.routes.find((r) => r.name === name)).filter(
@@ -117,16 +119,18 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           <Pressable
             accessibilityRole="button"
             accessibilityState={focused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
             testID={options.tabBarButtonTestID}
             onPress={onPress}
             onLongPress={onLongPress}
             style={styles.tab}
           >
             <Ionicons name={iconName} size={iconSize} color={tint} />
-            <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
-              {label}
-            </Text>
+            {iconsOnlyTabs ? null : (
+              <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+                {label}
+              </Text>
+            )}
           </Pressable>
         );
 

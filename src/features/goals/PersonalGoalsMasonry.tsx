@@ -21,9 +21,6 @@ import { formatSideGoalDateCaption } from '@/features/goals/sideGoals.logic';
 import type { SideGoalPersisted } from '@/stores/sideGoals.store';
 import { useAppTheme } from '@/theme';
 
-const SILVER_BORDER = 'rgba(230, 232, 245, 0.34)';
-const SILVER_BORDER_SOFT = 'rgba(230, 232, 245, 0.2)';
-const SILVER_GLOW = 'rgba(248, 250, 252, 0.5)';
 const GLASS_FILL = 'rgba(10, 10, 16, 0.78)';
 const NEON_START = '#22d3ee';
 const NEON_END = '#c084fc';
@@ -40,12 +37,10 @@ function formatSideGoalNumericCaption(goal: Pick<SideGoalPersisted, 'current' | 
 
 function GlassShell({
   children,
-  borderColor,
   borderRadius,
   style,
 }: {
   children: ReactNode;
-  borderColor: string;
   borderRadius: number;
   style?: object;
 }) {
@@ -56,8 +51,7 @@ function GlassShell({
         {
           borderRadius,
           overflow: 'hidden',
-          borderWidth: 1,
-          borderColor,
+          borderWidth: 0,
           backgroundColor: Platform.OS === 'web' ? GLASS_FILL : 'transparent',
         },
         style,
@@ -384,13 +378,11 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
     goal.progressKind === 'checkbox' || (goal.progressKind === 'numeric' && goal.target <= 1);
   const done = showCheckbox && goal.current >= goal.target;
   const dateCap = formatSideGoalDateCaption(goal);
-  const [hovered, setHovered] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const onHoverIn = useCallback(() => {
     if (Platform.OS !== 'web') return;
-    setHovered(true);
     if (hasPhoto) {
       Animated.spring(scale, { toValue: 1.015, friction: 9, useNativeDriver: true }).start();
     }
@@ -398,11 +390,8 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
 
   const onHoverOut = useCallback(() => {
     if (Platform.OS !== 'web') return;
-    setHovered(false);
     Animated.spring(scale, { toValue: 1, friction: 8, useNativeDriver: true }).start();
   }, [scale]);
-
-  const borderColor = hovered && Platform.OS === 'web' ? SILVER_GLOW : SILVER_BORDER;
 
   const badges = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
@@ -499,16 +488,8 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
   ) : null;
 
   return (
-    <Pressable
-      onHoverIn={onHoverIn}
-      onHoverOut={onHoverOut}
-      style={{
-        ...(Platform.OS === 'web' && hovered
-          ? { shadowColor: '#f8fafc', shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } }
-          : {}),
-      }}
-    >
-      <GlassShell borderColor={borderColor} borderRadius={20} style={{ padding: spacing.md }}>
+    <Pressable onHoverIn={onHoverIn} onHoverOut={onHoverOut}>
+      <GlassShell borderRadius={20} style={{ padding: spacing.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
           <Pressable
@@ -524,8 +505,6 @@ export function SideGoalMasonryCard({ goal, onEdit, onView, onToggleOneShot }: C
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: 'rgba(0,0,0,0.35)',
-              borderWidth: 1,
-              borderColor: SILVER_BORDER_SOFT,
             }}
           >
             <Ionicons name="create-outline" size={18} color="rgba(248,250,252,0.88)" />

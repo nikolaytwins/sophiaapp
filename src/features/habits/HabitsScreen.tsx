@@ -46,7 +46,7 @@ import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
 import { JournalMoodCalendarPanel } from '@/features/journal/JournalMoodCalendarPanel';
 import { AppSurfaceCard as SurfaceCard } from '@/shared/ui/AppSurfaceCard';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
 import { confirmDestructive } from '@/shared/lib/confirmAction';
@@ -1020,8 +1020,8 @@ export function HabitsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: spacing.md }}>
+        <ScreenHeaderChrome avatarMarginTop={4}>
+          <View>
             <Text
               style={[
                 typography.caption,
@@ -1062,8 +1062,7 @@ export function HabitsScreen() {
               </Link>
             </View>
           </View>
-          <HeaderProfileAvatar marginTop={4} />
-        </View>
+        </ScreenHeaderChrome>
 
         <View style={{ marginTop: spacing.md, marginBottom: spacing.sm }}>
           <SegmentedControl

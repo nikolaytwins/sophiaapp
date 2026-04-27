@@ -80,7 +80,7 @@ import { invalidatePlannerCalendarQueries, invalidatePlannerWeekQueries } from '
 import { useSupabaseAuthSession } from '@/hooks/useSupabaseAuthSession';
 import { getSupabase } from '@/lib/supabase';
 import { WEB_NAV_LG_MIN } from '@/navigation/navConstants';
-import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
+import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
 
@@ -404,12 +404,14 @@ export function CalendarScreen() {
   }, []);
 
   useEffect(() => {
-    if (!addEventOpen) return;
-    setNewWeekEventTitle('');
+    if (addEventOpen) {
+      setNewWeekEventTitle('');
+      setNewWeekEventKind('none');
+      setNewWeekEventStart('');
+      setNewWeekEventEnd('');
+      return;
+    }
     setNewWeekEventDate('');
-    setNewWeekEventKind('none');
-    setNewWeekEventStart('');
-    setNewWeekEventEnd('');
   }, [addEventOpen]);
 
   useEffect(() => {
@@ -463,8 +465,20 @@ export function CalendarScreen() {
   const todayTasksQ = useQuery({
     queryKey: [...PLANNER_TASKS_QUERY_KEY, todayKey],
     queryFn: () => listPlannerTasks(todayKey),
-    enabled,
+    enabled: enabled && isDesktop,
   });
+
+  /** На мобилке список задач привязан к выбранному в календаре дню (`weekAnchorKey`). */
+  const selectedDayTasksQ = useQuery({
+    queryKey: [...PLANNER_TASKS_QUERY_KEY, 'day', weekAnchorKey],
+    queryFn: () => listPlannerTasks(weekAnchorKey),
+    enabled: enabled && !isDesktop,
+  });
+
+  const calendarMobileDayEvents = useMemo(
+    () => (weekEventsQ.data ?? []).filter((e) => e.event_date === weekAnchorKey),
+    [weekEventsQ.data, weekAnchorKey]
+  );
 
   const datedEventsByDay = useMemo(() => {
     const map = new Map<string, number>();
@@ -533,7 +547,7 @@ export function CalendarScreen() {
     },
     onSuccess: () => {
       invalidatePlannerWeekQueries(qc, weekAnchorKey);
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, todayKey] });
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY] });
       void qc.invalidateQueries({ queryKey: [...PLANNER_STATS_QUERY_KEY] });
     },
     onError: (e) => Alert.alert('Ошибка', (e as Error).message ?? 'Не удалось обновить'),
@@ -547,7 +561,7 @@ export function CalendarScreen() {
       if (task.is_done && !next) await adjustPlannerCompletedCount(-1);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY, todayKey] });
+      void qc.invalidateQueries({ queryKey: [...PLANNER_TASKS_QUERY_KEY] });
       invalidatePlannerWeekQueries(qc, weekAnchorKey);
       void qc.invalidateQueries({ queryKey: [...PLANNER_STATS_QUERY_KEY] });
     },
@@ -894,6 +908,7 @@ export function CalendarScreen() {
             const inMonth = Number(dateKey.slice(5, 7)) === viewYm.m;
             const isToday = dateKey === todayKey;
             const selWeek = dateKey >= weekMonday && dateKey <= weekSun;
+            const highlightNonToday = isDesktop ? selWeek : dateKey === weekAnchorKey;
             return (
               <Pressable
                 key={dateKey}
@@ -910,12 +925,12 @@ export function CalendarScreen() {
                     ? isV2
                       ? '#2A2150'
                       : brand.primaryMuted
-                    : selWeek
+                    : highlightNonToday
                       ? isV2
                         ? '#241C4A'
                         : 'rgba(123, 92, 255, 0.08)'
                       : 'transparent',
-                  borderWidth: isToday && !isV2 ? 1 : 0,
+                  borderWidth: (isToday && !isV2) || (!isDesktop && !isToday && dateKey === weekAnchorKey) ? 1 : 0,
                   borderColor: isV2 ? 'transparent' : fillAccent,
                 }}
               >
@@ -1051,6 +1066,69 @@ export function CalendarScreen() {
             key={task.id}
             task={task}
             isLast={i === (todayTasksQ.data ?? []).length - 1}
+            colors={colors}
+            isLight={isLight}
+            fillAccent={fillAccent}
+            toggleBusy={toggleTodayTaskMut.isPending}
+            onToggle={() => toggleTodayTaskMut.mutate(task)}
+          />
+        ))}
+        <Link href={'/tasks' as Href} asChild>
+          <Pressable style={{ marginTop: 10 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textMuted }}>Все задачи →</Text>
+          </Pressable>
+        </Link>
+      </View>
+    </View>
+  );
+
+  const mobileDayEventsBlock = (
+    <View style={{ marginTop: spacing.lg }}>
+      <Text style={sectionLabel(colors, isLight, isV2)}>События дня</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, marginBottom: 8 }]}>
+        {fullDayTitleRu(weekAnchorKey)}
+      </Text>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
+        {weekEventsQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
+        {calendarMobileDayEvents.length === 0 && !weekEventsQ.isLoading ? (
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Нет событий в этот день</Text>
+        ) : null}
+        {calendarMobileDayEvents.map((ev) => (
+          <SidebarEventRow key={ev.id} ev={ev} isLight={isLight} isV2={isV2} onEdit={() => openEventEditor(ev)} onDelete={() => confirmDeleteEvent(ev, deleteEventMut.mutate)} />
+        ))}
+        <GradientPrimaryButton
+          label="Добавить событие"
+          isLight={isLight}
+          solidColor={!isV2 && !isLight ? CAL_SOLID_ACCENT : undefined}
+          gradientColors={ctaGradient}
+          accentRgb={isV2 ? '160, 106, 240' : !isLight ? CAL_SOLID_ACCENT_RGB : '157, 107, 255'}
+          enableGlow={!isLight && (isV2 ? false : true)}
+          onPress={() => {
+            setNewWeekEventDate(weekAnchorKey);
+            setAddEventOpen(true);
+          }}
+          disabled={createEventMut.isPending}
+        />
+      </View>
+    </View>
+  );
+
+  const mobileDayTasksBlock = (
+    <View style={{ marginTop: spacing.lg }}>
+      <Text style={sectionLabel(colors, isLight, isV2)}>Задачи дня</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, marginBottom: 8 }]}>
+        {fullDayTitleRu(weekAnchorKey)}
+      </Text>
+      <View style={[cardShell(mainShellBorder, isLight, isV2)]}>
+        {selectedDayTasksQ.isLoading ? <ActivityIndicator color={fillAccent} /> : null}
+        {!selectedDayTasksQ.isLoading && (selectedDayTasksQ.data ?? []).length === 0 ? (
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Нет задач на этот день</Text>
+        ) : null}
+        {(selectedDayTasksQ.data ?? []).map((task, i) => (
+          <TodayTaskRow
+            key={task.id}
+            task={task}
+            isLast={i === (selectedDayTasksQ.data ?? []).length - 1}
             colors={colors}
             isLight={isLight}
             fillAccent={fillAccent}
@@ -1318,21 +1396,21 @@ export function CalendarScreen() {
     </View>
   );
 
-  const leftColumn = (
+  const desktopLeftColumn = (
     <View
       style={{
-        width: isDesktop ? SIDEBAR_W : undefined,
-        padding: isDesktop ? spacing.lg : 0,
-        paddingRight: isDesktop ? spacing.xl : 0,
+        width: SIDEBAR_W,
+        padding: spacing.lg,
+        paddingRight: spacing.xl,
         borderRightWidth: 0,
         borderRightColor: mainShellBorder,
-        backgroundColor: isDesktop ? sidebarBg : 'transparent',
-        borderRadius: isDesktop ? 20 : 0,
+        backgroundColor: sidebarBg,
+        borderRadius: 20,
         ...(isV2 ? (leftInfoPanelShell(true) as object) : {}),
       }}
     >
       {miniMonth}
-      {isDesktop ? weekNavBar : null}
+      {weekNavBar}
       {sidebarEventsBlock}
       {sidebarFocusBlock}
       {sidebarNotesBlock}
@@ -1378,31 +1456,28 @@ export function CalendarScreen() {
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+      <ScreenHeaderChrome marginBottom={spacing.md} avatarMarginTop={2}>
         {Platform.OS === 'web' ? (
-          <View style={{ flex: 1 }} />
+          <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.88)' }} numberOfLines={2}>
+            {profileTitle}
+          </Text>
         ) : (
           <Text style={[typography.screenTitle, { color: colors.text, fontSize: isDesktop ? 32 : 28 }]}>Календарь</Text>
         )}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {Platform.OS === 'web' ? (
-            <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.88)' }} numberOfLines={1}>
-              {profileTitle}
-            </Text>
-          ) : null}
-          <HeaderProfileAvatar />
-        </View>
-      </View>
+      </ScreenHeaderChrome>
 
       {isDesktop ? (
         <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: spacing.lg }}>
-          {leftColumn}
+          {desktopLeftColumn}
           {rightColumn}
         </View>
       ) : (
         <View>
-          {leftColumn}
-          <View style={{ marginTop: spacing.xl }}>{rightColumn}</View>
+          {miniMonth}
+          {mobileDayEventsBlock}
+          {mobileDayTasksBlock}
+          {sidebarFocusBlock}
+          {sidebarEventsBlock}
         </View>
       )}
     </ScrollView>
