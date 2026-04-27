@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { type Href, Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,8 +26,11 @@ const GOALS_MAIN_TABS: {
   { id: 'global', label: 'Глобальное видение', icon: 'globe-outline' },
 ];
 
+const PERSONAL_BOARD_HREF = '/personal-targets' as Href;
+
 /**
- * Годовые цели и глобальное видение (маршрут `/goals` в нижнем меню).
+ * Годовые цели и глобальное видение — вкладка «Цели» (`/goals`).
+ * Персональная доска (николаевский блок и боковые цели): `/personal-targets`.
  */
 export function GoalsScreen() {
   const insets = useSafeAreaInsets();
@@ -132,6 +136,15 @@ export function GoalsScreen() {
                 </Pressable>
               );
             })}
+          </View>
+          <View style={{ marginTop: 14, alignItems: 'flex-start' }}>
+            <Link href={PERSONAL_BOARD_HREF} asChild>
+              <Pressable hitSlop={6}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: GOALS_ACCENT, textDecorationLine: 'underline' }}>
+                  Персональная доска целей →
+                </Text>
+              </Pressable>
+            </Link>
           </View>
         </View>
 

@@ -1,5 +1,5 @@
-import { PersonalTargetsScreen } from '@/features/goals/PersonalTargetsScreen';
+import { GoalsScreen } from '@/features/goals/GoalsScreen';
 
 export default function GoalsTab() {
-  return <PersonalTargetsScreen />;
+  return <GoalsScreen />;
 }
