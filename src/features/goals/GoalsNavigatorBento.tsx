@@ -427,7 +427,6 @@ export function GoalsNavigatorBento({
     <View style={{ gap: spacing.xl + 4 }}>
       <View style={{ gap: spacing.md }}>
         <ZoneHint text="Навигатор · верх" />
-        {nearestSlot}
         {nearestSide.length > 0 ? (
           <View
             style={{
@@ -491,6 +490,21 @@ export function GoalsNavigatorBento({
             ))}
           </View>
         )}
+      </View>
+
+      <View
+        style={{
+          gap: spacing.md,
+          paddingVertical: spacing.md + 2,
+          paddingHorizontal: spacing.sm,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: 'rgba(167,139,250,0.28)',
+          backgroundColor: 'rgba(255,255,255,0.04)',
+        }}
+      >
+        <ZoneHint text="Накопления · как отдельные счета" />
+        {nearestSlot}
       </View>
     </View>
   );

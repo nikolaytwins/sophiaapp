@@ -324,7 +324,6 @@ function SideGoalsBoardBlock({
         <>
           {boardTab === 'nearest' ? (
             <View style={{ gap: spacing.lg }}>
-              {nearestSlot}
               {pinnedGoals.length === 0 ? (
                 <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(247,244,250,0.38)', fontWeight: '600' }}>
                   Пока нет закреплённых целей. Нажми «Добавить цель» и включи «Ближайшая цель».
@@ -334,6 +333,7 @@ function SideGoalsBoardBlock({
                   <SideGoalBentoTile key={g.id} goal={g} size="medium" onEdit={() => setEditId(g.id)} />
                 ))
               )}
+              {nearestSlot}
             </View>
           ) : null}
 
