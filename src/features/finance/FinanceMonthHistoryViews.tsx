@@ -1,18 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  LayoutChangeEvent,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Keyboard, LayoutChangeEvent, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
 import { upsertFinanceMonthSnapshot, type UpsertFinanceMonthSnapshotInput } from '@/features/finance/financeApi';
@@ -57,6 +45,225 @@ function fmtYAxisTick(n: number): string {
 
 function monthLabel(s: FinanceMonthSnapshot) {
   return new Date(s.year, s.month - 1, 1).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
+}
+
+type SnapshotMoneyField = 'balance' | 'revenue' | 'expenseTotal' | 'profit';
+
+function expenseSum(s: FinanceMonthSnapshot) {
+  return s.personalExpenses + s.businessExpenses;
+}
+
+function draftForField(s: FinanceMonthSnapshot, field: SnapshotMoneyField): string {
+  switch (field) {
+    case 'balance':
+      return String(Math.round(s.totalBalance));
+    case 'revenue':
+      return s.totalRevenue != null ? String(Math.round(s.totalRevenue)) : '';
+    case 'expenseTotal':
+      return String(Math.round(expenseSum(s)));
+    case 'profit':
+      return s.projectProfit != null ? String(Math.round(s.projectProfit)) : '';
+    default:
+      return '';
+  }
+}
+
+function committedValueForField(s: FinanceMonthSnapshot, field: SnapshotMoneyField): number | null {
+  switch (field) {
+    case 'balance':
+      return Math.round(s.totalBalance);
+    case 'revenue':
+      return s.totalRevenue != null ? Math.round(s.totalRevenue) : null;
+    case 'expenseTotal':
+      return Math.round(expenseSum(s));
+    case 'profit':
+      return s.projectProfit != null ? Math.round(s.projectProfit) : null;
+    default:
+      return null;
+  }
+}
+
+function displayForField(s: FinanceMonthSnapshot, field: SnapshotMoneyField, colors: { text: string }): string {
+  switch (field) {
+    case 'balance':
+      return fmtMoneyPlain(s.totalBalance);
+    case 'revenue':
+      return s.totalRevenue == null ? '—' : fmtMoneyPlain(s.totalRevenue);
+    case 'expenseTotal':
+      return fmtMoneyPlain(expenseSum(s));
+    case 'profit':
+      return s.projectProfit == null ? '—' : fmtSignedRub(s.projectProfit);
+    default:
+      return '—';
+  }
+}
+
+function displayColorForField(s: FinanceMonthSnapshot, field: SnapshotMoneyField, colors: { text: string }): string {
+  if (field === 'profit' && s.projectProfit != null) return signedColor(s.projectProfit) ?? colors.text;
+  return colors.text;
+}
+
+function parseDraftForField(
+  raw: string,
+  field: SnapshotMoneyField
+): { ok: true; n: number | null } | { ok: false } {
+  const t = raw.trim().replace(/\s/g, '').replace(',', '.');
+  const nullable = field === 'revenue' || field === 'profit';
+  if (t === '') {
+    if (nullable) return { ok: true, n: null };
+    return { ok: false };
+  }
+  const num = Number(t);
+  if (!Number.isFinite(num)) return { ok: false };
+  if (field !== 'profit' && num < 0) return { ok: false };
+  return { ok: true, n: Math.round(num) };
+}
+
+function valuesEqualField(a: number | null, b: number | null): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  return Math.round(a) === Math.round(b);
+}
+
+function InlineSnapshotMoneyCell({
+  snapshot,
+  field,
+  editable,
+  flexGrow,
+  last,
+  line,
+  lineColor,
+  typography,
+  colors,
+  brand,
+  isLight,
+  isPending,
+  onCommit,
+}: {
+  snapshot: FinanceMonthSnapshot;
+  field: SnapshotMoneyField;
+  editable: boolean;
+  flexGrow: number;
+  last: boolean;
+  line: number;
+  lineColor: string;
+  typography: { caption: object };
+  colors: { text: string; textMuted: string; border: string };
+  brand: { primary: string; primaryMuted: string };
+  isLight: boolean;
+  isPending: boolean;
+  onCommit: (s: FinanceMonthSnapshot, value: number | null) => void;
+}) {
+  const [active, setActive] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const open = useCallback(() => {
+    if (!editable || isPending) return;
+    setDraft(draftForField(snapshot, field));
+    setActive(true);
+  }, [editable, isPending, snapshot, field]);
+
+  const commit = useCallback(() => {
+    setActive(false);
+    const parsed = parseDraftForField(draft, field);
+    if (!parsed.ok) {
+      Alert.alert('Снимок', 'Введите корректное число.');
+      return;
+    }
+    const prev = committedValueForField(snapshot, field);
+    if (!valuesEqualField(prev, parsed.n)) {
+      onCommit(snapshot, parsed.n);
+    }
+  }, [draft, field, onCommit, snapshot]);
+
+  const textAlign: 'right' = 'right';
+  const display = displayForField(snapshot, field, colors);
+  const dc = displayColorForField(snapshot, field, colors);
+
+  const shell = (
+    <Text
+      style={[
+        typography.caption,
+        {
+          textAlign,
+          fontWeight: '800',
+          fontVariant: ['tabular-nums'],
+          color: dc,
+          fontSize: 12,
+        },
+      ]}
+      numberOfLines={2}
+    >
+      {display}
+    </Text>
+  );
+
+  return (
+    <View
+      style={{
+        flex: flexGrow,
+        minWidth: field === 'balance' ? 78 : 72,
+        paddingVertical: 11,
+        paddingHorizontal: 8,
+        borderRightWidth: last ? 0 : line,
+        borderRightColor: lineColor,
+        justifyContent: 'center',
+        opacity: isPending ? 0.55 : 1,
+      }}
+    >
+      {!editable ? (
+        shell
+      ) : !active ? (
+        <Pressable
+          onPress={open}
+          accessibilityRole="button"
+          accessibilityLabel="Изменить значение"
+          disabled={isPending}
+          style={({ pressed }) => ({
+            borderRadius: 8,
+            paddingVertical: 4,
+            paddingHorizontal: 4,
+            marginHorizontal: -4,
+            backgroundColor: pressed ? (isLight ? brand.primaryMuted : 'rgba(168,85,247,0.12)') : 'transparent',
+          })}
+        >
+          {shell}
+        </Pressable>
+      ) : (
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          autoFocus
+          selectTextOnFocus
+          keyboardType={field === 'profit' ? 'numbers-and-punctuation' : 'decimal-pad'}
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={() => {
+            void Keyboard.dismiss();
+            commit();
+          }}
+          onBlur={commit}
+          editable={!isPending}
+          style={{
+            ...typography.caption,
+            textAlign,
+            fontWeight: '800',
+            fontVariant: ['tabular-nums'],
+            fontSize: 12,
+            color: colors.text,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: 'rgba(167,139,250,0.55)',
+            paddingVertical: 6,
+            paddingHorizontal: 6,
+            marginHorizontal: -4,
+            minWidth: 64,
+            backgroundColor: isLight ? 'rgba(255,255,255,0.95)' : 'rgba(12,10,20,0.98)',
+          }}
+        />
+      )}
+    </View>
+  );
 }
 
 const GREEN_UP = '#22C55E';
@@ -351,16 +558,22 @@ type TableProps = {
   rows: EnrichedMonthRow[];
   screenInnerWidth: number;
   editable?: boolean;
-  onPressRevenue?: (s: FinanceMonthSnapshot) => void;
-  onPressExpenseTotal?: (s: FinanceMonthSnapshot) => void;
+  isPending?: boolean;
+  onCommitBalance?: (s: FinanceMonthSnapshot, value: number) => void;
+  onCommitRevenue?: (s: FinanceMonthSnapshot, value: number | null) => void;
+  onCommitExpenseTotal?: (s: FinanceMonthSnapshot, value: number) => void;
+  onCommitProfit?: (s: FinanceMonthSnapshot, value: number | null) => void;
 };
 
 export function MonthHistoryTableTwin({
   rows,
   screenInnerWidth,
   editable,
-  onPressRevenue,
-  onPressExpenseTotal,
+  isPending,
+  onCommitBalance,
+  onCommitRevenue,
+  onCommitExpenseTotal,
+  onCommitProfit,
 }: TableProps) {
   const { colors, typography, radius, brand, isLight } = useAppTheme();
   const lineColor = colors.border;
@@ -433,67 +646,6 @@ export function MonthHistoryTableTwin({
     );
   };
 
-  const expenseTotal = (s: FinanceMonthSnapshot) => s.personalExpenses + s.businessExpenses;
-
-  const cellEditableMoney = (
-    s: FinanceMonthSnapshot,
-    flexGrow: number,
-    value: number | null,
-    onPress: (() => void) | undefined,
-    hint: string
-  ) => {
-    const text = value == null ? '—' : fmtMoneyPlain(value);
-    const inner = (
-      <Text
-        style={[
-          typography.caption,
-          {
-            textAlign: 'right',
-            fontWeight: '800',
-            fontVariant: ['tabular-nums'],
-            color: colors.text,
-            fontSize: 12,
-          },
-        ]}
-        numberOfLines={2}
-      >
-        {text}
-      </Text>
-    );
-    return (
-      <View
-        style={{
-          flex: flexGrow,
-          minWidth: 78,
-          paddingVertical: 11,
-          paddingHorizontal: 8,
-          borderRightWidth: line,
-          borderRightColor: lineColor,
-          justifyContent: 'center',
-        }}
-      >
-        {editable && onPress ? (
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={hint}
-            style={({ pressed }) => ({
-              borderRadius: 8,
-              paddingVertical: 4,
-              paddingHorizontal: 4,
-              marginHorizontal: -4,
-              backgroundColor: pressed ? (isLight ? brand.primaryMuted : 'rgba(168,85,247,0.12)') : 'transparent',
-            })}
-          >
-            {inner}
-          </Pressable>
-        ) : (
-          inner
-        )}
-      </View>
-    );
-  };
-
   const cellMonth = (s: FinanceMonthSnapshot, flexGrow: number) => (
     <View
       style={{
@@ -559,48 +711,112 @@ export function MonthHistoryTableTwin({
             }}
           >
             {cellMonth(s, 1.05)}
-            <View
-              style={{
-                flex: 1.1,
-                minWidth: 72,
-                paddingVertical: 11,
-                paddingHorizontal: 8,
-                borderRightWidth: line,
-                borderRightColor: lineColor,
-                justifyContent: 'center',
-              }}
-            >
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    textAlign: 'right',
-                    fontWeight: '800',
-                    fontVariant: ['tabular-nums'],
-                    color: colors.text,
-                    fontSize: 12,
-                  },
-                ]}
+            {editable && onCommitBalance ? (
+              <InlineSnapshotMoneyCell
+                snapshot={s}
+                field="balance"
+                editable
+                flexGrow={1.1}
+                last={false}
+                line={line}
+                lineColor={lineColor}
+                typography={typography}
+                colors={colors}
+                brand={brand}
+                isLight={isLight}
+                isPending={Boolean(isPending)}
+                onCommit={(snap, v) => {
+                  if (v != null) onCommitBalance(snap, v);
+                }}
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1.1,
+                  minWidth: 72,
+                  paddingVertical: 11,
+                  paddingHorizontal: 8,
+                  borderRightWidth: line,
+                  borderRightColor: lineColor,
+                  justifyContent: 'center',
+                }}
               >
-                {fmtMoneyPlain(s.totalBalance)}
-              </Text>
-            </View>
+                <Text
+                  style={[
+                    typography.caption,
+                    {
+                      textAlign: 'right',
+                      fontWeight: '800',
+                      fontVariant: ['tabular-nums'],
+                      color: colors.text,
+                      fontSize: 12,
+                    },
+                  ]}
+                >
+                  {fmtMoneyPlain(s.totalBalance)}
+                </Text>
+              </View>
+            )}
             {cellMoney(capitalDelta, 1.15, 'right', false, true)}
-            {cellEditableMoney(
-              s,
-              1,
-              s.totalRevenue,
-              onPressRevenue ? () => onPressRevenue(s) : undefined,
-              'Правка дохода за месяц'
+            {editable && onCommitRevenue ? (
+              <InlineSnapshotMoneyCell
+                snapshot={s}
+                field="revenue"
+                editable
+                flexGrow={1}
+                last={false}
+                line={line}
+                lineColor={lineColor}
+                typography={typography}
+                colors={colors}
+                brand={brand}
+                isLight={isLight}
+                isPending={Boolean(isPending)}
+                onCommit={onCommitRevenue}
+              />
+            ) : (
+              cellMoney(s.totalRevenue, 1, 'right', false, false)
             )}
-            {cellEditableMoney(
-              s,
-              1,
-              expenseTotal(s),
-              onPressExpenseTotal ? () => onPressExpenseTotal(s) : undefined,
-              'Правка расхода за месяц'
+            {editable && onCommitExpenseTotal ? (
+              <InlineSnapshotMoneyCell
+                snapshot={s}
+                field="expenseTotal"
+                editable
+                flexGrow={1}
+                last={false}
+                line={line}
+                lineColor={lineColor}
+                typography={typography}
+                colors={colors}
+                brand={brand}
+                isLight={isLight}
+                isPending={Boolean(isPending)}
+                onCommit={(snap, v) => {
+                  if (v != null) onCommitExpenseTotal(snap, v);
+                }}
+              />
+            ) : (
+              cellMoney(expenseSum(s), 1, 'right', false, false)
             )}
-            {cellMoney(s.projectProfit, 0.95, 'right', true, true)}
+            {editable && onCommitProfit ? (
+              <InlineSnapshotMoneyCell
+                snapshot={s}
+                field="profit"
+                editable
+                flexGrow={0.95}
+                last
+                line={line}
+                lineColor={lineColor}
+                typography={typography}
+                colors={colors}
+                brand={brand}
+                isLight={isLight}
+                isPending={Boolean(isPending)}
+                onCommit={onCommitProfit}
+              />
+            ) : (
+              cellMoney(s.projectProfit, 0.95, 'right', true, true)
+            )}
           </View>
         ))}
       </View>
@@ -732,11 +948,6 @@ export function FinanceMonthHistorySection({
 }: HistorySectionProps) {
   const { colors, typography, spacing, radius, brand, isLight } = useAppTheme();
   const [blockW, setBlockW] = useState(0);
-  const [moneyModal, setMoneyModal] = useState<null | {
-    kind: 'income' | 'expense';
-    snapshot: FinanceMonthSnapshot;
-    draft: string;
-  }>(null);
 
   const upsertMut = useMutation({
     mutationFn: (input: UpsertFinanceMonthSnapshotInput) => {
@@ -745,7 +956,6 @@ export function FinanceMonthHistorySection({
     },
     onSuccess: () => {
       onSnapshotsSaved?.();
-      setMoneyModal(null);
     },
     onError: (e: Error) => Alert.alert('Снимок месяца', e.message ?? 'Ошибка'),
   });
@@ -756,38 +966,33 @@ export function FinanceMonthHistorySection({
   const hasCurrentMonth = rows.some((r) => r.snapshot.year === cy && r.snapshot.month === cm);
   const canEdit = Boolean(userId);
 
-  const openIncome = useCallback((s: FinanceMonthSnapshot) => {
-    setMoneyModal({
-      kind: 'income',
-      snapshot: s,
-      draft: s.totalRevenue != null ? String(Math.round(s.totalRevenue)) : '',
-    });
-  }, []);
+  const commitBalance = useCallback(
+    (s: FinanceMonthSnapshot, value: number) => {
+      upsertMut.mutate({ year: s.year, month: s.month, totalBalance: value });
+    },
+    [upsertMut]
+  );
 
-  const openExp = useCallback((s: FinanceMonthSnapshot) => {
-    const t = s.personalExpenses + s.businessExpenses;
-    setMoneyModal({ kind: 'expense', snapshot: s, draft: String(Math.round(t)) });
-  }, []);
+  const commitRevenue = useCallback(
+    (s: FinanceMonthSnapshot, value: number | null) => {
+      upsertMut.mutate({ year: s.year, month: s.month, totalRevenue: value });
+    },
+    [upsertMut]
+  );
 
-  const submitMoneyModal = useCallback(() => {
-    if (!moneyModal) return;
-    const raw = moneyModal.draft.replace(/\s/g, '').replace(',', '.');
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n < 0) {
-      Alert.alert('Снимок', 'Введите неотрицательное число.');
-      return;
-    }
-    if (moneyModal.kind === 'income') {
-      upsertMut.mutate({ year: moneyModal.snapshot.year, month: moneyModal.snapshot.month, totalRevenue: n });
-    } else {
-      upsertMut.mutate({
-        year: moneyModal.snapshot.year,
-        month: moneyModal.snapshot.month,
-        personalExpenses: n,
-        businessExpenses: 0,
-      });
-    }
-  }, [moneyModal, upsertMut]);
+  const commitExpenseTotal = useCallback(
+    (s: FinanceMonthSnapshot, value: number) => {
+      upsertMut.mutate({ year: s.year, month: s.month, personalExpenses: value, businessExpenses: 0 });
+    },
+    [upsertMut]
+  );
+
+  const commitProfit = useCallback(
+    (s: FinanceMonthSnapshot, value: number | null) => {
+      upsertMut.mutate({ year: s.year, month: s.month, projectProfit: value });
+    },
+    [upsertMut]
+  );
 
   const addCurrentMonth = useCallback(() => {
     const bal =
@@ -845,9 +1050,9 @@ export function FinanceMonthHistorySection({
       <MonthHistoryCapitalLineChart rows={rows} width={chartWidth} />
 
       <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.md, lineHeight: 20 }]}>
-        История по месяцам. Динамика капитала — изменение баланса к предыдущему месяцу в списке. Колонки «Доход» и
-        «Расход» можно править по тапу — значения сохраняются в снимок месяца и попадают на график «Доходы» / «Расходы»
-        на дашборде.
+        История по месяцам. Динамика капитала — разница баланса к предыдущему месяцу в списке (считается автоматически).
+        В таблице тап по сумме открывает ввод в ячейке: баланс, доход, расход, прибыль — без модального окна; расход
+        сохраняется как «личные» (бизнес-расход в этой колонке обнуляется). Значения пишутся в finance_month_snapshots.
       </Text>
 
       {canEdit && !hasCurrentMonth ? (
@@ -889,79 +1094,15 @@ export function FinanceMonthHistorySection({
           rows={rows}
           screenInnerWidth={screenInnerWidth}
           editable={canEdit}
-          onPressRevenue={canEdit ? openIncome : undefined}
-          onPressExpenseTotal={canEdit ? openExp : undefined}
+          isPending={upsertMut.isPending}
+          onCommitBalance={canEdit ? commitBalance : undefined}
+          onCommitRevenue={canEdit ? commitRevenue : undefined}
+          onCommitExpenseTotal={canEdit ? commitExpenseTotal : undefined}
+          onCommitProfit={canEdit ? commitProfit : undefined}
         />
       ) : (
         <MonthHistoryCards rows={rows} />
       )}
-
-      <Modal visible={moneyModal != null} transparent animationType="fade" onRequestClose={() => setMoneyModal(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: spacing.lg }}
-          onPress={() => setMoneyModal(null)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              borderRadius: radius.xl,
-              padding: spacing.lg,
-              backgroundColor: isLight ? '#FFFFFF' : '#16161c',
-              borderWidth: isLight ? 1 : 0,
-              borderColor: colors.border,
-              ...(Platform.OS === 'web'
-                ? ({ boxShadow: '0 24px 64px rgba(0,0,0,0.55)' } as object)
-                : {}),
-            }}
-          >
-            <Text style={{ fontWeight: '900', fontSize: 17, color: colors.text, marginBottom: 8 }}>
-              {moneyModal?.kind === 'income' ? 'Доход за месяц, ₽' : 'Расход за месяц (сумма), ₽'}
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 12 }}>
-              {moneyModal
-                ? `${monthLabel(moneyModal.snapshot)} · сохранится в finance_month_snapshots`
-                : ''}
-            </Text>
-            <TextInput
-              value={moneyModal?.draft ?? ''}
-              onChangeText={(t) => setMoneyModal((m) => (m ? { ...m, draft: t } : m))}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={colors.textMuted}
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: radius.lg,
-                padding: 14,
-                fontSize: 17,
-                fontWeight: '800',
-                color: colors.text,
-                marginBottom: 14,
-              }}
-            />
-            <Pressable
-              onPress={submitMoneyModal}
-              disabled={upsertMut.isPending}
-              style={{
-                paddingVertical: 14,
-                borderRadius: radius.lg,
-                backgroundColor: brand.primary,
-                alignItems: 'center',
-                opacity: upsertMut.isPending ? 0.65 : 1,
-              }}
-            >
-              {upsertMut.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={{ fontWeight: '900', color: '#fff' }}>Сохранить</Text>
-              )}
-            </Pressable>
-            <Pressable onPress={() => setMoneyModal(null)} style={{ marginTop: 12, padding: 12, alignItems: 'center' }}>
-              <Text style={{ fontWeight: '700', color: colors.textMuted }}>Отмена</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
