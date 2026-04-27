@@ -67,12 +67,15 @@ function GlassShell({
   );
 }
 
-/** Грубая оценка высоты для балансировки колонок Masonry (фото — вертикальный стек без обрезки). */
+/** Грубая оценка высоты для Masonry (учёт 2-колоночной сетки для нескольких фото). */
 export function estimateGoalMasonryHeight(goal: SideGoalPersisted): number {
   const n = goal.photoUris?.length ?? 0;
   const header = 130;
   if (n === 0) return header;
-  return header + n * 220;
+  if (n === 1) return header + 200;
+  const rows = Math.ceil(n / 2);
+  const rowH = n >= 3 ? 148 : 168;
+  return header + rows * rowH;
 }
 
 export function distributeGoalsMasonryColumns(
@@ -94,7 +97,7 @@ export function distributeGoalsMasonryColumns(
   return cols;
 }
 
-/** Одно фото внутри карточки: ширина = карточка, высота по натуральному соотношению сторон, без crop (`contain`). */
+/** Одно фото: ширина = родитель, высота по пропорциям, `contain` без crop. */
 function GoalPhotoNatural({ uri }: { uri: string }) {
   const [aspectWH, setAspectWH] = useState<number | null>(null);
 
@@ -122,7 +125,7 @@ function GoalPhotoNatural({ uri }: { uri: string }) {
     <View
       style={{
         width: '100%',
-        borderRadius: 14,
+        borderRadius: 12,
         overflow: 'hidden',
         backgroundColor: 'rgba(0,0,0,0.22)',
       }}
@@ -139,13 +142,72 @@ function GoalPhotoNatural({ uri }: { uri: string }) {
   );
 }
 
-function GoalPhotosInCard({ uris }: { uris: string[] }) {
+/** Ряд из 1–2 фото на всю ширину родителя. */
+function GoalPhotoRow({ uris }: { uris: string[] }) {
   if (uris.length === 0) return null;
+  if (uris.length === 1) {
+    return <GoalPhotoNatural uri={uris[0]!} />;
+  }
   return (
-    <View style={{ gap: 12, marginTop: 2 }}>
+    <View style={{ flexDirection: 'row', gap: 8, width: '100%', alignItems: 'flex-start' }}>
       {uris.map((uri, i) => (
-        <GoalPhotoNatural key={`${uri}-${i}`} uri={uri} />
+        <View key={`${uri}-${i}`} style={{ flex: 1, minWidth: 0 }}>
+          <GoalPhotoNatural uri={uri} />
+        </View>
       ))}
+    </View>
+  );
+}
+
+/**
+ * Динамика по числу фото:
+ * - 1 — на всю ширину карточки;
+ * - 2 — один ряд, две колонки на 100% ширины;
+ * - 3+ — сетка 2 колонки в полосе ~68% ширины (компактнее по высоте, две фотки в строке).
+ */
+function GoalPhotosInCard({ uris }: { uris: string[] }) {
+  const { width: winW } = useWindowDimensions();
+  if (uris.length === 0) return null;
+
+  const rows: string[][] = [];
+  for (let i = 0; i < uris.length; i += 2) {
+    rows.push(uris.slice(i, i + 2));
+  }
+
+  if (uris.length === 1) {
+    return (
+      <View style={{ marginTop: 2, gap: 10 }}>
+        <GoalPhotoNatural uri={uris[0]!} />
+      </View>
+    );
+  }
+
+  if (uris.length === 2) {
+    return (
+      <View style={{ marginTop: 2 }}>
+        <GoalPhotoRow uris={uris} />
+      </View>
+    );
+  }
+
+  const grid = (
+    <View style={{ gap: 10 }}>
+      {rows.map((pair, ri) => (
+        <GoalPhotoRow key={`row-${pair[0]}-${ri}`} uris={pair} />
+      ))}
+    </View>
+  );
+
+  /** На узком экране / узкой колонке — 100% ширины; на шире — компактная полоса ~68%. */
+  const fullWidthGrid = winW < 640;
+
+  if (fullWidthGrid) {
+    return <View style={{ marginTop: 2, width: '100%' }}>{grid}</View>;
+  }
+
+  return (
+    <View style={{ marginTop: 2, width: '100%', alignItems: 'center' }}>
+      <View style={{ width: '68%', maxWidth: 420, alignSelf: 'center' }}>{grid}</View>
     </View>
   );
 }
