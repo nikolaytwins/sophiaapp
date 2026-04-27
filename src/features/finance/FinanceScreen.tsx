@@ -18,6 +18,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSupabaseConfigured, useTeamtrackerAgencyIncomeConfigured } from '@/config/env';
+import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
+import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { tryAutoSealPreviousMonthSnapshot } from '@/features/finance/financeAutoSealPreviousMonth';
 import {
   clampFinanceCalendarMonth,
@@ -44,6 +46,7 @@ import { FINANCE_QUERY_KEY, financeExpenseAnalyticsKey } from '@/features/financ
 import { buildSpendByCategoryName, categoryToBudgetLine, childrenForRoot } from '@/features/finance/financeBudgetTree';
 import type { FinanceBudgetLine, FinanceExpenseCategory, FinanceTransaction } from '@/features/finance/finance.types';
 import { getSupabase } from '@/lib/supabase';
+import { useSprintStore } from '@/stores/sprint.store';
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { SegmentedControl } from '@/shared/ui/SegmentedControl';
@@ -393,6 +396,13 @@ export function FinanceScreen() {
   const qc = useQueryClient();
   const supabaseOn = useSupabaseConfigured;
   const [userId, setUserId] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
+  const { china, cushion } = useMemo(
+    () => pickNikolayMoneyProgressGoals(activeSprint?.goals ?? []),
+    [activeSprint]
+  );
+  const isNikolay = isNikolayPrimaryAccount(accountEmail);
   const [mainTab, setMainTab] = useState<MainTab>('dashboard');
   const [financeMonth, setFinanceMonth] = useState(() => {
     const d = new Date();
@@ -433,11 +443,15 @@ export function FinanceScreen() {
       setUserId(null);
       return undefined;
     }
-    void sb.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null));
+    void sb.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user?.id ?? null);
+      setAccountEmail(data.session?.user?.email ?? null);
+    });
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((_e, session) => {
       setUserId(session?.user?.id ?? null);
+      setAccountEmail(session?.user?.email ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -699,15 +713,42 @@ export function FinanceScreen() {
         ) : overview ? (
           <>
             {mainTab === 'dashboard' ? (
-              <FinanceDashboardBento
-                overview={overview}
-                userId={userId}
-                calendarMonth={financeMonthSafe}
-                monthHistoryRows={monthHistoryRows}
-                expenseAnalytics={expenseAnalyticsQ.data}
-                expenseAnalyticsLoading={expenseAnalyticsQ.isLoading}
-                onRefresh={invalidateFinance}
-              />
+              <>
+                <FinanceDashboardBento
+                  overview={overview}
+                  userId={userId}
+                  calendarMonth={financeMonthSafe}
+                  monthHistoryRows={monthHistoryRows}
+                  expenseAnalytics={expenseAnalyticsQ.data}
+                  expenseAnalyticsLoading={expenseAnalyticsQ.isLoading}
+                  onRefresh={invalidateFinance}
+                />
+                {isNikolay ? (
+                  <View style={{ marginTop: spacing.xl + 8, gap: spacing.sm }}>
+                    <Text
+                      style={[
+                        typography.caption,
+                        {
+                          color: colors.textMuted,
+                          letterSpacing: 1.6,
+                          textTransform: 'uppercase',
+                          marginBottom: 4,
+                        },
+                      ]}
+                    >
+                      Накопления · Китай и подушка (счета резерва)
+                    </Text>
+                    <NikolayDayMoneyHeroCards
+                      sprintId={activeSprint?.id ?? null}
+                      chinaGoal={china}
+                      cushionGoal={cushion}
+                      financeAccounts={overview.accounts}
+                      financeUserId={userId}
+                      onFinanceAccountsUpdated={invalidateFinance}
+                    />
+                  </View>
+                ) : null}
+              </>
             ) : null}
 
 

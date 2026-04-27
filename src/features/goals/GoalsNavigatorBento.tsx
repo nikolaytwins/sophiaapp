@@ -14,7 +14,7 @@ export function GoalsNavigatorBento({
   wishGoals,
   horizonGoals,
   otherYearGoals,
-  nearestSlot,
+  nearestSlot = null,
   onEditGoal,
   onToggleOneShot,
 }: {
@@ -25,7 +25,8 @@ export function GoalsNavigatorBento({
   wishGoals: SideGoalPersisted[];
   horizonGoals: SideGoalPersisted[];
   otherYearGoals: SideGoalPersisted[];
-  nearestSlot: ReactNode;
+  /** Блок накоплений (Китай/подушка) — опционально, если показан выше на странице. */
+  nearestSlot?: ReactNode | null;
   onEditGoal: (id: string) => void;
   onToggleOneShot?: (id: string, done: boolean) => void;
 }) {
@@ -61,31 +62,33 @@ export function GoalsNavigatorBento({
         onToggleOneShot={onToggleOneShot}
       />
 
-      <View
-        style={{
-          gap: spacing.md,
-          paddingVertical: spacing.md + 2,
-          paddingHorizontal: spacing.sm,
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: 'rgba(167,139,250,0.28)',
-          backgroundColor: 'rgba(255,255,255,0.04)',
-        }}
-      >
-        <Text
+      {nearestSlot ? (
+        <View
           style={{
-            fontSize: 10,
-            fontWeight: '800',
-            letterSpacing: 2,
-            color: 'rgba(248,250,252,0.28)',
-            textTransform: 'uppercase',
-            marginBottom: 4,
+            gap: spacing.md,
+            paddingVertical: spacing.md + 2,
+            paddingHorizontal: spacing.sm,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(167,139,250,0.28)',
+            backgroundColor: 'rgba(255,255,255,0.04)',
           }}
         >
-          Накопления · как отдельные счета
-        </Text>
-        {nearestSlot}
-      </View>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '800',
+              letterSpacing: 2,
+              color: 'rgba(248,250,252,0.28)',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Накопления · как отдельные счета
+          </Text>
+          {nearestSlot}
+        </View>
+      ) : null}
     </View>
   );
 }

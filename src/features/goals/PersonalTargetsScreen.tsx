@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -14,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
+import { useSupabaseConfigured } from '@/config/env';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
 import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
@@ -21,6 +23,8 @@ import { GoalsNavigatorBento, nearestCutoffForAugust } from '@/features/goals/Go
 import { PersonalGoalsMasonryGrid } from '@/features/goals/PersonalGoalsMasonry';
 import { GOALS_ACCENT } from '@/features/goals/goalsNotionTheme';
 import { normalizeDateKey, sideGoalDatedOutsideYear, sideGoalInCalendarYear, type SideGoalBoardTab } from '@/features/goals/sideGoals.logic';
+import { loadFinanceOverview } from '@/features/finance/financeApi';
+import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { strategyPageConfig, type StrategyGoalsTabDef } from '@/features/strategy/strategy.config';
 import { getSupabase } from '@/lib/supabase';
 import { uploadSideGoalPhotoToSupabase } from '@/services/sideGoalsPhotoUpload';
@@ -49,12 +53,12 @@ function SideGoalsBoardBlock({
   config,
   boardTab,
   onBoardTab,
-  nearestSlot,
+  nearestSlot = null,
 }: {
   config: StrategyGoalsTabDef;
   boardTab: SideGoalBoardTab;
   onBoardTab: (t: SideGoalBoardTab) => void;
-  nearestSlot: ReactNode;
+  nearestSlot?: ReactNode | null;
 }) {
   const { typography, spacing, colors } = useAppTheme();
   const goals = useSideGoalsStore((s) => s.goals);
@@ -348,7 +352,7 @@ function SideGoalsBoardBlock({
                   onToggleOneShot={onToggleOneShot}
                 />
               )}
-              {nearestSlot}
+              {nearestSlot ? nearestSlot : null}
             </View>
           ) : null}
 
@@ -832,7 +836,10 @@ function SideGoalsBoardBlock({
 export function PersonalTargetsScreen() {
   const { typography, spacing, colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const supabaseOn = useSupabaseConfigured;
   const [email, setEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [boardTab, setBoardTab] = useState<SideGoalBoardTab>('all');
   const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
   const seedFromSeedsIfEmpty = useSideGoalsStore((s) => s.seedFromSeedsIfEmpty);
@@ -843,6 +850,23 @@ export function PersonalTargetsScreen() {
   );
 
   const cfg = strategyPageConfig.goalsTab;
+
+  const financeMonthVm = useMemo(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }, []);
+
+  const isNikolay = isNikolayPrimaryAccount(email);
+
+  const financeOverviewQ = useQuery({
+    queryKey: [...FINANCE_QUERY_KEY, 'overview', userId, financeMonthVm.year, financeMonthVm.month],
+    queryFn: () => loadFinanceOverview(userId!, financeMonthVm),
+    enabled: Boolean(supabaseOn && userId && isNikolay),
+  });
+
+  const invalidateFinance = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
+  }, [qc]);
 
   useEffect(() => {
     void (async () => {
@@ -855,20 +879,21 @@ export function PersonalTargetsScreen() {
     const sb = getSupabase();
     if (!sb) {
       setEmail(null);
+      setUserId(null);
       return undefined;
     }
     void sb.auth.getSession().then(({ data: { session } }) => {
       setEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
     });
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange((_e, session) => {
       setEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  const isNikolay = isNikolayPrimaryAccount(email);
 
   return (
     <ScreenCanvas>
@@ -881,6 +906,31 @@ export function PersonalTargetsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {isNikolay ? (
+          <View style={{ gap: spacing.sm }}>
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 15,
+                fontWeight: '700',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                color: 'rgba(247,244,250,0.55)',
+              }}
+            >
+              {cfg.nearestSectionTitle}
+            </Text>
+            <NikolayDayMoneyHeroCards
+              sprintId={activeSprint?.id ?? null}
+              chinaGoal={china}
+              cushionGoal={cushion}
+              financeAccounts={financeOverviewQ.data?.accounts ?? null}
+              financeUserId={userId}
+              onFinanceAccountsUpdated={invalidateFinance}
+            />
+          </View>
+        ) : null}
+
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
           <HeaderProfileAvatar />
         </View>
@@ -915,31 +965,15 @@ export function PersonalTargetsScreen() {
               </View>
             </View>
 
-            <View style={{ gap: spacing.md }}>
-              <Text
-                style={{
-                  fontSize: 11,
-                  lineHeight: 15,
-                  fontWeight: '700',
-                  letterSpacing: 1.2,
-                  textTransform: 'uppercase',
-                  color: 'rgba(247,244,250,0.55)',
-                }}
-              >
-                {cfg.nearestSectionTitle}
-              </Text>
-              <Text style={[typography.body, { fontSize: 14, lineHeight: 20, color: colors.textMuted }]}>
-                {cfg.nearestDeadlineLine}
-              </Text>
-            </View>
+            <Text style={[typography.body, { fontSize: 14, lineHeight: 20, color: colors.textMuted }]}>
+              {cfg.nearestDeadlineLine}
+            </Text>
 
             <SideGoalsBoardBlock
               config={cfg}
               boardTab={boardTab}
               onBoardTab={setBoardTab}
-              nearestSlot={
-                <NikolayDayMoneyHeroCards sprintId={activeSprint?.id ?? null} chinaGoal={china} cushionGoal={cushion} />
-              }
+              nearestSlot={null}
             />
           </>
         )}

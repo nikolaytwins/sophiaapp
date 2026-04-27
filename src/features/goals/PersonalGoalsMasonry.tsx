@@ -67,13 +67,12 @@ function GlassShell({
   );
 }
 
-/** Грубая оценка высоты для балансировки колонок Masonry. */
+/** Грубая оценка высоты для балансировки колонок Masonry (фото — вертикальный стек без обрезки). */
 export function estimateGoalMasonryHeight(goal: SideGoalPersisted): number {
   const n = goal.photoUris?.length ?? 0;
-  if (n === 0) return 108;
-  if (n === 1) return 268;
-  if (n === 2) return 248;
-  return 280;
+  const header = 130;
+  if (n === 0) return header;
+  return header + n * 220;
 }
 
 export function distributeGoalsMasonryColumns(
@@ -95,72 +94,57 @@ export function distributeGoalsMasonryColumns(
   return cols;
 }
 
-function PhotoCollage({
-  uris,
-  maxHeightSingle,
-}: {
-  uris: string[];
-  maxHeightSingle: number;
-}) {
-  const [aspect, setAspect] = useState<number | null>(null);
+/** Одно фото внутри карточки: ширина = карточка, высота по натуральному соотношению сторон, без crop (`contain`). */
+function GoalPhotoNatural({ uri }: { uri: string }) {
+  const [aspectWH, setAspectWH] = useState<number | null>(null);
 
-  const onFirstLoad = useCallback(
-    (w: number, h: number) => {
-      if (w > 0 && h > 0) setAspect(h / w);
+  const applySize = useCallback((w: number, h: number) => {
+    if (w > 0 && h > 0) setAspectWH(w / h);
+  }, []);
+
+  const ratio = aspectWH && aspectWH > 0 ? aspectWH : 4 / 3;
+
+  const onLoadMeta = useCallback(
+    (e: { source?: unknown }) => {
+      const src = e.source;
+      if (src && typeof src === 'object' && 'width' in src && 'height' in src) {
+        const sw = Number((src as { width?: number }).width);
+        const sh = Number((src as { height?: number }).height);
+        if (sw > 0 && sh > 0) applySize(sw, sh);
+      } else if (Platform.OS !== 'web') {
+        RNImage.getSize(uri, (iw, ih) => applySize(iw, ih), () => {});
+      }
     },
-    [setAspect]
+    [applySize, uri]
   );
 
-  if (uris.length === 0) return null;
-
-  if (uris.length === 1) {
-    const ar = aspect && aspect > 0 ? aspect : 4 / 3;
-    return (
-      <View style={{ width: '100%', borderRadius: 0, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.35)' }}>
-        <View style={{ width: '100%', aspectRatio: 1 / ar, maxHeight: maxHeightSingle }}>
-          <Image
-            source={{ uri: uris[0] }}
-            style={StyleSheet.absoluteFillObject}
-            contentFit="contain"
-            onLoad={(e) => {
-              const src = e.source;
-              if (src && typeof src === 'object' && 'width' in src && 'height' in src) {
-                const sw = Number((src as { width?: number }).width);
-                const sh = Number((src as { height?: number }).height);
-                if (sw > 0 && sh > 0) onFirstLoad(sw, sh);
-              } else if (Platform.OS !== 'web') {
-                RNImage.getSize(
-                  uris[0],
-                  (iw, ih) => onFirstLoad(iw, ih),
-                  () => {}
-                );
-              }
-            }}
-          />
-        </View>
-      </View>
-    );
-  }
-
-  if (uris.length === 2) {
-    return (
-      <View style={{ flexDirection: 'row', width: '100%', height: 152, gap: 3, backgroundColor: 'rgba(0,0,0,0.25)' }}>
-        {uris.slice(0, 2).map((uri) => (
-          <View key={uri} style={{ flex: 1, overflow: 'hidden' }}>
-            <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-          </View>
-        ))}
-      </View>
-    );
-  }
-
-  const grid = uris.slice(0, 4);
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%', gap: 3, backgroundColor: 'rgba(0,0,0,0.22)' }}>
-      {grid.map((uri, i) => (
-        <View key={`${uri}-${i}`} style={{ width: '48%', flexGrow: 1, minWidth: '42%', height: 96, overflow: 'hidden' }}>
-          <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-        </View>
+    <View
+      style={{
+        width: '100%',
+        borderRadius: 14,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(0,0,0,0.22)',
+      }}
+    >
+      <View style={{ width: '100%', aspectRatio: ratio }}>
+        <Image
+          source={{ uri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="contain"
+          onLoad={onLoadMeta}
+        />
+      </View>
+    </View>
+  );
+}
+
+function GoalPhotosInCard({ uris }: { uris: string[] }) {
+  if (uris.length === 0) return null;
+  return (
+    <View style={{ gap: 12, marginTop: 2 }}>
+      {uris.map((uri, i) => (
+        <GoalPhotoNatural key={`${uri}-${i}`} uri={uri} />
       ))}
     </View>
   );
@@ -186,8 +170,10 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
   const onHoverIn = useCallback(() => {
     if (Platform.OS !== 'web') return;
     setHovered(true);
-    Animated.spring(scale, { toValue: 1.04, friction: 7, useNativeDriver: true }).start();
-  }, [scale]);
+    if (hasPhoto) {
+      Animated.spring(scale, { toValue: 1.015, friction: 9, useNativeDriver: true }).start();
+    }
+  }, [hasPhoto, scale]);
 
   const onHoverOut = useCallback(() => {
     if (Platform.OS !== 'web') return;
@@ -215,11 +201,11 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
   const titleBlock = (
     <View style={{ gap: 4 }}>
       {badges}
-      <Text numberOfLines={hasPhoto ? 3 : 4} style={{ fontSize: hasPhoto ? 17 : 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
+      <Text numberOfLines={8} style={{ fontSize: 16, fontWeight: '800', color: '#FAFAFC', letterSpacing: -0.2 }}>
         {goal.title}
       </Text>
       {dateCap ? <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(248,250,252,0.5)' }}>{dateCap}</Text> : null}
-      {!hasPhoto && !oneShot ? (
+      {!oneShot ? (
         <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.55)', fontVariant: ['tabular-nums'] }}>
           {goal.target >= 100_000
             ? `${new Intl.NumberFormat('ru-RU').format(Math.round(goal.current))} / ${new Intl.NumberFormat('ru-RU').format(Math.round(goal.target))} ₽`
@@ -259,47 +245,6 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
       <Text style={{ marginTop: 8, fontSize: 12, fontWeight: '700', color: 'rgba(248,250,252,0.5)' }}>{done ? 'Выполнено' : 'В работе'}</Text>
     ) : null;
 
-  if (!hasPhoto) {
-    return (
-      <Pressable
-        onPress={() => {
-          if (Platform.OS !== 'web') void Haptics.selectionAsync();
-          onEdit();
-        }}
-        onHoverIn={onHoverIn}
-        onHoverOut={onHoverOut}
-        style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
-      >
-        <GlassShell borderColor={borderColor} borderRadius={18} style={{ padding: spacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-            <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
-            <Pressable
-              onPress={(e) => {
-                (e as { stopPropagation?: () => void }).stopPropagation?.();
-                onEdit();
-              }}
-              hitSlop={8}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 11,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(0,0,0,0.35)',
-                borderWidth: 1,
-                borderColor: SILVER_BORDER_SOFT,
-              }}
-            >
-              <Ionicons name="create-outline" size={18} color="rgba(248,250,252,0.88)" />
-            </Pressable>
-          </View>
-          {footerProgress}
-          {oneShotRow}
-        </GlassShell>
-      </Pressable>
-    );
-  }
-
   return (
     <Pressable
       onPress={() => {
@@ -309,73 +254,43 @@ export function SideGoalMasonryCard({ goal, onEdit, onToggleOneShot }: CardProps
       onHoverIn={onHoverIn}
       onHoverOut={onHoverOut}
       style={({ pressed }) => ({
-        opacity: pressed ? 0.94 : 1,
+        opacity: pressed ? 0.92 : 1,
         ...(Platform.OS === 'web' && hovered
           ? { shadowColor: '#f8fafc', shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } }
           : {}),
       })}
     >
-      <GlassShell borderColor={borderColor} borderRadius={20}>
-        <View style={{ overflow: 'hidden', borderRadius: 19 }}>
-          <Animated.View style={{ transform: [{ scale }] }}>
-            <PhotoCollage uris={photos} maxHeightSingle={440} />
-          </Animated.View>
-          <LinearGradient
-            colors={['transparent', 'rgba(4,4,8,0.55)', 'rgba(4,4,8,0.94)']}
-            locations={[0, 0.35, 1]}
-            style={[StyleSheet.absoluteFillObject, { pointerEvents: 'none', top: '28%' }]}
-          />
-          <View
+      <GlassShell borderColor={borderColor} borderRadius={20} style={{ padding: spacing.md }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
+          <Pressable
+            onPress={(e) => {
+              (e as { stopPropagation?: () => void }).stopPropagation?.();
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              onEdit();
+            }}
+            hitSlop={8}
             style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              padding: spacing.md,
-              paddingTop: 28,
+              width: 36,
+              height: 36,
+              borderRadius: 11,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.35)',
+              borderWidth: 1,
+              borderColor: SILVER_BORDER_SOFT,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
-              <Pressable
-                onPress={(e) => {
-                  (e as { stopPropagation?: () => void }).stopPropagation?.();
-                  if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                  onEdit();
-                }}
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(0,0,0,0.45)',
-                  borderWidth: 1,
-                  borderColor: SILVER_BORDER_SOFT,
-                }}
-              >
-                <Ionicons name="create-outline" size={18} color="rgba(248,250,252,0.9)" />
-              </Pressable>
-            </View>
-            {!oneShot && goal.target > 1 ? (
-              <Text
-                style={{
-                  marginTop: 6,
-                  fontSize: 11,
-                  fontWeight: '700',
-                  color: 'rgba(248,250,252,0.55)',
-                  fontVariant: ['tabular-nums'],
-                }}
-              >
-                {goal.target >= 100_000
-                  ? `${new Intl.NumberFormat('ru-RU').format(Math.round(goal.current))} / ${new Intl.NumberFormat('ru-RU').format(Math.round(goal.target))} ₽`
-                  : `${goal.current} / ${goal.target}`}
-              </Text>
-            ) : null}
-            {footerProgress}
-            {oneShot ? <View style={{ marginTop: 4 }}>{oneShotRow}</View> : null}
-          </View>
+            <Ionicons name="create-outline" size={18} color="rgba(248,250,252,0.88)" />
+          </Pressable>
         </View>
+        {footerProgress}
+        {oneShotRow}
+        {hasPhoto ? (
+          <Animated.View style={{ marginTop: spacing.md, transform: [{ scale }] }}>
+            <GoalPhotosInCard uris={photos} />
+          </Animated.View>
+        ) : null}
       </GlassShell>
     </Pressable>
   );

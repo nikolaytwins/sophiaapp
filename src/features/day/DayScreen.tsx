@@ -30,6 +30,8 @@ import {
 } from '@/features/habits/optimisticHabitsList';
 import { HABITS_QUERY_KEY } from '@/features/habits/queryKeys';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
+import { loadFinanceOverview } from '@/features/finance/financeApi';
+import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
 import { listPlannerTasks } from '@/features/tasks/plannerApi';
 import { PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
 import { findJournalHabit, habitIsDiaryLinked } from '@/features/journal/journalHabit';
@@ -141,6 +143,21 @@ export function DayScreen() {
     () => pickNikolayMoneyProgressGoals(activeSprint?.goals ?? []),
     [activeSprint]
   );
+
+  const financeMonthVm = useMemo(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }, []);
+
+  const financeOverviewQ = useQuery({
+    queryKey: [...FINANCE_QUERY_KEY, 'overview', userId, financeMonthVm.year, financeMonthVm.month],
+    queryFn: () => loadFinanceOverview(userId!, financeMonthVm),
+    enabled: Boolean(supabaseOn && userId && isNikolay),
+  });
+
+  const invalidateFinance = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: [...FINANCE_QUERY_KEY] });
+  }, [qc]);
 
   const data = habits.data ?? [];
 
@@ -526,6 +543,9 @@ export function DayScreen() {
             chinaGoal={nikolayMoneyGoals.china}
             cushionGoal={nikolayMoneyGoals.cushion}
             desktopTwoColumn={isDesktopLayout}
+            financeAccounts={financeOverviewQ.data?.accounts ?? null}
+            financeUserId={userId}
+            onFinanceAccountsUpdated={invalidateFinance}
           />
         ) : null}
 

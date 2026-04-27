@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, Link } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -15,6 +15,9 @@ import {
 } from 'react-native';
 
 import type { Habit } from '@/entities/models';
+import { GenZFinanceReservePlaque } from '@/features/accounts/nikolayFinanceReservePlaque';
+import { pickNikolayMoneyReserveAccounts } from '@/features/accounts/nikolayFinanceReserveAccounts';
+import type { FinanceAccount } from '@/features/finance/finance.types';
 import type { SprintGoal } from '@/features/sprint/sprint.types';
 import { useSprintStore } from '@/stores/sprint.store';
 import { useAppTheme } from '@/theme';
@@ -440,77 +443,152 @@ function GenZMoneyGoalPlaque({
   );
 }
 
-/** Плашки Китай и подушка из активного спринта (редактирование в спринте). */
+const HINT_CHINA_FINANCE =
+  'В «Финансах» добавь счёт в блоке «Резервы и накопления» (тип накопления / цель / резерв), в названии — «Китай». Баланс суммируется с другими резервами. Либо настрой цель в спринте.';
+const HINT_CUSHION_FINANCE =
+  'В «Финансах» добавь счёт в резервах с «подуш» в названии — баланс пойдёт в накопления. Либо цель в спринте.';
+
+function NikolayMoneyHeroSlot({
+  variant,
+  overline,
+  defaultTitle,
+  financeAccount,
+  financeUserId,
+  onFinanceUpdated,
+  sprintGoal,
+  sprintId,
+  fallbackHint,
+}: {
+  variant: MoneyPlaqueVariant;
+  overline: string;
+  defaultTitle: string;
+  financeAccount: FinanceAccount | null;
+  financeUserId: string | null;
+  onFinanceUpdated?: () => void;
+  sprintGoal: SprintGoal | null;
+  sprintId: string | null;
+  fallbackHint: string;
+}) {
+  if (financeAccount && financeUserId) {
+    return (
+      <GenZFinanceReservePlaque
+        variant={variant}
+        overline={overline}
+        defaultTitle={defaultTitle}
+        account={financeAccount}
+        userId={financeUserId}
+        onSaved={() => onFinanceUpdated?.()}
+      />
+    );
+  }
+  return (
+    <GenZMoneyGoalPlaque
+      variant={variant}
+      overline={overline}
+      defaultTitle={defaultTitle}
+      goal={sprintGoal}
+      sprintId={sprintId}
+      fallbackHint={fallbackHint}
+    />
+  );
+}
+
+/**
+ * Китай и подушка: приоритет — счета «резервы» из Финансов (имя содержит китай / подуш).
+ * Иначе — прогресс-цели активного спринта (как раньше).
+ */
 export function NikolayDayMoneyHeroCards({
   sprintId,
   chinaGoal,
   cushionGoal,
   overline = '',
-  /** Десктоп (lg+): две карточки в один ряд, gap как у сетки дня. */
   desktopTwoColumn = false,
+  financeAccounts,
+  financeUserId,
+  onFinanceAccountsUpdated,
 }: {
   sprintId: string | null;
   chinaGoal: SprintGoal | null;
   cushionGoal: SprintGoal | null;
-  /** Например дедлайн капсом над названием. */
   overline?: string;
   desktopTwoColumn?: boolean;
+  financeAccounts?: FinanceAccount[] | null;
+  financeUserId?: string | null;
+  onFinanceAccountsUpdated?: () => void;
 }) {
   const { spacing } = useAppTheme();
   const desktopGap = 24;
-  if (desktopTwoColumn) {
-    return (
-      <View
-        style={{
-          marginBottom: spacing.md,
-          flexDirection: 'row',
-          gap: desktopGap,
-          alignItems: 'stretch',
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <GenZMoneyGoalPlaque
-            variant="china"
-            overline={overline}
-            defaultTitle="Поездка в Китай"
-            goal={chinaGoal}
-            sprintId={sprintId}
-            fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала прогресса."
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <GenZMoneyGoalPlaque
-            variant="cushion"
-            overline={overline}
-            defaultTitle="Финансовая подушка"
-            goal={cushionGoal}
-            sprintId={sprintId}
-            fallbackHint="Добавь прогресс-цель с «подуш» в названии в спринте — увидишь накопление здесь."
-          />
-        </View>
+  const { china: chinaAccount, cushion: cushionAccount } = useMemo(
+    () => pickNikolayMoneyReserveAccounts(financeAccounts ?? []),
+    [financeAccounts]
+  );
+  const finUid = financeUserId ?? null;
+  const onFin = onFinanceAccountsUpdated;
+
+  const row = desktopTwoColumn ? (
+    <View
+      style={{
+        marginBottom: spacing.md,
+        flexDirection: 'row',
+        gap: desktopGap,
+        alignItems: 'stretch',
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <NikolayMoneyHeroSlot
+          variant="china"
+          overline={overline}
+          defaultTitle="Поездка в Китай"
+          financeAccount={chinaAccount}
+          financeUserId={finUid}
+          onFinanceUpdated={onFin}
+          sprintGoal={chinaGoal}
+          sprintId={sprintId}
+          fallbackHint={HINT_CHINA_FINANCE}
+        />
       </View>
-    );
-  }
-  return (
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <NikolayMoneyHeroSlot
+          variant="cushion"
+          overline={overline}
+          defaultTitle="Финансовая подушка"
+          financeAccount={cushionAccount}
+          financeUserId={finUid}
+          onFinanceUpdated={onFin}
+          sprintGoal={cushionGoal}
+          sprintId={sprintId}
+          fallbackHint={HINT_CUSHION_FINANCE}
+        />
+      </View>
+    </View>
+  ) : (
     <View style={{ marginBottom: spacing.md, gap: spacing.lg }}>
-      <GenZMoneyGoalPlaque
+      <NikolayMoneyHeroSlot
         variant="china"
         overline={overline}
         defaultTitle="Поездка в Китай"
-        goal={chinaGoal}
+        financeAccount={chinaAccount}
+        financeUserId={finUid}
+        onFinanceUpdated={onFin}
+        sprintGoal={chinaGoal}
         sprintId={sprintId}
-        fallbackHint="Добавь прогресс-цель с «Китай» в названии во вкладке «Спринт» — здесь появится шкала прогресса."
+        fallbackHint={HINT_CHINA_FINANCE}
       />
-      <GenZMoneyGoalPlaque
+      <NikolayMoneyHeroSlot
         variant="cushion"
         overline={overline}
         defaultTitle="Финансовая подушка"
-        goal={cushionGoal}
+        financeAccount={cushionAccount}
+        financeUserId={finUid}
+        onFinanceUpdated={onFin}
+        sprintGoal={cushionGoal}
         sprintId={sprintId}
-        fallbackHint="Добавь прогресс-цель с «подуш» в названии в спринте — увидишь накопление здесь."
+        fallbackHint={HINT_CUSHION_FINANCE}
       />
     </View>
   );
+
+  return row;
 }
 
 /** Приглушённые напоминания под деньгами. */
