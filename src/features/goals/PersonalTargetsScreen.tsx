@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { useSupabaseConfigured } from '@/config/env';
 import { isNikolayPrimaryAccount } from '@/features/accounts/nikolayProfile';
 import { NikolayDayMoneyHeroCards, pickNikolayMoneyProgressGoals } from '@/features/accounts/nikolayHabitsUi';
+import { GoalsHero } from '@/features/goals/GoalsHero';
 import { pickVisionBoardImageUris } from '@/features/goals/pickGoalImage';
 import { GoalsNavigatorBento, nearestCutoffForAugust } from '@/features/goals/GoalsNavigatorBento';
 import { PersonalGoalsMasonryGrid, SideGoalPhotoLightboxModal } from '@/features/goals/PersonalGoalsMasonry';
@@ -1315,6 +1316,10 @@ export function PersonalTargetsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
           <Text style={[typography.title1, { letterSpacing: -0.2, flexShrink: 1 }]}>Цели</Text>
           <HeaderProfileAvatar />
+        </View>
+
+        <View style={{ overflow: 'visible', paddingBottom: 36 }}>
+          <GoalsHero />
         </View>
 
         {!isNikolay ? (
