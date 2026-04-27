@@ -206,21 +206,25 @@ export async function listMergedWeekFocus(anchorDateKey: string): Promise<Planne
   return sortMergedWeekFocusItems(items);
 }
 
-export async function createPlannerWeekFocus(input: { week_monday: string; title: string }): Promise<PlannerWeekFocusStandaloneRow> {
+export async function createPlannerWeekFocus(input: {
+  week_monday: string;
+  title: string;
+  priority?: BacklogPriority;
+}): Promise<PlannerWeekFocusStandaloneRow> {
   const sb = getSupabase();
   if (!sb) throw new Error('Supabase не настроен');
   const userId = await requireUserId();
   const weekMonday = startOfWeekMondayKey(input.week_monday);
   const title = input.title.trim();
   if (!title) throw new Error('Введи текст фокуса');
+  const priority = input.priority ?? 'medium';
   const { data, error } = await sb
     .from('planner_week_focus')
     .insert({
       user_id: userId,
       week_monday: weekMonday,
       title,
-      /** В БД колонка остаётся; у фокуса недели нет UI-приоритета — всегда нейтральное значение. */
-      priority: 'medium',
+      priority,
       sort_order: Date.now() % 1_000_000_000,
       updated_at: new Date().toISOString(),
     })
@@ -235,6 +239,7 @@ export async function updatePlannerWeekFocus(
   patch: {
     title?: string;
     is_done?: boolean;
+    priority?: BacklogPriority;
   }
 ): Promise<PlannerWeekFocusStandaloneRow> {
   const sb = getSupabase();
@@ -243,6 +248,7 @@ export async function updatePlannerWeekFocus(
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.title !== undefined) row.title = patch.title.trim();
   if (patch.is_done !== undefined) row.is_done = patch.is_done;
+  if (patch.priority !== undefined) row.priority = patch.priority;
   const { data, error } = await sb
     .from('planner_week_focus')
     .update(row)

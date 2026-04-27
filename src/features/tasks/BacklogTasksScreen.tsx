@@ -15,6 +15,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,15 +32,11 @@ import {
   sortBacklogTasksForDisplay,
   updateBacklogTask,
 } from '@/features/tasks/backlogApi';
+import { BacklogHero } from '@/features/tasks/BacklogHero';
 import { WEEKDAY_SHORT_RU } from '@/features/day/dayHabitUi';
 import { addDays, localDateKey } from '@/features/habits/habitLogic';
 import { BACKLOG_TASKS_QUERY_KEY, BACKLOG_TYPES_QUERY_KEY, PLANNER_TASKS_QUERY_KEY } from '@/features/tasks/queryKeys';
-import {
-  PLANNER_PRIORITY_OPTIONS,
-  cardSurfaceForPriority,
-  priorityBadgeStyle,
-  priorityStripStyle,
-} from '@/features/tasks/taskPriorityUi';
+import { PLANNER_PRIORITY_OPTIONS, priorityBadgeStyle } from '@/features/tasks/taskPriorityUi';
 import { getSupabase } from '@/lib/supabase';
 import { alertInfo, confirmDestructive } from '@/shared/lib/confirmAction';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
@@ -72,6 +69,39 @@ function weekdayShortRu(dateKey: string): string {
   const day = dt.getDay();
   const idx = day === 0 ? 6 : day - 1;
   return WEEKDAY_SHORT_RU[idx] ?? '';
+}
+
+function shortTaskId(id: string): string {
+  return id.replace(/-/g, '').slice(0, 6).toUpperCase();
+}
+
+function relativeBacklogAge(createdAt: string): string {
+  const diff = Date.now() - new Date(createdAt).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if (m < 1) return 'сейчас';
+  if (m < 60) return `${m} мин`;
+  if (h < 24) return `${h} ч`;
+  if (d === 1) return 'вчера';
+  if (d < 7) return `${d} дн.`;
+  const w = Math.floor(d / 7);
+  if (w < 5) return `${w} нед.`;
+  return new Date(createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+const TYPE_PILL_BACKGROUNDS = [
+  'rgba(168,85,247,0.38)',
+  'rgba(59,130,246,0.38)',
+  'rgba(16,185,129,0.34)',
+  'rgba(236,72,153,0.32)',
+  'rgba(245,158,11,0.34)',
+];
+
+function typePillBackground(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return TYPE_PILL_BACKGROUNDS[h % TYPE_PILL_BACKGROUNDS.length] ?? TYPE_PILL_BACKGROUNDS[0];
 }
 
 export type BacklogTasksScreenProps = {
@@ -107,6 +137,7 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
   const [scheduleDayKey, setScheduleDayKey] = useState(todayKey);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [backlogView, setBacklogView] = useState<'table' | 'kanban'>('table');
 
   const scheduleStripKeys = useMemo(
     () => Array.from({ length: 14 }, (_, i) => addDays(scheduleDayKey, i - 5)),
@@ -162,6 +193,19 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
     }
     return list;
   }, [views, priorityFilter, typeFilter]);
+
+  const { width: windowWidth } = useWindowDimensions();
+
+  const kanbanColumns = useMemo(() => {
+    const types = typesQ.data ?? [];
+    const cols: { key: string; title: string; tasks: BacklogTaskView[] }[] = [
+      { key: 'none', title: 'Без типа', tasks: filteredViews.filter((t) => !t.type_id) },
+    ];
+    for (const ty of types) {
+      cols.push({ key: ty.id, title: ty.name, tasks: filteredViews.filter((t) => t.type_id === ty.id) });
+    }
+    return cols;
+  }, [filteredViews, typesQ.data]);
 
   const invalidateAll = useCallback(() => {
     void qc.invalidateQueries({ queryKey: [...BACKLOG_TYPES_QUERY_KEY] });
@@ -316,7 +360,7 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ marginBottom: spacing.sm }}>
+        <View style={{ marginBottom: spacing.md }}>
           <Text
             style={[
               typography.caption,
@@ -330,13 +374,8 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
           >
             Рабочий стол
           </Text>
-          <Text style={[typography.hero, { fontSize: 28, letterSpacing: -0.8, color: colors.text }]}>
+          <Text style={[typography.hero, { fontSize: 26, letterSpacing: -0.65, color: colors.text }]}>
             {variant === 'tab' ? 'Входящие' : 'Идеи без даты'}
-          </Text>
-          <Text style={[typography.body, { marginTop: spacing.sm, color: colors.textMuted, lineHeight: 22 }]}>
-            {variant === 'tab'
-              ? 'Список без даты: добавляй задачи и приоритеты, переноси в план (календарь) или отметь галочкой «сделано» — строка сразу исчезнет. Пакетом — через «Выбрать».'
-              : 'Задачи без привязки к дню. Галочка у карточки — выполнено, сразу убирается. Дневной план — на вкладке «Задачи».'}
           </Text>
         </View>
 
@@ -367,99 +406,168 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
           </View>
         ) : (
           <>
-                <Pressable
-                  onPress={openCreate}
-                  style={({ pressed }) => ({
-                    marginTop: spacing.md,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    paddingVertical: 14,
-                    borderRadius: radius.xl,
-                    backgroundColor: pressed ? 'rgba(168,85,247,0.22)' : 'rgba(168,85,247,0.14)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(168,85,247,0.4)',
-                    ...webCursor,
-                  })}
-                >
-                  <Ionicons name="add-circle-outline" size={22} color={ACCENT} />
-                  <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 16 }}>Добавить в бэклог</Text>
-                </Pressable>
+            <BacklogHero backlogCount={views.length} />
 
-                {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
-                  <View style={{ marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <View
+              style={{
+                marginTop: spacing.md,
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={openCreate}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: radius.xl,
+                  backgroundColor: pressed ? 'rgba(168,85,247,0.22)' : 'rgba(168,85,247,0.14)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(168,85,247,0.4)',
+                  ...webCursor,
+                })}
+              >
+                <Ionicons name="add-circle-outline" size={22} color={ACCENT} />
+                <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 15 }}>Добавить</Text>
+              </Pressable>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  borderRadius: radius.lg,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    setBacklogView('table');
+                  }}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    backgroundColor: backlogView === 'table' ? 'rgba(168,85,247,0.2)' : 'transparent',
+                    ...webCursor,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: backlogView === 'table' ? '800' : '600',
+                      color: backlogView === 'table' ? ACCENT : colors.textMuted,
+                    }}
+                  >
+                    Таблица
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                    setBacklogView('kanban');
+                  }}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    backgroundColor: backlogView === 'kanban' ? 'rgba(168,85,247,0.2)' : 'transparent',
+                    ...webCursor,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: backlogView === 'kanban' ? '800' : '600',
+                      color: backlogView === 'kanban' ? ACCENT : colors.textMuted,
+                    }}
+                  >
+                    Канбан
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={{ flex: 1, minWidth: 4 }} />
+
+              {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== 'web') void Haptics.selectionAsync();
+                      setSelectMode((m) => {
+                        if (m) setSelectedIds(new Set());
+                        return !m;
+                      });
+                    }}
+                    style={({ pressed }) => ({
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      borderColor: selectMode ? 'rgba(168,85,247,0.55)' : colors.border,
+                      backgroundColor: selectMode ? 'rgba(168,85,247,0.14)' : 'rgba(255,255,255,0.04)',
+                      opacity: pressed ? 0.88 : 1,
+                      ...webCursor,
+                    })}
+                  >
+                    <Text style={{ fontWeight: '800', color: selectMode ? ACCENT : colors.textMuted, fontSize: 13 }}>
+                      {selectMode ? 'Готово' : 'Выбрать'}
+                    </Text>
+                  </Pressable>
+                  {selectMode ? (
                     <Pressable
                       onPress={() => {
-                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                        setSelectMode((m) => {
-                          if (m) setSelectedIds(new Set());
-                          return !m;
+                        const ids = filteredViews.map((t) => t.id);
+                        setSelectedIds((prev) => {
+                          const allOn = ids.length > 0 && ids.every((id) => prev.has(id));
+                          return allOn ? new Set() : new Set(ids);
                         });
+                        if (Platform.OS !== 'web') void Haptics.selectionAsync();
                       }}
                       style={({ pressed }) => ({
                         paddingVertical: 10,
                         paddingHorizontal: 14,
                         borderRadius: radius.lg,
                         borderWidth: 1,
-                        borderColor: selectMode ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.12)',
-                        backgroundColor: selectMode ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
+                        borderColor: colors.border,
+                        backgroundColor: 'rgba(255,255,255,0.04)',
                         opacity: pressed ? 0.88 : 1,
                         ...webCursor,
                       })}
                     >
-                      <Text style={{ fontWeight: '800', color: selectMode ? ACCENT : colors.textMuted, fontSize: 13 }}>
-                        {selectMode ? 'Готово' : 'Выбрать'}
+                      <Text style={{ fontWeight: '700', color: colors.textMuted, fontSize: 13 }}>Все в фильтре</Text>
+                    </Pressable>
+                  ) : null}
+                  {selectMode && selectedIds.size > 0 ? (
+                    <Pressable
+                      onPress={() => {
+                        const list = filteredViews.filter((t) => selectedIds.has(t.id));
+                        openScheduleForTasks(list);
+                      }}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: radius.lg,
+                        borderWidth: 1,
+                        borderColor: 'rgba(52,211,153,0.45)',
+                        backgroundColor: 'rgba(52,211,153,0.12)',
+                        opacity: pressed ? 0.88 : 1,
+                        ...webCursor,
+                      })}
+                    >
+                      <Text style={{ fontWeight: '800', color: 'rgba(52,211,153,0.98)', fontSize: 13 }}>
+                        На день ({selectedIds.size})
                       </Text>
                     </Pressable>
-                    {selectMode ? (
-                      <Pressable
-                        onPress={() => {
-                          const ids = filteredViews.map((t) => t.id);
-                          setSelectedIds((prev) => {
-                            const allOn = ids.length > 0 && ids.every((id) => prev.has(id));
-                            return allOn ? new Set() : new Set(ids);
-                          });
-                          if (Platform.OS !== 'web') void Haptics.selectionAsync();
-                        }}
-                        style={({ pressed }) => ({
-                          paddingVertical: 10,
-                          paddingHorizontal: 14,
-                          borderRadius: radius.lg,
-                          borderWidth: 1,
-                          borderColor: 'rgba(255,255,255,0.12)',
-                          backgroundColor: 'rgba(255,255,255,0.04)',
-                          opacity: pressed ? 0.88 : 1,
-                          ...webCursor,
-                        })}
-                      >
-                        <Text style={{ fontWeight: '700', color: colors.textMuted, fontSize: 13 }}>Все в фильтре</Text>
-                      </Pressable>
-                    ) : null}
-                    {selectMode && selectedIds.size > 0 ? (
-                      <Pressable
-                        onPress={() => {
-                          const list = filteredViews.filter((t) => selectedIds.has(t.id));
-                          openScheduleForTasks(list);
-                        }}
-                        style={({ pressed }) => ({
-                          paddingVertical: 10,
-                          paddingHorizontal: 14,
-                          borderRadius: radius.lg,
-                          borderWidth: 1,
-                          borderColor: 'rgba(52,211,153,0.45)',
-                          backgroundColor: 'rgba(52,211,153,0.12)',
-                          opacity: pressed ? 0.88 : 1,
-                          ...webCursor,
-                        })}
-                      >
-                        <Text style={{ fontWeight: '800', color: 'rgba(52,211,153,0.98)', fontSize: 13 }}>
-                          На день ({selectedIds.size})
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
 
                 {!tasksQ.isLoading && !typesQ.isLoading && views.length > 0 ? (
                   <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -648,207 +756,345 @@ export function BacklogTasksScreen({ variant = 'stack' }: BacklogTasksScreenProp
                   >
                     Нет задач по выбранным фильтрам. Сбрось фильтр «Все» / «Все типы».
                   </Text>
-                ) : (
-                  <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
-                    {filteredViews.map((t) => {
-                      const prOpt = PRIORITY_OPTIONS.find((p) => p.id === t.priority);
-                      const pBadge = priorityBadgeStyle(t.priority, isLight);
-                      const strip = priorityStripStyle(t.priority, isLight);
-                      const titleWeight = t.priority === 'high' ? ('900' as const) : ('800' as const);
-                      return (
-                        <View
-                          key={t.id}
+                ) : backlogView === 'table' ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginTop: spacing.lg }}
+                    contentContainerStyle={{ paddingBottom: spacing.md }}
+                  >
+                    <View style={{ minWidth: Math.max(580, windowWidth - spacing.xl * 2) }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          paddingHorizontal: 6,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: colors.border,
+                        }}
+                      >
+                        {selectMode ? <View style={{ width: 36 }} /> : null}
+                        <Text
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'stretch',
-                            borderRadius: radius.xl,
-                            overflow: 'hidden',
-                            ...cardSurfaceForPriority(t.priority, isLight),
+                            flex: 1,
+                            minWidth: 200,
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: colors.textMuted,
+                            letterSpacing: 0.4,
                           }}
                         >
-                          <View style={{ width: strip.width, backgroundColor: strip.backgroundColor }} />
-                          {selectMode ? (
-                            <Pressable
-                              onPress={() => toggleTaskSelected(t.id)}
-                              style={{
-                                justifyContent: 'center',
-                                paddingLeft: spacing.sm,
-                                paddingRight: 4,
-                              }}
-                              accessibilityRole="checkbox"
-                              accessibilityState={{ checked: selectedIds.has(t.id) }}
-                            >
-                              <Ionicons
-                                name={selectedIds.has(t.id) ? 'checkmark-circle' : 'ellipse-outline'}
-                                size={26}
-                                color={selectedIds.has(t.id) ? ACCENT : colors.textMuted}
-                              />
-                            </Pressable>
-                          ) : null}
-                          <Pressable
-                            onPress={() => (selectMode ? toggleTaskSelected(t.id) : openEdit(t))}
-                            style={({ pressed }) => [
-                              {
-                                flex: 1,
-                                flexDirection: 'row',
-                                alignItems: 'flex-start',
-                                gap: spacing.sm,
-                                paddingVertical: spacing.md,
-                                paddingLeft: selectMode ? spacing.xs : spacing.md,
-                                paddingRight: spacing.xs,
-                                opacity: pressed ? 0.92 : 1,
-                              },
-                              webCursor,
-                            ]}
+                          Задача
+                        </Text>
+                        <Text
+                          style={{
+                            width: 112,
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: colors.textMuted,
+                            letterSpacing: 0.4,
+                          }}
+                        >
+                          Тип
+                        </Text>
+                        <Text
+                          style={{
+                            width: 80,
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: colors.textMuted,
+                            letterSpacing: 0.4,
+                          }}
+                        >
+                          Приоритет
+                        </Text>
+                        <Text
+                          style={{
+                            width: 72,
+                            fontSize: 11,
+                            fontWeight: '800',
+                            color: colors.textMuted,
+                            letterSpacing: 0.4,
+                          }}
+                        >
+                          Когда
+                        </Text>
+                        {!selectMode ? (
+                          <View style={{ width: 100, flexDirection: 'row', justifyContent: 'flex-end' }} />
+                        ) : (
+                          <View style={{ width: 4 }} />
+                        )}
+                      </View>
+                      {filteredViews.map((t) => {
+                        const prOpt = PRIORITY_OPTIONS.find((p) => p.id === t.priority);
+                        const pBadge = priorityBadgeStyle(t.priority, isLight);
+                        const typeSeed = t.type_id ?? t.typeName ?? 'none';
+                        return (
+                          <View
+                            key={t.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              paddingVertical: 12,
+                              paddingHorizontal: 6,
+                              borderBottomWidth: StyleSheet.hairlineWidth,
+                              borderBottomColor: colors.border,
+                            }}
                           >
-                            <View style={{ flex: 1, minWidth: 0 }}>
+                            {selectMode ? (
+                              <Pressable
+                                onPress={() => toggleTaskSelected(t.id)}
+                                style={{ width: 36, justifyContent: 'center' }}
+                                accessibilityRole="checkbox"
+                                accessibilityState={{ checked: selectedIds.has(t.id) }}
+                              >
+                                <Ionicons
+                                  name={selectedIds.has(t.id) ? 'checkmark-circle' : 'ellipse-outline'}
+                                  size={24}
+                                  color={selectedIds.has(t.id) ? ACCENT : colors.textMuted}
+                                />
+                              </Pressable>
+                            ) : null}
+                            <Pressable
+                              onPress={() => (selectMode ? toggleTaskSelected(t.id) : openEdit(t))}
+                              style={({ pressed }) => [
+                                {
+                                  flex: 1,
+                                  minWidth: 200,
+                                  opacity: pressed ? 0.88 : 1,
+                                  paddingRight: spacing.xs,
+                                },
+                                webCursor,
+                              ]}
+                            >
+                              <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11, fontWeight: '700' }]}>
+                                {shortTaskId(t.id)}
+                              </Text>
                               <Text
                                 style={[
-                                  typography.title2,
+                                  typography.body,
                                   {
                                     color: colors.text,
-                                    fontWeight: titleWeight,
-                                    fontSize: t.priority === 'high' ? 18 : 17,
+                                    fontWeight: t.priority === 'high' ? '800' : '700',
+                                    marginTop: 2,
+                                    fontSize: 15,
                                   },
                                 ]}
-                                numberOfLines={3}
+                                numberOfLines={2}
                               >
                                 {t.title}
                               </Text>
-                              {t.description ? (
-                                <Text
-                                  style={[
-                                    typography.caption,
-                                    { color: colors.textMuted, marginTop: 6, lineHeight: 18 },
-                                  ]}
-                                  numberOfLines={4}
-                                >
-                                  {t.description}
-                                </Text>
-                              ) : null}
-                            </View>
-                            <View
-                              style={{
-                                alignItems: 'flex-end',
-                                justifyContent: 'flex-start',
-                                gap: 8,
-                                maxWidth: 118,
-                                paddingTop: 2,
-                              }}
-                            >
-                              <View
-                                style={{
-                                  paddingHorizontal: t.priority === 'high' ? 11 : 9,
-                                  paddingVertical: t.priority === 'high' ? 6 : 5,
-                                  borderRadius: radius.md,
-                                  borderWidth: 1,
-                                  backgroundColor: pBadge.backgroundColor,
-                                  borderColor: pBadge.borderColor,
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    fontSize: t.priority === 'high' ? 12 : 11,
-                                    fontWeight: '900',
-                                    color: pBadge.color,
-                                    textAlign: 'right',
-                                  }}
-                                  numberOfLines={1}
-                                >
-                                  {t.priority === 'high' ? 'ВАЖНО' : prOpt?.short ?? prOpt?.label ?? t.priority}
-                                </Text>
-                              </View>
+                            </Pressable>
+                            <View style={{ width: 112, justifyContent: 'center' }}>
                               {t.typeName ? (
                                 <View
                                   style={{
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 4,
+                                    alignSelf: 'flex-start',
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
                                     borderRadius: radius.full,
-                                    backgroundColor: isLight ? 'rgba(15,17,24,0.04)' : 'rgba(255,255,255,0.05)',
-                                    borderWidth: 1,
-                                    borderColor: isLight ? 'rgba(15,17,24,0.1)' : 'rgba(255,255,255,0.1)',
+                                    backgroundColor: typePillBackground(typeSeed),
                                   }}
                                 >
-                                  <Text
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: '600',
-                                      color: colors.textMuted,
-                                      textAlign: 'right',
-                                    }}
-                                    numberOfLines={2}
-                                  >
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#FAFAFC' }} numberOfLines={1}>
                                     {t.typeName}
                                   </Text>
                                 </View>
-                              ) : null}
+                              ) : (
+                                <Text style={{ fontSize: 12, color: colors.textMuted }}>—</Text>
+                              )}
                             </View>
-                          </Pressable>
-                          {!selectMode ? (
-                            <Pressable
-                              onPress={() => openScheduleForTasks([t])}
-                              hitSlop={10}
-                              accessibilityRole="button"
-                              accessibilityLabel="Перенести в план на день"
-                              style={({ pressed }) => ({
-                                justifyContent: 'flex-start',
-                                paddingTop: spacing.md,
-                                paddingLeft: 4,
-                                paddingRight: 4,
-                                opacity: pressed ? 0.65 : 1,
-                                ...webCursor,
-                              })}
-                            >
-                              <Ionicons name="calendar-outline" size={22} color="rgba(52,211,153,0.95)" />
-                            </Pressable>
-                          ) : null}
-                          {!selectMode ? (
-                            <Pressable
-                              onPress={() => {
-                                if (Platform.OS !== 'web') {
-                                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                }
-                                deleteMut.mutate(t.id);
+                            <View style={{ width: 80, justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: pBadge.color }} numberOfLines={1}>
+                                {prOpt?.label ?? t.priority}
+                              </Text>
+                            </View>
+                            <Text
+                              style={{
+                                width: 72,
+                                fontSize: 11,
+                                color: colors.textMuted,
+                                fontWeight: '600',
                               }}
-                              disabled={deleteMut.isPending}
-                              hitSlop={10}
-                              accessibilityRole="button"
-                              accessibilityLabel="Выполнено, убрать из входящих"
-                              style={({ pressed }) => ({
-                                justifyContent: 'flex-start',
-                                paddingTop: spacing.md,
-                                paddingLeft: 2,
-                                paddingRight: 2,
-                                opacity: deleteMut.isPending ? 0.35 : pressed ? 0.65 : 1,
-                                ...webCursor,
-                              })}
+                              numberOfLines={1}
                             >
-                              <Ionicons name="checkmark-circle-outline" size={24} color="rgba(129,140,248,0.98)" />
-                            </Pressable>
-                          ) : null}
-                          <Pressable
-                            onPress={() =>
-                              confirmDestructive({
-                                title: 'Удалить задачу?',
-                                message: `«${t.title}»`,
-                                onConfirm: () => deleteMut.mutate(t.id),
-                              })
-                            }
-                            hitSlop={12}
-                            style={({ pressed }) => ({
-                              justifyContent: 'flex-start',
-                              paddingTop: spacing.md,
-                              paddingRight: spacing.md,
-                              paddingLeft: 4,
-                              opacity: pressed ? 0.6 : 1,
-                            })}
-                          >
-                            <Ionicons name="trash-outline" size={20} color="rgba(248,113,113,0.88)" />
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
+                              {relativeBacklogAge(t.created_at)}
+                            </Text>
+                            {!selectMode ? (
+                              <View style={{ width: 100, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                                <Pressable
+                                  onPress={() => openScheduleForTasks([t])}
+                                  hitSlop={8}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Перенести в план на день"
+                                  style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.65 : 1, ...webCursor })}
+                                >
+                                  <Ionicons name="calendar-outline" size={20} color="rgba(52,211,153,0.95)" />
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => {
+                                    if (Platform.OS !== 'web') {
+                                      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    }
+                                    deleteMut.mutate(t.id);
+                                  }}
+                                  disabled={deleteMut.isPending}
+                                  hitSlop={8}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Выполнено, убрать из входящих"
+                                  style={({ pressed }) => ({
+                                    padding: 6,
+                                    opacity: deleteMut.isPending ? 0.35 : pressed ? 0.65 : 1,
+                                    ...webCursor,
+                                  })}
+                                >
+                                  <Ionicons name="checkmark-circle-outline" size={22} color="rgba(129,140,248,0.98)" />
+                                </Pressable>
+                                <Pressable
+                                  onPress={() =>
+                                    confirmDestructive({
+                                      title: 'Удалить задачу?',
+                                      message: `«${t.title}»`,
+                                      onConfirm: () => deleteMut.mutate(t.id),
+                                    })
+                                  }
+                                  hitSlop={8}
+                                  style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.6 : 1, ...webCursor })}
+                                >
+                                  <Ionicons name="trash-outline" size={18} color="rgba(248,113,113,0.88)" />
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <View style={{ width: 4 }} />
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginTop: spacing.lg }}
+                    contentContainerStyle={{ flexDirection: 'row', gap: 12, paddingBottom: spacing.md }}
+                  >
+                    {kanbanColumns.map((col) => (
+                      <View
+                        key={col.key}
+                        style={{
+                          width: 276,
+                          borderRadius: radius.xl,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          padding: spacing.sm,
+                          backgroundColor: isLight ? colors.bg : 'rgba(20,20,26,0.96)',
+                        }}
+                      >
+                        <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', fontSize: 10, letterSpacing: 1 }]}>
+                          {col.title.toUpperCase()}
+                        </Text>
+                        <Text style={[typography.body, { color: colors.text, fontWeight: '900', marginTop: 4, marginBottom: spacing.sm }]}>
+                          {col.tasks.length} шт.
+                        </Text>
+                        {col.tasks.map((t) => {
+                          const prOpt = PRIORITY_OPTIONS.find((p) => p.id === t.priority);
+                          const pBadge = priorityBadgeStyle(t.priority, isLight);
+                          const typeSeed = t.type_id ?? t.typeName ?? 'none';
+                          return (
+                            <View
+                              key={t.id}
+                              style={{
+                                marginBottom: spacing.sm,
+                                borderRadius: radius.lg,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: spacing.sm,
+                                backgroundColor: isLight ? 'rgba(15,17,24,0.02)' : 'rgba(255,255,255,0.03)',
+                              }}
+                            >
+                              <Pressable
+                                onPress={() => (selectMode ? toggleTaskSelected(t.id) : openEdit(t))}
+                                style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }, webCursor]}
+                              >
+                                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>{shortTaskId(t.id)}</Text>
+                                <Text style={[typography.body, { color: colors.text, fontWeight: '700', marginTop: 4 }]} numberOfLines={3}>
+                                  {t.title}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                                  {t.typeName ? (
+                                    <View
+                                      style={{
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 4,
+                                        borderRadius: radius.full,
+                                        backgroundColor: typePillBackground(typeSeed),
+                                      }}
+                                    >
+                                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#FAFAFC' }} numberOfLines={1}>
+                                        {t.typeName}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: pBadge.color }}>{prOpt?.label ?? t.priority}</Text>
+                                  <View style={{ flex: 1, minWidth: 4 }} />
+                                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{relativeBacklogAge(t.created_at)}</Text>
+                                </View>
+                              </Pressable>
+                              {selectMode ? (
+                                <Pressable
+                                  onPress={() => toggleTaskSelected(t.id)}
+                                  style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                                >
+                                  <Ionicons
+                                    name={selectedIds.has(t.id) ? 'checkmark-circle' : 'ellipse-outline'}
+                                    size={22}
+                                    color={selectedIds.has(t.id) ? ACCENT : colors.textMuted}
+                                  />
+                                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Выбрать для переноса</Text>
+                                </Pressable>
+                              ) : (
+                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 4, marginTop: 10 }}>
+                                  <Pressable onPress={() => openScheduleForTasks([t])} style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.65 : 1, ...webCursor })}>
+                                    <Ionicons name="calendar-outline" size={20} color="rgba(52,211,153,0.95)" />
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() => {
+                                      if (Platform.OS !== 'web') {
+                                        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                      }
+                                      deleteMut.mutate(t.id);
+                                    }}
+                                    disabled={deleteMut.isPending}
+                                    style={({ pressed }) => ({
+                                      padding: 6,
+                                      opacity: deleteMut.isPending ? 0.35 : pressed ? 0.65 : 1,
+                                      ...webCursor,
+                                    })}
+                                  >
+                                    <Ionicons name="checkmark-circle-outline" size={20} color="rgba(129,140,248,0.98)" />
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() =>
+                                      confirmDestructive({
+                                        title: 'Удалить задачу?',
+                                        message: `«${t.title}»`,
+                                        onConfirm: () => deleteMut.mutate(t.id),
+                                      })
+                                    }
+                                    style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.6 : 1, ...webCursor })}
+                                  >
+                                    <Ionicons name="trash-outline" size={18} color="rgba(248,113,113,0.88)" />
+                                  </Pressable>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </ScrollView>
                 )}
           </>
         )}
