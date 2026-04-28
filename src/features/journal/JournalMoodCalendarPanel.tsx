@@ -84,10 +84,19 @@ function JournalFaceCalendarCell({
           borderRadius: CELL_RADIUS,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: meta && !isFuture ? meta.circleBg : 'rgba(255,255,255,0.04)',
-          borderWidth: meta && !isFuture ? 0 : StyleSheet.hairlineWidth,
-          borderColor: isToday && !isFuture ? (isLight ? colors.borderStrong : 'rgba(255,255,255,0.28)') : 'rgba(255,255,255,0.08)',
-          opacity: isFuture ? 0.32 : 1,
+          backgroundColor: meta && !isFuture ? meta.circleBg : isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.07)',
+          borderWidth: meta && !isFuture ? 1 : StyleSheet.hairlineWidth,
+          borderColor:
+            meta && !isFuture
+              ? meta.circleBorder
+              : isToday && !isFuture
+                ? isLight
+                  ? colors.borderStrong
+                  : 'rgba(255,255,255,0.3)'
+                : isLight
+                  ? 'rgba(15,17,24,0.1)'
+                  : 'rgba(255,255,255,0.12)',
+          opacity: isFuture ? 0.36 : 1,
         }}
       >
         {meta && !isFuture ? (

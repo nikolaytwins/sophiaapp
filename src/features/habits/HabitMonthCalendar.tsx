@@ -34,7 +34,6 @@ function CalendarDayCell({
   isLight: boolean;
   heatMode: HabitCalendarHeatMode;
 }) {
-
   if (!cell.dateKey) {
     return <View style={{ flex: 1, aspectRatio: 1, minWidth: 0 }} />;
   }

@@ -100,24 +100,29 @@ export function TasksPlannerHero({ taskCount, selectedDay, todayKey }: Props) {
   );
 }
 
+/** Было ~168px — на вебе герой читался низким; минимум ×2 по высоте. */
+const HERO_MIN_H = 336;
+const HERO_STACK_MIN_H = 440;
+const HERO_FIGURE_STACK_MIN_H = 400;
+
 const styles = StyleSheet.create({
   wrap: {
-    minHeight: 168,
+    minHeight: HERO_MIN_H,
     overflow: 'hidden',
     position: 'relative',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    minHeight: 168,
+    minHeight: HERO_MIN_H,
   },
   rowStack: {
     flexDirection: 'column',
-    minHeight: 220,
+    minHeight: HERO_STACK_MIN_H,
   },
   copy: {
     flex: 1,
-    paddingVertical: 22,
+    paddingVertical: 28,
     paddingLeft: 22,
     paddingRight: 12,
     justifyContent: 'center',
@@ -137,20 +142,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
-    letterSpacing: -0.4,
+    letterSpacing: -0.45,
     color: '#FAFAFC',
-    lineHeight: 28,
+    lineHeight: 30,
   },
   figure: {
     width: '48%',
-    minHeight: 168,
+    minHeight: HERO_MIN_H,
     position: 'relative',
   },
   figureStack: {
     width: '100%',
-    minHeight: 200,
+    minHeight: HERO_FIGURE_STACK_MIN_H,
     flex: 1,
   },
   figureFrame: {

@@ -100,7 +100,7 @@ function formatWeekRangeRu(weekMonday: string): string {
 }
 
 export function TasksPlannerScreen() {
-  const { colors, typography, spacing, radius, isLight } = useAppTheme();
+  const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -635,11 +635,25 @@ export function TasksPlannerScreen() {
                 style={{
                   marginTop: spacing.lg,
                   flexDirection: twoCol ? 'row' : 'column',
-                  gap: twoCol ? spacing.lg : spacing.xl,
+                  gap: twoCol ? 28 : spacing.xl,
                   alignItems: 'stretch',
                 }}
               >
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <View
+                  style={
+                    twoCol
+                      ? {
+                          flex: 1,
+                          minWidth: 0,
+                          borderRadius: radius.xl,
+                          padding: spacing.md,
+                          backgroundColor: brand.surface,
+                          borderWidth: 1,
+                          borderColor: brand.surfaceBorder,
+                        }
+                      : { flex: 1, minWidth: 0 }
+                  }
+                >
                   <View
                     style={{
                       flexDirection: 'row',
@@ -715,7 +729,21 @@ export function TasksPlannerScreen() {
                   )}
                 </View>
 
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <View
+                  style={
+                    twoCol
+                      ? {
+                          flex: 1,
+                          minWidth: 0,
+                          borderRadius: radius.xl,
+                          padding: spacing.md,
+                          backgroundColor: brand.surface,
+                          borderWidth: 1,
+                          borderColor: brand.surfaceBorder,
+                        }
+                      : { flex: 1, minWidth: 0 }
+                  }
+                >
                   <View
                     style={{
                       flexDirection: 'row',
@@ -1286,6 +1314,7 @@ function PlannerTaskRowMinimal({
         borderRadius: radius.lg,
         overflow: 'hidden',
         marginBottom: spacing.sm,
+        minHeight: 96,
         ...surface,
       }}
     >
@@ -1294,15 +1323,18 @@ function PlannerTaskRowMinimal({
         onPress={onToggle}
         disabled={busy}
         hitSlop={6}
-        style={StyleSheet.flatten([{ justifyContent: 'center', paddingLeft: spacing.sm, paddingRight: 4 }, webPtr])}
+        style={StyleSheet.flatten([
+          { justifyContent: 'center', paddingLeft: spacing.md, paddingRight: 6, minWidth: 44 },
+          webPtr,
+        ])}
         accessibilityRole="button"
         accessibilityLabel={task.is_done ? 'Снять отметку' : 'Выполнено'}
       >
         <View
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
+            width: 26,
+            height: 26,
+            borderRadius: 13,
             borderWidth: task.is_done ? 0 : 2,
             borderColor: 'rgba(255,255,255,0.22)',
             backgroundColor: task.is_done ? ACCENT : 'transparent',
@@ -1311,14 +1343,17 @@ function PlannerTaskRowMinimal({
           }}
         >
           {task.is_done ? (
-            <Ionicons name="checkmark" size={14} color={isLight ? '#FFFFFF' : 'rgba(12,12,16,0.92)'} />
+            <Ionicons name="checkmark" size={15} color={isLight ? '#FFFFFF' : 'rgba(12,12,16,0.92)'} />
           ) : null}
         </View>
       </Pressable>
       <Pressable
         onPress={onOpen}
         disabled={busy}
-        style={StyleSheet.flatten([{ flex: 1, paddingVertical: spacing.sm, paddingRight: spacing.sm }, webPtr])}
+        style={StyleSheet.flatten([
+          { flex: 1, justifyContent: 'center', paddingVertical: spacing.md, paddingRight: spacing.md },
+          webPtr,
+        ])}
       >
         <Text
           style={[
@@ -1380,6 +1415,7 @@ function PlannerWeekFocusRowMinimal({
         borderRadius: radius.lg,
         overflow: 'hidden',
         marginBottom: spacing.sm,
+        minHeight: 96,
         ...surface,
       }}
     >
@@ -1388,14 +1424,17 @@ function PlannerWeekFocusRowMinimal({
         onPress={onToggle}
         disabled={busy}
         hitSlop={6}
-        style={StyleSheet.flatten([{ justifyContent: 'center', paddingLeft: spacing.sm, paddingRight: 4 }, webPtr])}
+        style={StyleSheet.flatten([
+          { justifyContent: 'center', paddingLeft: spacing.md, paddingRight: 6, minWidth: 44 },
+          webPtr,
+        ])}
         accessibilityRole="button"
       >
         <View
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
+            width: 26,
+            height: 26,
+            borderRadius: 13,
             borderWidth: done ? 0 : 2,
             borderColor: 'rgba(255,255,255,0.22)',
             backgroundColor: done ? ACCENT : 'transparent',
@@ -1404,11 +1443,18 @@ function PlannerWeekFocusRowMinimal({
           }}
         >
           {done ? (
-            <Ionicons name="checkmark" size={14} color={isLight ? '#FFFFFF' : 'rgba(12,12,16,0.92)'} />
+            <Ionicons name="checkmark" size={15} color={isLight ? '#FFFFFF' : 'rgba(12,12,16,0.92)'} />
           ) : null}
         </View>
       </Pressable>
-      <Pressable onPress={onOpen} disabled={busy} style={StyleSheet.flatten([{ flex: 1, paddingVertical: spacing.sm, paddingRight: spacing.sm }, webPtr])}>
+      <Pressable
+        onPress={onOpen}
+        disabled={busy}
+        style={StyleSheet.flatten([
+          { flex: 1, justifyContent: 'center', paddingVertical: spacing.md, paddingRight: spacing.md },
+          webPtr,
+        ])}
+      >
         {badgeLabel ? (
           <Text style={{ fontSize: 10, fontWeight: '800', color: WEEK_FOCUS, marginBottom: 4 }}>{badgeLabel}</Text>
         ) : null}
