@@ -16,37 +16,37 @@ export const JOURNAL_MOODS: Array<{
     id: 'death',
     label: 'Смерть',
     emoji: '💀',
-    /** Календарь: чуть насыщеннее серой каши — день читается с первого взгляда. */
-    circleBg: 'rgba(108, 96, 138, 0.72)',
-    circleBorder: 'rgba(170, 158, 205, 0.42)',
+    /** Аналитика / день: заметные, насыщенные плитки (тёмная тема). */
+    circleBg: 'rgba(132, 96, 188, 0.9)',
+    circleBorder: 'rgba(216, 196, 255, 0.72)',
   },
   {
     id: 'sad',
     label: 'Грустно',
     emoji: '☹️',
-    circleBg: 'rgba(58, 118, 178, 0.68)',
-    circleBorder: 'rgba(130, 185, 235, 0.45)',
+    circleBg: 'rgba(36, 128, 224, 0.88)',
+    circleBorder: 'rgba(160, 210, 255, 0.7)',
   },
   {
     id: 'neutral',
     label: 'Покерфейс',
     emoji: '😐',
-    circleBg: 'rgba(98, 110, 132, 0.62)',
-    circleBorder: 'rgba(165, 175, 195, 0.4)',
+    circleBg: 'rgba(118, 132, 168, 0.85)',
+    circleBorder: 'rgba(200, 212, 240, 0.62)',
   },
   {
     id: 'smile',
     label: 'Улыбка',
     emoji: '🙂',
-    circleBg: 'rgba(52, 148, 118, 0.68)',
-    circleBorder: 'rgba(130, 220, 188, 0.48)',
+    circleBg: 'rgba(28, 196, 138, 0.9)',
+    circleBorder: 'rgba(170, 248, 216, 0.72)',
   },
   {
     id: 'stars',
     label: 'Звёзды',
     emoji: '🤩',
-    circleBg: 'rgba(200, 132, 48, 0.62)',
-    circleBorder: 'rgba(255, 210, 140, 0.52)',
+    circleBg: 'rgba(250, 168, 38, 0.92)',
+    circleBorder: 'rgba(255, 230, 170, 0.78)',
   },
 ];
 

@@ -96,11 +96,11 @@ function JournalFaceCalendarCell({
                 : isLight
                   ? 'rgba(15,17,24,0.1)'
                   : 'rgba(255,255,255,0.12)',
-          opacity: isFuture ? 0.36 : 1,
+          opacity: isFuture ? 0.4 : 1,
         }}
       >
         {meta && !isFuture ? (
-          <Text style={{ fontSize: 17, lineHeight: 22 }}>{meta.emoji}</Text>
+          <Text style={{ fontSize: 20, lineHeight: 24 }}>{meta.emoji}</Text>
         ) : (
           <Text
             style={{
@@ -299,13 +299,13 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderRadius: radius.md,
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: 'rgba(255,255,255,0.08)',
+                    backgroundColor: row.circleBg,
+                    borderWidth: 1,
+                    borderColor: row.circleBorder,
                   }}
                 >
                   <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{moodCounts[row.id]}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }}>{moodCounts[row.id]}</Text>
                 </View>
               ))}
             </View>
@@ -380,13 +380,13 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderRadius: radius.md,
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: 'rgba(255,255,255,0.08)',
+                    backgroundColor: row.circleBg,
+                    borderWidth: 1,
+                    borderColor: row.circleBorder,
                   }}
                 >
                   <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{energyCounts[row.id]}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }}>{energyCounts[row.id]}</Text>
                 </View>
               ))}
             </View>
@@ -455,13 +455,13 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
                   paddingVertical: 6,
                   paddingHorizontal: 10,
                   borderRadius: radius.md,
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: row.circleBg,
+                  borderWidth: 1,
+                  borderColor: row.circleBorder,
                 }}
               >
                 <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{moodCounts[row.id]}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }}>{moodCounts[row.id]}</Text>
               </View>
             ))}
           </View>
@@ -528,13 +528,13 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
                   paddingVertical: 6,
                   paddingHorizontal: 10,
                   borderRadius: radius.md,
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: row.circleBg,
+                  borderWidth: 1,
+                  borderColor: row.circleBorder,
                 }}
               >
                 <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{energyCounts[row.id]}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }}>{energyCounts[row.id]}</Text>
               </View>
             ))}
           </View>

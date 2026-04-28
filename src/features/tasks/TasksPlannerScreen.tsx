@@ -712,7 +712,15 @@ export function TasksPlannerScreen() {
                             dayKey: selectedDay,
                           })
                         }
-                        onOpen={() => openTaskEditor(t)}
+                        onEdit={() => openTaskEditor(t)}
+                        onDeferNextDay={() => deferToNextDayMut.mutate({ id: t.id, fromDay: selectedDay })}
+                        onDelete={() =>
+                          confirmDestructive({
+                            title: 'Удалить задачу?',
+                            message: `«${t.title}»`,
+                            onConfirm: () => deleteMut.mutate({ id: t.id, wasDone: t.is_done }),
+                          })
+                        }
                         busy={
                           toggleMut.isPending ||
                           deleteMut.isPending ||
@@ -1289,7 +1297,9 @@ function PlannerTaskRowMinimal({
   spacing,
   radius,
   onToggle,
-  onOpen,
+  onEdit,
+  onDeferNextDay,
+  onDelete,
   busy,
 }: {
   task: PlannerTaskRow;
@@ -1299,13 +1309,19 @@ function PlannerTaskRowMinimal({
   spacing: AppThemeTokens['spacing'];
   radius: AppThemeTokens['radius'];
   onToggle: () => void;
-  onOpen: () => void;
+  onEdit: () => void;
+  onDeferNextDay: () => void;
+  onDelete: () => void;
   busy: boolean;
 }) {
   const webPtr = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {};
   const pr = task.priority as BacklogPriority;
   const strip = priorityStripStyle(pr, isLight);
   const surface = cardSurfaceForPriority(pr, isLight);
+  const iconMuted = colors.textMuted;
+  const deleteTint = isLight ? 'rgba(220,38,38,0.92)' : 'rgba(248,113,113,0.92)';
+  const editTint = isLight ? 'rgba(124,58,237,0.9)' : 'rgba(196,181,253,0.88)';
+
   return (
     <View
       style={{
@@ -1334,7 +1350,7 @@ function PlannerTaskRowMinimal({
           style={{
             width: 26,
             height: 26,
-            borderRadius: 13,
+            borderRadius: 6,
             borderWidth: task.is_done ? 0 : 2,
             borderColor: 'rgba(255,255,255,0.22)',
             backgroundColor: task.is_done ? ACCENT : 'transparent',
@@ -1347,30 +1363,72 @@ function PlannerTaskRowMinimal({
           ) : null}
         </View>
       </Pressable>
-      <Pressable
-        onPress={onOpen}
-        disabled={busy}
-        style={StyleSheet.flatten([
-          { flex: 1, justifyContent: 'center', paddingVertical: spacing.md, paddingRight: spacing.md },
-          webPtr,
-        ])}
+      <View
+        style={{
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          minWidth: 0,
+          paddingVertical: spacing.md,
+          paddingRight: spacing.sm,
+        }}
       >
-        <Text
-          style={[
-            typography.body,
-            {
-              fontSize: 15,
-              fontWeight: pr === 'high' ? '800' : '700',
-              color: colors.text,
-              textDecorationLine: task.is_done ? 'line-through' : 'none',
-              opacity: task.is_done ? 0.65 : 1,
-            },
-          ]}
-          numberOfLines={3}
-        >
-          {task.title}
-        </Text>
-      </Pressable>
+        <View style={{ flex: 1, minWidth: 0, paddingRight: spacing.xs }}>
+          <Text
+            style={[
+              typography.body,
+              {
+                fontSize: 15,
+                fontWeight: pr === 'high' ? '800' : '700',
+                color: colors.text,
+                textDecorationLine: task.is_done ? 'line-through' : 'none',
+                opacity: task.is_done ? 0.65 : 1,
+              },
+            ]}
+            numberOfLines={3}
+          >
+            {task.title}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Pressable
+            onPress={onDelete}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Удалить задачу"
+            style={({ pressed }) =>
+              StyleSheet.flatten([{ padding: 4, opacity: pressed ? 0.72 : 1 }, webPtr])
+            }
+          >
+            <Ionicons name="trash-outline" size={21} color={deleteTint} />
+          </Pressable>
+          <Pressable
+            onPress={onDeferNextDay}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Перенести на следующий день"
+            style={({ pressed }) =>
+              StyleSheet.flatten([{ padding: 4, opacity: pressed ? 0.72 : 1 }, webPtr])
+            }
+          >
+            <Ionicons name="arrow-forward-circle-outline" size={22} color={iconMuted} />
+          </Pressable>
+          <Pressable
+            onPress={onEdit}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Редактировать задачу"
+            style={({ pressed }) =>
+              StyleSheet.flatten([{ padding: 4, opacity: pressed ? 0.72 : 1 }, webPtr])
+            }
+          >
+            <Ionicons name="create-outline" size={22} color={editTint} />
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }

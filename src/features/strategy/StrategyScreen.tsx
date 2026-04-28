@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { STRATEGY } from '@/features/strategy/strategyDashboardUi';
 import { strategyPageConfig } from '@/features/strategy/strategy.config';
 import { StrategyHero } from '@/features/strategy/StrategyHero';
+import { StrategyVisionHubEmbed } from '@/features/strategy/StrategyVisionHubEmbed';
 import { ScreenHeaderChrome } from '@/shared/ui/ScreenHeaderChrome';
 import { ScreenCanvas } from '@/shared/ui/ScreenCanvas';
 import { useAppTheme } from '@/theme';
@@ -30,6 +31,8 @@ export function StrategyScreen() {
           headline={strategyPageConfig.meta.title}
           microcopy={`${strategyPageConfig.meta.subtitle}\n\n${strategyPageConfig.meta.lastContentUpdate}`}
         />
+
+        <StrategyVisionHubEmbed />
       </ScrollView>
     </ScreenCanvas>
   );
