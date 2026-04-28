@@ -1,17 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { LinearGradient } from 'expo-linear-gradient';
-import { type Href, Link } from 'expo-router';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { type Href, Link, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useSupabaseConfigured } from '@/config/env';
-import { loadFinanceExpenseAnalytics } from '@/features/finance/financeApi';
-import { financeExpenseAnalyticsKey } from '@/features/finance/queryKeys';
+import { FinanceCategoryExpenseTableBlock } from '@/features/finance/FinanceCategoryExpenseTableBlock';
+import type { DonutSegment } from '@/features/finance/FinanceExpenseDonut';
+import { FinanceExpenseDonut } from '@/features/finance/FinanceExpenseDonut';
+import { FinanceMonthBarChart } from '@/features/finance/FinanceMonthBarChart';
+import { FinancePremiumChart } from '@/features/finance/FinancePremiumChart';
+import {
+  loadFinanceExpenseAnalytics,
+  loadFinanceOverview,
+  type FinanceExpenseAnalytics,
+} from '@/features/finance/financeApi';
+import type { FinanceExpenseCategory } from '@/features/finance/finance.types';
+import { rollupExpenseCategoryToRootName } from '@/features/finance/financeBudgetTree';
+import { FINANCE_QUERY_KEY, financeExpenseAnalyticsKey } from '@/features/finance/queryKeys';
 import { useAppTheme } from '@/theme';
 
-const CHART_HEIGHT = 152;
-const BAR_PURPLE: [string, string] = ['#FB7185', '#BE123C'];
-const ACCENT = '#A855F7';
+const DONUT_MUTED: string[] = [
+  'rgba(139,92,246,0.55)',
+  'rgba(99,102,241,0.5)',
+  'rgba(129,140,248,0.48)',
+  'rgba(94,129,172,0.5)',
+  'rgba(100,116,139,0.45)',
+  'rgba(120,113,108,0.48)',
+  'rgba(107,114,128,0.45)',
+];
 
 function fmtMoney(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }).replace(/\u00A0/g, ' ') + ' ₽';
@@ -21,39 +38,87 @@ type Props = {
   userId: string | null;
 };
 
+function buildDonutForMonth(
+  analytics: FinanceExpenseAnalytics,
+  expenseCategories: FinanceExpenseCategory[],
+  monthIdx: number
+): DonutSegment[] {
+  const rolled = new Map<string, number>();
+  for (const s of analytics.categorySeries) {
+    const v = s.amounts[monthIdx] ?? 0;
+    if (v <= 0) continue;
+    const root =
+      expenseCategories.length > 0 ? rollupExpenseCategoryToRootName(expenseCategories, s.category) : s.category.trim();
+    rolled.set(root, (rolled.get(root) ?? 0) + v);
+  }
+  const rows = [...rolled.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+  const top = rows.slice(0, 6);
+  const restSum = rows.slice(6).reduce((a, r) => a + r.value, 0);
+  const out: DonutSegment[] = top.map((r, i) => ({
+    label: r.label,
+    value: r.value,
+    color: DONUT_MUTED[i % DONUT_MUTED.length]!,
+  }));
+  if (restSum > 0) {
+    out.push({
+      label: 'Прочее',
+      value: restSum,
+      color: DONUT_MUTED[out.length % DONUT_MUTED.length]!,
+    });
+  }
+  return out;
+}
+
+/**
+ * Вкладка «Финансы» на экране аналитики привычек: те же графики и таблица, что в разделе «Финансы».
+ */
 export function FinanceAnalyticsTabPanel({ userId }: Props) {
   const { colors, typography, spacing, radius, isLight, brand } = useAppTheme();
+  const router = useRouter();
   const supabaseOn = useSupabaseConfigured;
 
-  const q = useQuery({
+  const analyticsQ = useQuery({
     queryKey: financeExpenseAnalyticsKey(userId),
     queryFn: () => loadFinanceExpenseAnalytics(userId!),
     enabled: Boolean(supabaseOn && userId),
   });
 
+  const overviewQ = useQuery({
+    queryKey: [...FINANCE_QUERY_KEY, 'overview', userId],
+    queryFn: () => loadFinanceOverview(userId!),
+    enabled: Boolean(supabaseOn && userId),
+  });
+
+  const [donutMonthIdx, setDonutMonthIdx] = useState(-1);
+
+  const analytics = analyticsQ.data;
+  const overview = overviewQ.data;
+
+  const monthCount = analytics?.monthKeys.length ?? 0;
+  const donutIdx = useMemo(() => {
+    if (monthCount === 0) return 0;
+    if (donutMonthIdx < 0) return monthCount - 1;
+    return Math.min(Math.max(0, donutMonthIdx), monthCount - 1);
+  }, [monthCount, donutMonthIdx]);
+
+  const donutSegments = useMemo(() => {
+    if (!analytics || !overview?.expenseCategories) return [];
+    return buildDonutForMonth(analytics, overview.expenseCategories, donutIdx);
+  }, [analytics, overview?.expenseCategories, donutIdx]);
+
+  const donutLabel = analytics?.monthLabels?.[donutIdx] ?? '';
+
   const shellBg = isLight ? 'rgba(15,17,24,0.04)' : 'rgba(10,10,14,0.92)';
   const shellBorder = isLight ? colors.border : 'rgba(255,255,255,0.07)';
-  const trackBg = 'rgba(255,255,255,0.08)';
 
-  const analytics = q.data;
-  const n = analytics?.monthlyExpenseTotal.length ?? 0;
-  const lastIdx = n > 0 ? n - 1 : -1;
+  const lastIdx = monthCount > 0 ? monthCount - 1 : -1;
   const prevIdx = lastIdx > 0 ? lastIdx - 1 : -1;
-  const curTotal = lastIdx >= 0 ? (analytics!.monthlyExpenseTotal[lastIdx] ?? 0) : 0;
-  const prevTotal = prevIdx >= 0 ? (analytics!.monthlyExpenseTotal[prevIdx] ?? 0) : 0;
+  const curTotal = lastIdx >= 0 && analytics ? (analytics.monthlyExpenseTotal[lastIdx] ?? 0) : 0;
+  const prevTotal = prevIdx >= 0 && analytics ? (analytics.monthlyExpenseTotal[prevIdx] ?? 0) : 0;
   const delta = curTotal - prevTotal;
   const deltaPct = prevTotal > 0 ? Math.round((delta / prevTotal) * 100) : null;
-
-  const yMax = analytics ? Math.max(1, ...analytics.monthlyExpenseTotal.map((v) => v)) : 1;
-  const top5 =
-    analytics && lastIdx >= 0
-      ? analytics.categorySeries
-          .map((s) => ({ category: s.category, amount: s.amounts[lastIdx] ?? 0 }))
-          .filter((x) => x.amount > 0)
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 5)
-      : [];
-  const top5max = top5.length ? Math.max(...top5.map((x) => x.amount)) : 1;
 
   if (!supabaseOn || !userId) {
     return (
@@ -89,11 +154,11 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
     );
   }
 
-  if (q.isLoading) {
+  if (analyticsQ.isLoading || overviewQ.isLoading) {
     return <ActivityIndicator color={brand.primary} style={{ marginTop: spacing.xl }} />;
   }
 
-  if (q.isError || !analytics) {
+  if (analyticsQ.isError || !analytics) {
     return (
       <Text style={{ marginTop: spacing.lg, color: colors.danger }}>
         Не удалось загрузить аналитику расходов.
@@ -101,89 +166,20 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
     );
   }
 
-  return (
-    <View style={{ marginTop: spacing.lg, gap: spacing.lg }}>
-      <View
-        style={{
-          borderRadius: radius.xl,
-          padding: spacing.md,
-          backgroundColor: shellBg,
-          borderWidth: 1,
-          borderColor: shellBorder,
-        }}
-      >
-        <Text
-          style={[
-            typography.caption,
-            {
-              color: 'rgba(196,181,253,0.85)',
-              letterSpacing: 1.4,
-              textTransform: 'uppercase',
-              marginBottom: spacing.sm,
-            },
-          ]}
-        >
-          Расходы по месяцам
-        </Text>
-        <Text style={[typography.body, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 }]}>
-          Сумма всех расходов за календарный месяц (12 мес.).
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, paddingTop: 8, gap: 4 }}>
-          {analytics.monthLabels.map((lab, j) => {
-            const v = analytics.monthlyExpenseTotal[j] ?? 0;
-            const hRatio = yMax > 0 ? v / yMax : 0;
-            const fillH = Math.max(hRatio * 100, v > 0 ? 6 : 0);
-            return (
-              <View key={analytics.monthKeys[j]} style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
-                <View
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    maxWidth: 22,
-                    justifyContent: 'flex-end',
-                  }}
-                >
-                  <View
-                    style={{
-                      flex: 1,
-                      width: '100%',
-                      borderRadius: 999,
-                      backgroundColor: trackBg,
-                      overflow: 'hidden',
-                      justifyContent: 'flex-end',
-                    }}
-                  >
-                    <LinearGradient
-                      colors={BAR_PURPLE}
-                      start={{ x: 0.5, y: 1 }}
-                      end={{ x: 0.5, y: 0 }}
-                      style={{
-                        width: '100%',
-                        height: `${fillH}%`,
-                        minHeight: v > 0 ? 4 : 0,
-                        borderRadius: 999,
-                      }}
-                    />
-                  </View>
-                </View>
-                <Text
-                  style={{
-                    marginTop: 6,
-                    fontSize: 9,
-                    fontWeight: '700',
-                    color: colors.textMuted,
-                    textTransform: 'lowercase',
-                  }}
-                  numberOfLines={1}
-                >
-                  {lab}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </View>
+  if (overviewQ.isError || !overview) {
+    return (
+      <Text style={{ marginTop: spacing.lg, color: colors.danger }}>
+        Не удалось загрузить категории и бюджет для графиков.
+      </Text>
+    );
+  }
 
+  return (
+    <ScrollView
+      style={{ marginTop: spacing.md }}
+      contentContainerStyle={{ paddingBottom: spacing.xl * 2, gap: spacing.lg }}
+      showsVerticalScrollIndicator={false}
+    >
       <View
         style={{
           borderRadius: radius.xl,
@@ -193,7 +189,18 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
           backgroundColor: shellBg,
         }}
       >
-        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1.2, marginBottom: spacing.sm }]}>
+        <Text
+          style={[
+            typography.caption,
+            {
+              color: colors.textMuted,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              marginBottom: spacing.sm,
+              fontWeight: '800',
+            },
+          ]}
+        >
           Текущий месяц
         </Text>
         <Text style={[typography.hero, { fontSize: 28, color: colors.text, fontVariant: ['tabular-nums'] }]}>
@@ -211,14 +218,16 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   borderRadius: radius.full,
-                  backgroundColor: delta <= 0 ? 'rgba(74,222,128,0.14)' : 'rgba(251,113,133,0.14)',
+                  backgroundColor: isLight ? 'rgba(15,17,24,0.06)' : 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: colors.border,
                 }}
               >
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: '800',
-                    color: delta <= 0 ? '#4ADE80' : '#FB7185',
+                    color: delta <= 0 ? 'rgba(110,160,130,0.95)' : 'rgba(196,150,130,0.95)',
                     fontVariant: ['tabular-nums'],
                   }}
                 >
@@ -243,51 +252,125 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
         <Text
           style={[
             typography.caption,
-            { color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: spacing.sm },
+            {
+              color: colors.textMuted,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              marginBottom: spacing.sm,
+              fontWeight: '800',
+            },
           ]}
         >
-          Топ категорий (этот месяц)
+          Расходы по месяцам
         </Text>
-        {top5.length === 0 ? (
-          <Text style={{ color: colors.textMuted, lineHeight: 20 }}>В этом месяце расходов по категориям нет.</Text>
+        <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.md, lineHeight: 18 }]}>
+          Сумма расходов за календарный месяц (как на дашборде финансов).
+        </Text>
+        <FinanceMonthBarChart
+          values={analytics.monthlyExpenseTotal}
+          labels={analytics.monthLabels}
+          height={176}
+          isLight={isLight}
+        />
+      </View>
+
+      <View
+        style={{
+          borderRadius: radius.xl,
+          padding: spacing.md,
+          borderWidth: 1,
+          borderColor: shellBorder,
+          backgroundColor: shellBg,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: colors.textMuted,
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                fontWeight: '800',
+              },
+            ]}
+          >
+            Структура расходов
+          </Text>
+          {monthCount > 1 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Pressable
+                onPress={() => setDonutMonthIdx((i) => Math.max(0, (i < 0 ? monthCount - 1 : i) - 1))}
+                disabled={donutIdx <= 0}
+                hitSlop={8}
+                style={{ opacity: donutIdx <= 0 ? 0.35 : 1, padding: 6 }}
+              >
+                <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
+              </Pressable>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text, minWidth: 56, textAlign: 'center' }}>
+                {donutLabel}
+              </Text>
+              <Pressable
+                onPress={() => setDonutMonthIdx((i) => Math.min(monthCount - 1, (i < 0 ? monthCount - 1 : i) + 1))}
+                disabled={donutIdx >= monthCount - 1}
+                hitSlop={8}
+                style={{ opacity: donutIdx >= monthCount - 1 ? 0.35 : 1, padding: 6 }}
+              >
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{donutLabel}</Text>
+          )}
+        </View>
+        {donutSegments.length === 0 ? (
+          <Text style={{ color: colors.textMuted }}>Нет расходов за этот месяц.</Text>
         ) : (
-          top5.map((row) => {
-            const w = top5max > 0 ? Math.round((row.amount / top5max) * 100) : 0;
-            return (
-              <View key={row.category} style={{ marginBottom: spacing.md }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text
-                    style={[typography.caption, { color: colors.text, fontWeight: '700', flex: 1, paddingRight: 8 }]}
-                    numberOfLines={1}
-                  >
-                    {row.category}
-                  </Text>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] }}>
-                    {fmtMoney(row.amount)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    height: 8,
-                    borderRadius: 8,
-                    backgroundColor: trackBg,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: `${w}%`,
-                      height: '100%',
-                      borderRadius: 8,
-                      backgroundColor: ACCENT,
-                    }}
-                  />
-                </View>
-              </View>
-            );
-          })
+          <FinanceExpenseDonut segments={donutSegments} height={220} isLight={isLight} />
         )}
       </View>
+
+      <View
+        style={{
+          borderRadius: radius.xl,
+          padding: spacing.md,
+          borderWidth: 1,
+          borderColor: shellBorder,
+          backgroundColor: shellBg,
+        }}
+      >
+        <Text
+          style={[
+            typography.caption,
+            {
+              color: colors.textMuted,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              marginBottom: spacing.sm,
+              fontWeight: '800',
+            },
+          ]}
+        >
+          Динамика суммы (линия)
+        </Text>
+        <View style={{ width: '100%', minHeight: 200, alignItems: 'stretch' }}>
+          <FinancePremiumChart
+            values={analytics.monthlyExpenseTotal}
+            labels={analytics.monthLabels}
+            color={brand.primary}
+            height={200}
+            isLight={isLight}
+          />
+        </View>
+      </View>
+
+      <FinanceCategoryExpenseTableBlock
+        overview={overview}
+        analytics={analytics}
+        loading={false}
+        error={false}
+        onOpenSettings={() => router.push('/finance')}
+      />
 
       <Link href={'/finance' as Href} asChild>
         <Pressable
@@ -303,10 +386,10 @@ export function FinanceAnalyticsTabPanel({ userId }: Props) {
             backgroundColor: 'rgba(168,85,247,0.12)',
           }}
         >
-          <Text style={{ fontWeight: '800', color: brand.primary }}>Открыть финансы</Text>
+          <Text style={{ fontWeight: '800', color: brand.primary }}>Открыть раздел «Финансы»</Text>
           <Ionicons name="chevron-forward" size={18} color={brand.primary} />
         </Pressable>
       </Link>
-    </View>
+    </ScrollView>
   );
 }

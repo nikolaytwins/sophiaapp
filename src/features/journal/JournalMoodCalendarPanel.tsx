@@ -170,9 +170,10 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
         style={[
           typography.caption,
           {
-            color: 'rgba(232,121,249,0.85)',
+            color: colors.textMuted,
             letterSpacing: 1.4,
             textTransform: 'uppercase',
+            fontWeight: '800',
             marginBottom: spacing.sm,
           },
         ]}
@@ -232,9 +233,10 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
               style={[
                 typography.caption,
                 {
-                  color: 'rgba(232,121,249,0.85)',
+                  color: colors.textMuted,
                   letterSpacing: 1.1,
                   textTransform: 'uppercase',
+                  fontWeight: '800',
                   marginBottom: spacing.sm,
                 },
               ]}
@@ -312,9 +314,10 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
               style={[
                 typography.caption,
                 {
-                  color: 'rgba(147,197,253,0.9)',
+                  color: colors.textMuted,
                   letterSpacing: 1.1,
                   textTransform: 'uppercase',
+                  fontWeight: '800',
                   marginBottom: spacing.sm,
                 },
               ]}
@@ -386,9 +389,10 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             style={[
               typography.caption,
               {
-                color: 'rgba(232,121,249,0.85)',
+                color: colors.textMuted,
                 letterSpacing: 1.1,
                 textTransform: 'uppercase',
+                fontWeight: '800',
                 marginBottom: spacing.sm,
               },
             ]}
@@ -457,9 +461,10 @@ export function JournalMoodCalendarPanel({ onLayoutRoot }: Props) {
             style={[
               typography.caption,
               {
-                color: 'rgba(147,197,253,0.9)',
+                color: colors.textMuted,
                 letterSpacing: 1.1,
                 textTransform: 'uppercase',
+                fontWeight: '800',
                 marginTop: spacing.lg,
                 marginBottom: spacing.sm,
               },

@@ -40,7 +40,6 @@ import { useSupabaseConfigured } from '@/config/env';
 import { addDays, counterCountOnDate, localDateKey } from '@/features/habits/habitLogic';
 import { getSupabase } from '@/lib/supabase';
 import { FinanceAnalyticsTabPanel } from '@/features/finance/FinanceAnalyticsTabPanel';
-import { HabitsMonthlyCompletionsChart } from '@/features/habits/HabitsMonthlyCompletionsChart';
 import { HabitCounterRingCard } from '@/features/habits/HabitCounterRingCard';
 import { HabitMonthCalendar } from '@/features/habits/HabitMonthCalendar';
 import { useHabitsQuery } from '@/features/habits/useHabitsQuery';
@@ -1080,8 +1079,6 @@ export function HabitsScreen() {
         ) : (
           <>
             <JournalMoodCalendarPanel onLayoutRoot={setMoodPanelY} />
-
-            {pageHabits.length > 0 ? <HabitsMonthlyCompletionsChart habits={pageHabits} /> : null}
 
             {data.length === 0 ? (
           <SurfaceCard

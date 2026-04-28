@@ -12,11 +12,41 @@ export const JOURNAL_MOODS: Array<{
   /** Обводка, если настроение не выбрано (нейтральный плейсхолдер) */
   circleBorder: string;
 }> = [
-  { id: 'death', label: 'Смерть', emoji: '💀', circleBg: 'rgba(139,92,246,0.85)', circleBorder: 'rgba(139,92,246,0.35)' },
-  { id: 'sad', label: 'Грустно', emoji: '☹️', circleBg: 'rgba(59,130,246,0.75)', circleBorder: 'rgba(59,130,246,0.35)' },
-  { id: 'neutral', label: 'Покерфейс', emoji: '😐', circleBg: 'rgba(100,116,139,0.75)', circleBorder: 'rgba(148,163,184,0.35)' },
-  { id: 'smile', label: 'Улыбка', emoji: '🙂', circleBg: 'rgba(163,230,53,0.9)', circleBorder: 'rgba(163,230,53,0.4)' },
-  { id: 'stars', label: 'Звёзды', emoji: '🤩', circleBg: 'rgba(251,191,36,0.9)', circleBorder: 'rgba(251,191,36,0.45)' },
+  {
+    id: 'death',
+    label: 'Смерть',
+    emoji: '💀',
+    circleBg: 'rgba(88, 82, 110, 0.52)',
+    circleBorder: 'rgba(120, 115, 145, 0.28)',
+  },
+  {
+    id: 'sad',
+    label: 'Грустно',
+    emoji: '☹️',
+    circleBg: 'rgba(72, 98, 128, 0.48)',
+    circleBorder: 'rgba(100, 125, 155, 0.26)',
+  },
+  {
+    id: 'neutral',
+    label: 'Покерфейс',
+    emoji: '😐',
+    circleBg: 'rgba(95, 105, 120, 0.42)',
+    circleBorder: 'rgba(130, 138, 152, 0.24)',
+  },
+  {
+    id: 'smile',
+    label: 'Улыбка',
+    emoji: '🙂',
+    circleBg: 'rgba(78, 112, 102, 0.46)',
+    circleBorder: 'rgba(110, 140, 128, 0.26)',
+  },
+  {
+    id: 'stars',
+    label: 'Звёзды',
+    emoji: '🤩',
+    circleBg: 'rgba(118, 102, 88, 0.46)',
+    circleBorder: 'rgba(150, 132, 108, 0.28)',
+  },
 ];
 
 const MOOD_SET = new Set<JournalMoodId>(JOURNAL_MOOD_IDS);
