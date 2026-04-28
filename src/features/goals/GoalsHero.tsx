@@ -9,8 +9,10 @@ export const GOALS_HERO_VISION_IMAGE = require('../../assets/images/goals-hero-v
 
 const STACK_BREAKPOINT = 420;
 
-const GOALS_IMG_POS_ROW = { right: '0%', bottom: '0%' } as const;
-const GOALS_IMG_POS_STACK = { right: '0%', bottom: '0%' } as const;
+/** Было bottom:0 — обрезало верх (лицо). Верх + лёгкий translateY показывают голову в кадре. */
+const GOALS_IMG_POS_ROW = { top: '0%', right: '0%' } as const;
+const GOALS_IMG_POS_STACK = { top: '0%', right: '0%' } as const;
+const GOALS_IMG_NUDGE_Y = Platform.OS === 'web' ? 18 : 14;
 
 /**
  * Hero «Цели»: сетка как на «День» — картинка заполняет правую колонку (cover), без градиентного затемнения поверх фото.
@@ -55,7 +57,7 @@ export function GoalsHero() {
           <View style={styles.figureImageFrame} collapsable={false}>
             <Image
               source={GOALS_HERO_VISION_IMAGE}
-              style={StyleSheet.absoluteFillObject}
+              style={[StyleSheet.absoluteFillObject, { transform: [{ translateY: GOALS_IMG_NUDGE_Y }] }]}
               contentFit="cover"
               contentPosition={imgPos}
               accessibilityIgnoresInvertColors

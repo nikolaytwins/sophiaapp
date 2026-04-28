@@ -14,8 +14,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   const insets = useSafeAreaInsets();
   const { colors, isLight, typography, shadows } = useAppTheme();
   const screenW = Dimensions.get('window').width;
-  /** На узких экранах только иконки — подписи в шапке (бургер). */
-  const iconsOnlyTabs = screenW < 480;
+  /** На узких нативных экранах только иконки — подписи в шапке (бургер). На web всегда полная полоса с подписями. */
+  const iconsOnlyTabs = Platform.OS !== 'web' && screenW < 480;
   const tabMinW = iconsOnlyTabs ? 44 : screenW < 340 ? 42 : screenW < 380 ? 50 : screenW < 420 ? 56 : 62;
   const iconSize = screenW < 340 ? 22 : screenW < 380 ? 24 : 28;
   const labelSize = screenW < 340 ? 9 : screenW < 380 ? 10 : 11;

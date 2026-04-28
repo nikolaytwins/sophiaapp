@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { HeaderProfileAvatar } from '@/shared/ui/HeaderProfileAvatar';
 import { HeaderTabMenuBurger } from '@/shared/ui/HeaderTabMenuBurger';
@@ -38,7 +38,7 @@ export function ScreenHeaderChrome({ children, trailing, avatarMarginTop = 4, ma
         <View style={{ flex: 1, minWidth: 0 }} />
       )}
       {trailing ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>{trailing}</View> : null}
-      <HeaderTabMenuBurger />
+      {Platform.OS !== 'web' ? <HeaderTabMenuBurger /> : null}
     </View>
   );
 }
