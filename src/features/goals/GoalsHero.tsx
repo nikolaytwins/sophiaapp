@@ -4,7 +4,7 @@ import { Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-nat
 
 import { useAppTheme } from '@/theme';
 
-/** PNG с прозрачным фоном: София с доской «ЦЕЛИ». */
+/** Герой «Цели»: София с доской «ЦЕЛИ» (неон, тёмный фон). */
 export const GOALS_HERO_VISION_IMAGE = require('../../assets/images/goals-hero-vision-board.png');
 
 /** Как в `TasksPlannerHero` — один брейкпоинт стека и те же высоты. */
