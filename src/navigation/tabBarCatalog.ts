@@ -6,7 +6,6 @@ export const TAB_BAR_ROUTE_ORDER = ['day', 'calendar', 'strategy', 'goals', 'tas
 export const TAB_HREF: Record<string, Href> = {
   day: '/day',
   calendar: '/calendar' as Href,
-  sprint: '/sprint' as Href,
   strategy: '/strategy' as Href,
   goals: '/goals' as Href,
   tasks: '/tasks' as Href,
@@ -18,7 +17,6 @@ export const TAB_HREF: Record<string, Href> = {
 export const TAB_LABELS: Record<string, string> = {
   day: 'День',
   calendar: 'Календарь',
-  sprint: 'Спринт',
   strategy: 'Стратегия',
   goals: 'Цели',
   tasks: 'Задачи',
@@ -30,7 +28,6 @@ export const TAB_LABELS: Record<string, string> = {
 export const TAB_ICONS: Record<string, string> = {
   day: 'sunny-outline',
   calendar: 'calendar-outline',
-  sprint: 'flag-outline',
   strategy: 'navigate-circle-outline',
   goals: 'trophy-outline',
   tasks: 'list-outline',

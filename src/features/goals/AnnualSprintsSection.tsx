@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type Href, Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -262,29 +261,10 @@ export function AnnualSprintsSection() {
                   onCommit={(s, e) => commitSlotDates(slotId, s, e)}
                 />
 
-                <Link href={'/sprint' as Href} asChild>
-                  <Pressable
-                    style={{
-                      alignSelf: 'flex-start',
-                      marginBottom: 14,
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: 'rgba(168,85,247,0.35)',
-                      backgroundColor: 'rgba(168,85,247,0.08)',
-                    }}
-                  >
-                    <Text style={{ color: GOALS_ACCENT_SOFT, fontWeight: '700', fontSize: 13 }}>
-                      Открыть раздел «Спринт» →
-                    </Text>
-                  </Pressable>
-                </Link>
-
                 {showLive && liveGoals ? (
                   <>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>
-                      Цели в приложении (как на вкладке «Спринт»)
+                      Цели активного спринта (данные в приложении)
                     </Text>
                     {liveGoals.length === 0 ? (
                       <Text style={{ fontSize: 14, color: colors.textMuted, marginBottom: 12 }}>Пока нет целей.</Text>

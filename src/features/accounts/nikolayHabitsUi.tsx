@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type Href, Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -90,8 +89,6 @@ function parseRub(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
-
-const SPRINT_HREF = '/sprint' as Href;
 
 const GENZ_PURPLE = '#E879F9';
 const GENZ_PURPLE_SOFT = 'rgba(232,121,249,0.2)';
@@ -288,24 +285,6 @@ function GenZMoneyGoalPlaque({
         ) : (
           <View style={{ marginTop: 14 }}>
             <Text style={{ fontSize: 14, lineHeight: 22, color: 'rgba(255,255,255,0.5)' }}>{fallbackHint}</Text>
-            <Link href={SPRINT_HREF} asChild>
-              <Pressable
-                style={({ pressed }) => ({
-                  marginTop: 14,
-                  alignSelf: 'flex-start',
-                  paddingVertical: 12,
-                  paddingHorizontal: 18,
-                  borderRadius: 999,
-                  backgroundColor: pressed ? theme.chipBg : 'rgba(255,255,255,0.08)',
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                })}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '800', color: GENZ_PURPLE }}>
-                  Настроить в спринте →
-                </Text>
-              </Pressable>
-            </Link>
           </View>
         )}
       </View>
@@ -368,22 +347,6 @@ function GenZMoneyGoalPlaque({
             <Text style={{ fontSize: 13, lineHeight: 19, color: 'rgba(248,250,252,0.45)' }} numberOfLines={5}>
               {fallbackHint}
             </Text>
-            <Link href={SPRINT_HREF} asChild>
-              <Pressable
-                style={({ pressed }) => ({
-                  marginTop: 12,
-                  alignSelf: 'flex-start',
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  backgroundColor: pressed ? theme.chipBg : 'rgba(255,255,255,0.06)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(167,139,250,0.35)',
-                })}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '800', color: 'rgba(196,181,253,0.95)' }}>Настроить в спринте →</Text>
-              </Pressable>
-            </Link>
           </View>
         )}
       </View>

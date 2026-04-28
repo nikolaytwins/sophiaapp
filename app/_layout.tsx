@@ -41,9 +41,6 @@ export default function RootLayout() {
       <AppProviders>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="sprint-archive" />
-          <Stack.Screen name="sprint-settings" />
-          <Stack.Screen name="sprint-detail/[id]" />
           <Stack.Screen name="journal-settings" />
           <Stack.Screen name="journal-mood-stats" />
           <Stack.Screen name="(private)" />
@@ -110,26 +107,6 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="personal-targets"
-            options={{
-              presentation: Platform.OS === 'web' ? 'card' : 'modal',
-              contentStyle:
-                Platform.OS === 'web'
-                  ? { flex: 1, zIndex: 10000, position: 'relative' as const }
-                  : undefined,
-            }}
-          />
-          <Stack.Screen
-            name="annual-goals"
-            options={{
-              presentation: Platform.OS === 'web' ? 'card' : 'modal',
-              contentStyle:
-                Platform.OS === 'web'
-                  ? { flex: 1, zIndex: 10000, position: 'relative' as const }
-                  : undefined,
-            }}
-          />
-          <Stack.Screen
-            name="global-vision"
             options={{
               presentation: Platform.OS === 'web' ? 'card' : 'modal',
               contentStyle:
