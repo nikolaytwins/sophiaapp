@@ -1,0 +1,13 @@
+Положите сюда (в папку site/) ваши файлы с Mac:
+
+  site/index.html     или     site/index (1).html
+  site/assets/        — целиком папка из Downloads
+
+Затем commit + push в main — GitHub Actions выложит на сервер в /var/www/volky/
+
+Один раз на сервере: в nginx для twinlabs.ru вставьте блок «/volky/» из
+  twinworks/deploy/nginx-twinworks.conf
+(перед location /), затем nginx -t и reload.
+
+Если картинки/скрипты не грузятся — в HTML пути должны быть относительными (assets/...)
+или с префиксом /volky/ а не /assets/ с корня домена.

@@ -1,0 +1,14 @@
+# twinlabs.ru — статика под /volky/
+# Вставить внутрь server { } для twinlabs.ru ВЫШЕ location /, который отдаёт основное приложение.
+#
+# Локальные файлы на сервере: REMOTE_DIR/index.html и REMOTE_DIR/assets/...
+# Переименуйте «index (1).html» → index.html при выкладке.
+
+location = /volky {
+    return 301 /volky/;
+}
+
+location /volky/ {
+    alias /var/www/volky/;
+    index index.html;
+}

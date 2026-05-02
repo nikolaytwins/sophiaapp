@@ -1,0 +1,91 @@
+# Статика Volky: rsync каталога volky-site/site/ → /var/www/volky/
+# Secrets как у «Deploy Sophia OS web»: SERVER_HOST, SERVER_USER, SERVER_SSH_KEY, опционально SERVER_PORT
+
+name: Deploy Volky static site
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'volky-site/**'
+      - '.github/workflows/deploy-volky-site.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-volky-site
+  cancel-in-progress: false
+
+env:
+  VOLKY_REMOTE_DIR: /var/www/volky
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Есть ли что выкладывать
+        id: ready
+        run: |
+          if [[ -f volky-site/site/index.html || -f "volky-site/site/index (1).html" ]]; then
+            echo "yes=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "yes=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Пропуск (ещё нет index)
+        if: steps.ready.outputs.yes != '1'
+        run: echo "::notice::Деплой пропущен — добавьте volky-site/site/index.html или «index (1).html» и запушьте снова."
+
+      - name: Normalize index (Safari «index (1).html»)
+        if: steps.ready.outputs.yes == '1'
+        working-directory: volky-site/site
+        run: |
+          if [[ -f index.html ]]; then
+            echo "Using index.html"
+          else
+            cp "index (1).html" index.html
+            echo "Copied index (1).html → index.html"
+          fi
+
+      - name: Проверка assets
+        if: steps.ready.outputs.yes == '1'
+        run: test -d volky-site/site/assets || { echo "::error::Нужна папка volky-site/site/assets"; exit 1; }
+
+      - name: Start SSH agent
+        if: steps.ready.outputs.yes == '1'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Add server host key
+        if: steps.ready.outputs.yes == '1'
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          PORT="${SSH_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_PORT: ${{ secrets.SERVER_PORT }}
+
+      - name: Rsync to VPS
+        if: steps.ready.outputs.yes == '1'
+        run: |
+          PORT="${SSH_PORT:-22}"
+          ssh -p "$PORT" -o StrictHostKeyChecking=yes \
+            "${SERVER_USER}@${SERVER_HOST}" "mkdir -p '${VOLKY_REMOTE_DIR}'"
+          rsync -avz --delete \
+            -e "ssh -p $PORT -o StrictHostKeyChecking=yes" \
+            volky-site/site/ "${SERVER_USER}@${SERVER_HOST}:${VOLKY_REMOTE_DIR}/"
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SSH_PORT: ${{ secrets.SERVER_PORT }}
