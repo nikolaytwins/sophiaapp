@@ -367,8 +367,9 @@
       }
       if (mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
         if (file.size > MAX_BIN_BYTES) throw new Error(name + ': PDF > 25 МБ');
-        const fileData = await readAsDataURL(file);
-        return { type: 'file', file: { filename: name, fileData } };
+        // OpenRouter OpenAPI: поле file_data (snake_case), не fileData
+        const file_data = await readAsDataURL(file);
+        return { type: 'file', file: { filename: name, file_data } };
       }
       if (isTextLikeFile(file)) {
         if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 1 МБ — разбейте файл');
@@ -401,7 +402,7 @@
         for (const p of m.content) {
           if (p.type !== 'file' || !p.file) continue;
           const fn = String(p.file.filename || '').toLowerCase();
-          const fd = String(p.file.fileData || '');
+          const fd = String(p.file.file_data || p.file.fileData || '');
           if (fn.endsWith('.pdf') || fd.startsWith('data:application/pdf')) return true;
         }
       }
