@@ -71,8 +71,9 @@
       border-top: 1px solid var(--border);
       background: var(--panel);
       display: flex;
+      flex-direction: column;
       gap: 10px;
-      align-items: flex-end;
+      align-items: stretch;
       max-width: 900px;
       margin: 0 auto;
       width: 100%;
@@ -110,6 +111,42 @@
       line-height: 1.45;
     }
     .err { color: #f87171; font-size: 13px; padding: 0 16px; max-width: 900px; margin: 0 auto; width: 100%; }
+    .footer-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
+    .footer-row textarea { flex: 1; }
+    .btn-secondary {
+      background: #374151;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .attach-list { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-bottom: 4px; min-height: 0; }
+    .attach-chip {
+      font-size: 12px;
+      background: #2a3140;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .attach-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attach-remove {
+      cursor: pointer;
+      color: var(--muted);
+      border: none;
+      background: none;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .attach-remove:hover { color: #f87171; }
   </style>
 </head>
 <body>
@@ -144,15 +181,21 @@
   </div>
   <p class="note" id="note">
     Режим без прокси: ключ в браузере (localStorage), запрос напрямую на OpenRouter (нужен CORS).
-    С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа в приложение —
+    С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа —
     <a href="/grok/" style="color:var(--accent);">/grok/</a>
+    · Вложения: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
   </p>
   <p id="error" class="err" hidden></p>
   <main id="thread"></main>
   <footer>
-    <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
-    <button type="button" id="send">Отправить</button>
-    <button type="button" id="stop" disabled>Стоп</button>
+    <input type="file" id="fileInput" multiple style="display: none" />
+    <div id="attachList" class="attach-list" hidden></div>
+    <div class="footer-row">
+      <button type="button" id="attachBtn" class="btn-secondary">Файлы</button>
+      <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+      <button type="button" id="send">Отправить</button>
+      <button type="button" id="stop" disabled>Стоп</button>
+    </div>
   </footer>
   <script>
     const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -172,6 +215,14 @@
     const stopBtn = el('stop');
     const errorEl = el('error');
     const noteEl = el('note');
+    const fileInput = el('fileInput');
+    const attachBtn = el('attachBtn');
+    const attachList = el('attachList');
+
+    const MAX_ATTACH = 15;
+    const MAX_BIN_BYTES = 25 * 1024 * 1024;
+    const MAX_TEXT_BYTES = 512 * 1024;
+    let stagedFiles = [];
 
     let messages = [];
     let abortController = null;
@@ -236,6 +287,126 @@
     }
     initProxy();
 
+    function renderAttachList() {
+      attachList.innerHTML = '';
+      if (!stagedFiles.length) {
+        attachList.hidden = true;
+        return;
+      }
+      attachList.hidden = false;
+      stagedFiles.forEach((file) => {
+        const chip = document.createElement('div');
+        chip.className = 'attach-chip';
+        const name = document.createElement('span');
+        name.textContent = file.name + ' (' + Math.round(file.size / 1024) + ' КБ)';
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'attach-remove';
+        rm.setAttribute('aria-label', 'Удалить');
+        rm.textContent = '×';
+        rm.addEventListener('click', () => {
+          const i = stagedFiles.indexOf(file);
+          if (i !== -1) stagedFiles.splice(i, 1);
+          renderAttachList();
+        });
+        chip.appendChild(name);
+        chip.appendChild(rm);
+        attachList.appendChild(chip);
+      });
+    }
+
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      for (const f of fileInput.files) {
+        if (stagedFiles.length >= MAX_ATTACH) {
+          showError('Не больше ' + MAX_ATTACH + ' вложений за раз.');
+          break;
+        }
+        stagedFiles.push(f);
+      }
+      fileInput.value = '';
+      renderAttachList();
+      showError('');
+    });
+
+    function readAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+    }
+
+    function readAsText(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ''));
+        r.onerror = () => reject(r.error);
+        r.readAsText(file, 'UTF-8');
+      });
+    }
+
+    function isTextLikeFile(file) {
+      const mime = file.type || '';
+      if (mime.startsWith('text/')) return true;
+      const n = (file.name || '').toLowerCase();
+      return /\.(txt|md|json|csv|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|vue|py|rs|go|java|kt|swift|yml|yaml|log|sh|bash|zsh|toml|ini|sql|graphql|svg)$/i.test(
+        n
+      );
+    }
+
+    async function fileToContentPart(file) {
+      const name = file.name || 'file';
+      const mime = file.type || '';
+      if (mime.startsWith('image/')) {
+        if (file.size > MAX_BIN_BYTES) throw new Error(name + ': изображение > 25 МБ');
+        const url = await readAsDataURL(file);
+        return { type: 'image_url', image_url: { url } };
+      }
+      if (mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
+        if (file.size > MAX_BIN_BYTES) throw new Error(name + ': PDF > 25 МБ');
+        const fileData = await readAsDataURL(file);
+        return { type: 'file', file: { filename: name, fileData } };
+      }
+      if (isTextLikeFile(file)) {
+        if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 512 КБ — разбейте файл');
+        const body = await readAsText(file);
+        return { type: 'text', text: '### Файл: `' + name + '`\n\n```\n' + body + '\n```\n' };
+      }
+      throw new Error(
+        name + ': неподдерживаемый тип. Добавьте изображения, PDF или текстовые файлы (txt, md, json, код…).'
+      );
+    }
+
+    function formatUserForBubble(content) {
+      if (typeof content === 'string') return content;
+      if (!Array.isArray(content)) return String(content);
+      const texts = content.filter((p) => p.type === 'text').map((p) => p.text || '');
+      const nImg = content.filter((p) => p.type === 'image_url').length;
+      const nFile = content.filter((p) => p.type === 'file').length;
+      let head = texts.join('\n').trim().slice(0, 4000);
+      const badges = [];
+      if (nImg) badges.push(nImg + ' изображ.');
+      if (nFile) badges.push(nFile + ' PDF/файл');
+      if (badges.length) head = (head ? head + '\n\n' : '') + '📎 ' + badges.join(', ');
+      return head || '[вложения]';
+    }
+
+    function messagesContainPdf(messagesArr) {
+      for (const m of messagesArr) {
+        if (m.role !== 'user' || typeof m.content === 'string') continue;
+        if (!Array.isArray(m.content)) continue;
+        for (const p of m.content) {
+          if (p.type !== 'file' || !p.file) continue;
+          const fn = String(p.file.filename || '').toLowerCase();
+          const fd = String(p.file.fileData || '');
+          if (fn.endsWith('.pdf') || fd.startsWith('data:application/pdf')) return true;
+        }
+      }
+      return false;
+    }
+
     function showError(text) {
       if (!text) {
         errorEl.hidden = true;
@@ -281,10 +452,13 @@
       body.messages.push(...messages);
       const mt = maxTokens.value.trim();
       if (mt) body.max_tokens = Number(mt);
+      if (messagesContainPdf(body.messages)) {
+        body.plugins = [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }];
+      }
       return body;
     }
 
-    async function streamCompletion() {
+    async function streamCompletion(attachRestore) {
       showError('');
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
@@ -303,8 +477,8 @@
       stopBtn.disabled = false;
       abortController = new AbortController();
 
-      const userText = messages[messages.length - 1].content;
-      appendBubble('user', userText);
+      const lastUser = messages[messages.length - 1];
+      appendBubble('user', formatUserForBubble(lastUser.content));
       const { c: assistantContent } = appendBubble('assistant', '', true);
 
       try {
@@ -373,6 +547,10 @@
           showError(String(e.message || e));
           assistantContent.textContent = '[ошибка]';
           messages.pop();
+          if (attachRestore && attachRestore.length) {
+            stagedFiles = attachRestore;
+            renderAttachList();
+          }
         }
       } finally {
         sendBtn.disabled = false;
@@ -381,21 +559,45 @@
       }
     }
 
-    function send() {
+    async function send() {
       const text = input.value.trim();
-      if (!text) return;
+      if (!text && !stagedFiles.length) return;
+      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      let userContent;
+      try {
+        if (!stagedFiles.length) {
+          userContent = text;
+        } else {
+          const parts = [];
+          if (text) parts.push({ type: 'text', text: text });
+          else
+            parts.push({
+              type: 'text',
+              text: 'Проанализируй все вложения: по каждому файлу — что важно; в конце — общий вывод.',
+            });
+          for (const f of stagedFiles) {
+            parts.push(await fileToContentPart(f));
+          }
+          userContent = parts;
+        }
+      } catch (e) {
+        showError(e.message || String(e));
+        return;
+      }
+      stagedFiles = [];
+      renderAttachList();
       input.value = '';
-      messages.push({ role: 'user', content: text });
-      streamCompletion();
+      messages.push({ role: 'user', content: userContent });
+      await streamCompletion(attachBackup);
     }
 
-    sendBtn.addEventListener('click', send);
+    sendBtn.addEventListener('click', () => void send());
     stopBtn.addEventListener('click', () => abortController?.abort());
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        send();
+        void send();
       }
     });
   </script>
