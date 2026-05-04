@@ -147,7 +147,47 @@
       padding: 0 2px;
     }
     .attach-remove:hover { color: #f87171; }
+    .msg.user .content { white-space: pre-wrap; }
+    .msg.assistant .content.markdown-body { white-space: normal; font-size: 15px; }
+    .msg.assistant .content.markdown-body > :first-child { margin-top: 0; }
+    .msg.assistant .content.markdown-body > :last-child { margin-bottom: 0; }
+    .msg.assistant .content.markdown-body h1 { font-size: 1.35rem; margin: 0.75em 0 0.4em; font-weight: 700; }
+    .msg.assistant .content.markdown-body h2 { font-size: 1.2rem; margin: 0.75em 0 0.35em; font-weight: 650; }
+    .msg.assistant .content.markdown-body h3 { font-size: 1.05rem; margin: 0.65em 0 0.3em; font-weight: 600; }
+    .msg.assistant .content.markdown-body p { margin: 0.45em 0; }
+    .msg.assistant .content.markdown-body ul,
+    .msg.assistant .content.markdown-body ol { margin: 0.4em 0; padding-left: 1.35em; }
+    .msg.assistant .content.markdown-body li { margin: 0.2em 0; }
+    .msg.assistant .content.markdown-body blockquote {
+      margin: 0.5em 0;
+      padding-left: 1em;
+      border-left: 3px solid var(--accent);
+      color: var(--muted);
+    }
+    .msg.assistant .content.markdown-body pre {
+      background: #0d0f12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      overflow: auto;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .msg.assistant .content.markdown-body code {
+      background: #252a33;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .msg.assistant .content.markdown-body pre code { background: transparent; padding: 0; font-size: inherit; }
+    .msg.assistant .content.markdown-body a { color: var(--accent); word-break: break-all; }
+    .msg.assistant .content.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+    .msg.assistant .content.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 14px; }
+    .msg.assistant .content.markdown-body th,
+    .msg.assistant .content.markdown-body td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <header>
@@ -174,6 +214,10 @@
       <label for="maxTokens">max_tokens (пусто = по умолчанию API)</label>
       <input id="maxTokens" type="number" min="1" placeholder="—" style="width:100%;" />
     </div>
+    <div style="min-width:140px;">
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">История</label>
+      <button type="button" id="clearHistory" class="btn-secondary" style="width:100%;">Очистить чат</button>
+    </div>
   </header>
   <div style="padding:12px 16px 0; max-width:900px; margin:0 auto; width:100%;">
     <label for="system" style="font-size:12px;color:var(--muted);">Системный промпт (опционально)</label>
@@ -184,6 +228,7 @@
     С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа —
     <a href="/grok/" style="color:var(--accent);">/grok/</a>
     · Вложения: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
+    · История и настройки сохраняются в браузере (localStorage); очень большие вложения в истории могут быть урезаны.
   </p>
   <p id="error" class="err" hidden></p>
   <main id="thread"></main>
@@ -200,6 +245,10 @@
   <script>
     const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
     const STORAGE_KEY = 'openrouter_api_key';
+    const CHAT_STATE_KEY = 'openrouter_grok_chat_state_v2';
+    const MAX_STORED_MESSAGES = 100;
+    const MAX_STORED_FILE_DATA_CHARS = 120000;
+    const MAX_STORED_IMAGE_DATA_CHARS = 120000;
 
     const el = (id) => document.getElementById(id);
     const apiKeyRow = el('apiKeyRow');
@@ -218,6 +267,7 @@
     const fileInput = el('fileInput');
     const attachBtn = el('attachBtn');
     const attachList = el('attachList');
+    const clearHistoryBtn = el('clearHistory');
 
     const MAX_ATTACH = 15;
     const MAX_BIN_BYTES = 25 * 1024 * 1024;
@@ -245,9 +295,19 @@
       localStorage.setItem(STORAGE_KEY, apiKey.value.trim());
     });
 
+    function debouncedSaveChatMeta() {
+      clearTimeout(window._grokSaveMetaT);
+      window._grokSaveMetaT = setTimeout(() => saveChatState(), 500);
+    }
+
     model.addEventListener('change', () => {
       modelCustom.style.display = model.value === 'custom' ? 'block' : 'none';
+      debouncedSaveChatMeta();
     });
+    modelCustom.addEventListener('input', debouncedSaveChatMeta);
+    system.addEventListener('input', debouncedSaveChatMeta);
+    temperature.addEventListener('change', debouncedSaveChatMeta);
+    maxTokens.addEventListener('change', debouncedSaveChatMeta);
 
     function fillModelsFromApi(models, defaultId) {
       model.innerHTML = '';
@@ -286,7 +346,10 @@
         chatUrl = OR_URL;
       }
     }
-    initProxy();
+    void (async function boot() {
+      await initProxy();
+      loadChatState();
+    })();
 
     function renderAttachList() {
       attachList.innerHTML = '';
@@ -410,6 +473,140 @@
       return model.value;
     }
 
+    function renderAssistantMarkdown(el, md) {
+      if (!el) return;
+      const raw = String(md || '');
+      if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+        el.textContent = raw;
+        return;
+      }
+      try {
+        marked.setOptions({ gfm: true, breaks: true });
+        const html = marked.parse(raw);
+        el.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+      } catch (_) {
+        el.textContent = raw;
+      }
+    }
+
+    function slimMessagesForStorage(msgs) {
+      return msgs.map((m) => {
+        if (m.role !== 'user' || typeof m.content !== 'object' || !Array.isArray(m.content)) return m;
+        return {
+          role: m.role,
+          content: m.content.map((part) => {
+            if (part.type === 'file' && part.file && typeof part.file.file_data === 'string') {
+              if (part.file.file_data.length > MAX_STORED_FILE_DATA_CHARS) {
+                return {
+                  type: 'text',
+                  text:
+                    '[Вложение «' +
+                    (part.file.filename || 'file') +
+                    '» не сохранено в истории из‑за размера. При необходимости прикрепите файл снова.]',
+                };
+              }
+            }
+            if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+              const u = part.image_url.url;
+              if (u.startsWith('data:') && u.length > MAX_STORED_IMAGE_DATA_CHARS) {
+                return {
+                  type: 'text',
+                  text: '[Изображение не сохранено в истории из‑за размера; прикрепите снова.]',
+                };
+              }
+            }
+            return part;
+          }),
+        };
+      });
+    }
+
+    function saveChatState() {
+      const payload = {
+        v: 2,
+        messages: slimMessagesForStorage(messages.slice(-MAX_STORED_MESSAGES)),
+        system: system.value,
+        model: model.value,
+        modelCustom: modelCustom.value,
+      };
+      try {
+        localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        if (e && e.name === 'QuotaExceededError') {
+          try {
+            const minimal = {
+              v: 2,
+              messages: messages
+                .slice(-30)
+                .map((m) =>
+                  m.role === 'assistant'
+                    ? m
+                    : { role: 'user', content: typeof m.content === 'string' ? m.content : '[сообщение с вложениями]' }
+                ),
+              system: system.value,
+              model: model.value,
+              modelCustom: modelCustom.value,
+            };
+            localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(minimal));
+          } catch (_) {
+            showError('Не удалось сохранить историю: переполнение хранилища браузера. Очистите чат или вложения.');
+          }
+        }
+      }
+    }
+
+    function applySavedModelState(saved) {
+      if (!saved || !saved.model) return;
+      if (saved.model === 'custom') {
+        model.value = 'custom';
+        modelCustom.style.display = 'block';
+        modelCustom.value = saved.modelCustom || '';
+        return;
+      }
+      for (let i = 0; i < model.options.length; i++) {
+        if (model.options[i].value === saved.model) {
+          model.selectedIndex = i;
+          return;
+        }
+      }
+    }
+
+    function loadChatState() {
+      let raw;
+      try {
+        raw = localStorage.getItem(CHAT_STATE_KEY);
+      } catch (_) {
+        return;
+      }
+      if (!raw) return;
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (_) {
+        return;
+      }
+      if (Array.isArray(data)) {
+        messages = data;
+      } else if (data && Array.isArray(data.messages)) {
+        messages = data.messages;
+        if (typeof data.system === 'string') system.value = data.system;
+        applySavedModelState(data);
+      } else return;
+      rebuildThreadFromMessages();
+    }
+
+    function rebuildThreadFromMessages() {
+      thread.innerHTML = '';
+      for (const m of messages) {
+        if (m.role === 'user') {
+          appendBubble('user', formatUserForBubble(m.content), false);
+        } else if (m.role === 'assistant') {
+          appendBubble('assistant', m.content || '', false);
+        }
+      }
+      thread.scrollTop = thread.scrollHeight;
+    }
+
     function appendBubble(role, text, streaming) {
       const wrap = document.createElement('div');
       wrap.className = 'msg ' + role;
@@ -417,8 +614,13 @@
       r.className = 'role';
       r.textContent = role === 'user' ? 'Вы' : 'Ассистент';
       const c = document.createElement('div');
-      c.className = 'content';
-      c.textContent = text || '';
+      c.className = 'content' + (role === 'assistant' ? ' markdown-body' : '');
+      if (role === 'assistant') {
+        if (streaming) c.textContent = text || '';
+        else renderAssistantMarkdown(c, text || '');
+      } else {
+        c.textContent = text || '';
+      }
       wrap.appendChild(r);
       wrap.appendChild(c);
       thread.appendChild(wrap);
@@ -549,9 +751,15 @@
         }
 
         messages.push({ role: 'assistant', content: full });
+        renderAssistantMarkdown(assistantContent, full);
+        saveChatState();
       } catch (e) {
         if (e.name === 'AbortError') {
           assistantContent.textContent += '\n\n[прервано]';
+          const txt = assistantContent.textContent || '';
+          renderAssistantMarkdown(assistantContent, txt);
+          messages.push({ role: 'assistant', content: txt });
+          saveChatState();
         } else {
           showError(String(e.message || e));
           assistantContent.textContent = '[ошибка]';
@@ -602,6 +810,14 @@
 
     sendBtn.addEventListener('click', () => void send());
     stopBtn.addEventListener('click', () => abortController?.abort());
+
+    clearHistoryBtn.addEventListener('click', () => {
+      if (!confirm('Очистить историю диалога в этом браузере?')) return;
+      messages = [];
+      thread.innerHTML = '';
+      saveChatState();
+      showError('');
+    });
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
