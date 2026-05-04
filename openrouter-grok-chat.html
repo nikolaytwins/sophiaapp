@@ -395,20 +395,6 @@
       return head || '[вложения]';
     }
 
-    function messagesContainPdf(messagesArr) {
-      for (const m of messagesArr) {
-        if (m.role !== 'user' || typeof m.content === 'string') continue;
-        if (!Array.isArray(m.content)) continue;
-        for (const p of m.content) {
-          if (p.type !== 'file' || !p.file) continue;
-          const fn = String(p.file.filename || '').toLowerCase();
-          const fd = String(p.file.file_data || p.file.fileData || '');
-          if (fn.endsWith('.pdf') || fd.startsWith('data:application/pdf')) return true;
-        }
-      }
-      return false;
-    }
-
     function showError(text) {
       if (!text) {
         errorEl.hidden = true;
@@ -454,10 +440,24 @@
       body.messages.push(...messages);
       const mt = maxTokens.value.trim();
       if (mt) body.max_tokens = Number(mt);
-      if (messagesContainPdf(body.messages)) {
-        body.plugins = [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }];
-      }
+      // Не задаём file-parser/cloudflare-ai: на OpenRouter он даёт 400 «Failed to parse» для PDF.
+      // Без plugins маршрутизатор сам использует native / дефолт — проверено запросами к API.
+      normalizeOpenRouterMessages(body.messages);
       return body;
+    }
+
+    /** Совместимость и правка полей под OpenRouter. */
+    function normalizeOpenRouterMessages(msgs) {
+      if (!Array.isArray(msgs)) return;
+      for (const m of msgs) {
+        if (!m || typeof m.content !== 'object' || !Array.isArray(m.content)) continue;
+        for (const part of m.content) {
+          if (part.type === 'file' && part.file && part.file.fileData && !part.file.file_data) {
+            part.file.file_data = part.file.fileData;
+            delete part.file.fileData;
+          }
+        }
+      }
     }
 
     async function streamCompletion(attachRestore) {
@@ -503,7 +503,10 @@
           try {
             const j = JSON.parse(errText);
             if (j.error?.message) msg = j.error.message;
-          } catch (_) {}
+            if (j.error?.code != null) msg += ' (code ' + j.error.code + ')';
+          } catch (_) {
+            if (errText && errText.length < 500) msg += ': ' + errText;
+          }
           throw new Error(msg);
         }
 
@@ -530,9 +533,13 @@
             } catch {
               continue;
             }
-            const delta = chunk.choices?.[0]?.delta?.content;
-            if (delta) {
-              full += delta;
+            const d = chunk.choices?.[0]?.delta;
+            const piece =
+              (d && typeof d.content === 'string' ? d.content : '') +
+              (d && typeof d.reasoning === 'string' ? d.reasoning : '') +
+              (d && typeof d.reasoning_content === 'string' ? d.reasoning_content : '');
+            if (piece) {
+              full += piece;
               assistantContent.textContent = full;
               thread.scrollTop = thread.scrollHeight;
             }
