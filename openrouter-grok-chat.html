@@ -80,8 +80,8 @@
     }
     footer textarea {
       flex: 1;
-      min-height: 48px;
-      max-height: 200px;
+      min-height: 72px;
+      max-height: 400px;
       resize: vertical;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -177,7 +177,7 @@
   </header>
   <div style="padding:12px 16px 0; max-width:900px; margin:0 auto; width:100%;">
     <label for="system" style="font-size:12px;color:var(--muted);">Системный промпт (опционально)</label>
-    <textarea id="system" rows="2" style="width:100%; margin-top:4px; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px;"></textarea>
+    <textarea id="system" rows="4" style="width:100%; min-height:6rem; max-height:20rem; margin-top:4px; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px; resize:vertical;"></textarea>
   </div>
   <p class="note" id="note">
     Режим без прокси: ключ в браузере (localStorage), запрос напрямую на OpenRouter (нужен CORS).
@@ -221,7 +221,8 @@
 
     const MAX_ATTACH = 15;
     const MAX_BIN_BYTES = 25 * 1024 * 1024;
-    const MAX_TEXT_BYTES = 512 * 1024;
+    const MAX_TEXT_BYTES = 1024 * 1024;
+    const BUBBLE_USER_TEXT_PREVIEW = 8000;
     let stagedFiles = [];
 
     let messages = [];
@@ -370,7 +371,7 @@
         return { type: 'file', file: { filename: name, fileData } };
       }
       if (isTextLikeFile(file)) {
-        if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 512 КБ — разбейте файл');
+        if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 1 МБ — разбейте файл');
         const body = await readAsText(file);
         return { type: 'text', text: '### Файл: `' + name + '`\n\n```\n' + body + '\n```\n' };
       }
@@ -385,7 +386,7 @@
       const texts = content.filter((p) => p.type === 'text').map((p) => p.text || '');
       const nImg = content.filter((p) => p.type === 'image_url').length;
       const nFile = content.filter((p) => p.type === 'file').length;
-      let head = texts.join('\n').trim().slice(0, 4000);
+      let head = texts.join('\n').trim().slice(0, BUBBLE_USER_TEXT_PREVIEW);
       const badges = [];
       if (nImg) badges.push(nImg + ' изображ.');
       if (nFile) badges.push(nFile + ' PDF/файл');
