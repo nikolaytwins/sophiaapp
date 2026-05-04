@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenRouter — Grok чат</title>
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --panel: #161a20;
+      --border: #2a3140;
+      --text: #e8eaef;
+      --muted: #8b95a8;
+      --accent: #3b82f6;
+      --user: #1e3a5f;
+      --assistant: #1a1f28;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    header label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    header input, header select, header textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+    header input[type="password"], header input[type="text"] { min-width: 220px; }
+    .grow { flex: 1; min-width: 140px; }
+    main {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .msg {
+      border-radius: 12px;
+      padding: 12px 14px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user { background: var(--user); align-self: flex-end; max-width: 92%; }
+    .msg.assistant { background: var(--assistant); border: 1px solid var(--border); align-self: flex-start; max-width: 100%; }
+    .msg .role { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    footer textarea {
+      flex: 1;
+      min-height: 48px;
+      max-height: 200px;
+      resize: vertical;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 0 16px 12px;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+      line-height: 1.45;
+    }
+    .err { color: #f87171; font-size: 13px; padding: 0 16px; max-width: 900px; margin: 0 auto; width: 100%; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="grow" id="apiKeyRow">
+      <label for="apiKey">OpenRouter API key</label>
+      <input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-..." />
+    </div>
+    <div class="grow">
+      <label for="model">Модель (актуальные id — на openrouter.ai/models, фильтр xAI)</label>
+      <select id="model">
+        <option value="x-ai/grok-4">x-ai/grok-4</option>
+        <option value="x-ai/grok-4-fast">x-ai/grok-4-fast</option>
+        <option value="x-ai/grok-4.1-fast">x-ai/grok-4.1-fast</option>
+        <option value="x-ai/grok-4.20" selected>x-ai/grok-4.20 (флагман, если доступен в каталоге)</option>
+        <option value="custom">Свой id…</option>
+      </select>
+      <input id="modelCustom" type="text" placeholder="x-ai/..." style="margin-top:8px; width:100%; display:none;" />
+    </div>
+    <div style="min-width:100px;">
+      <label for="temperature">Temperature</label>
+      <input id="temperature" type="number" step="0.1" min="0" max="2" value="0.7" style="width:100%;" />
+    </div>
+    <div style="min-width:120px;">
+      <label for="maxTokens">max_tokens (пусто = по умолчанию API)</label>
+      <input id="maxTokens" type="number" min="1" placeholder="—" style="width:100%;" />
+    </div>
+  </header>
+  <div style="padding:12px 16px 0; max-width:900px; margin:0 auto; width:100%;">
+    <label for="system" style="font-size:12px;color:var(--muted);">Системный промпт (опционально)</label>
+    <textarea id="system" rows="2" style="width:100%; margin-top:4px; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px;"></textarea>
+  </div>
+  <p class="note" id="note">
+    Режим без прокси: ключ в браузере (localStorage), запрос напрямую на OpenRouter (нужен CORS).
+    С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа в приложение —
+    <a href="/grok/" style="color:var(--accent);">/grok/</a>
+  </p>
+  <p id="error" class="err" hidden></p>
+  <main id="thread"></main>
+  <footer>
+    <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+    <button type="button" id="send">Отправить</button>
+    <button type="button" id="stop" disabled>Стоп</button>
+  </footer>
+  <script>
+    const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+    const STORAGE_KEY = 'openrouter_api_key';
+
+    const el = (id) => document.getElementById(id);
+    const apiKeyRow = el('apiKeyRow');
+    const apiKey = el('apiKey');
+    const model = el('model');
+    const modelCustom = el('modelCustom');
+    const temperature = el('temperature');
+    const maxTokens = el('maxTokens');
+    const system = el('system');
+    const thread = el('thread');
+    const input = el('input');
+    const sendBtn = el('send');
+    const stopBtn = el('stop');
+    const errorEl = el('error');
+    const noteEl = el('note');
+
+    let messages = [];
+    let abortController = null;
+    let proxyMode = false;
+    let chatUrl = OR_URL;
+
+    /** Префикс при выкладке под https://app.twinlabs.ru/grok/ */
+    function apiBase() {
+      const p = window.location.pathname;
+      if (p === '/grok' || p.startsWith('/grok/')) return '/grok';
+      return '';
+    }
+    const API_BASE = apiBase();
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) apiKey.value = saved;
+
+    apiKey.addEventListener('change', () => {
+      localStorage.setItem(STORAGE_KEY, apiKey.value.trim());
+    });
+
+    model.addEventListener('change', () => {
+      modelCustom.style.display = model.value === 'custom' ? 'block' : 'none';
+    });
+
+    function fillModelsFromApi(models, defaultId) {
+      model.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        const ctx = m.context_length ? Math.round(m.context_length / 1000) + 'k ctx' : '';
+        opt.textContent = (m.name || m.id) + (ctx ? ' · ' + ctx : '');
+        model.appendChild(opt);
+      }
+      const optC = document.createElement('option');
+      optC.value = 'custom';
+      optC.textContent = 'Свой id…';
+      model.appendChild(optC);
+      if (models.some((x) => x.id === defaultId)) model.value = defaultId;
+      else if (models[0]) model.value = models[0].id;
+    }
+
+    async function initProxy() {
+      try {
+        const r = await fetch(API_BASE + '/api/config');
+        if (!r.ok) throw new Error('no config');
+        const cfg = await r.json();
+        proxyMode = true;
+        chatUrl = API_BASE + '/api/chat';
+        apiKeyRow.style.display = 'none';
+        fillModelsFromApi(cfg.models || [], cfg.defaultModel || 'x-ai/grok-4.20');
+        if (noteEl) {
+          noteEl.textContent =
+            'Прокси: ключ на сервере (auth-profiles). Список моделей с OpenRouter. По умолчанию: ' +
+            (cfg.defaultModel || '') +
+            '.';
+        }
+      } catch {
+        proxyMode = false;
+        chatUrl = OR_URL;
+      }
+    }
+    initProxy();
+
+    function showError(text) {
+      if (!text) {
+        errorEl.hidden = true;
+        errorEl.textContent = '';
+        return;
+      }
+      errorEl.hidden = false;
+      errorEl.textContent = text;
+    }
+
+    function resolvedModel() {
+      if (model.value === 'custom') return modelCustom.value.trim();
+      return model.value;
+    }
+
+    function appendBubble(role, text, streaming) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg ' + role;
+      const r = document.createElement('div');
+      r.className = 'role';
+      r.textContent = role === 'user' ? 'Вы' : 'Ассистент';
+      const c = document.createElement('div');
+      c.className = 'content';
+      c.textContent = text || '';
+      wrap.appendChild(r);
+      wrap.appendChild(c);
+      thread.appendChild(wrap);
+      thread.scrollTop = thread.scrollHeight;
+      return { wrap, c };
+    }
+
+    function buildPayload() {
+      const m = resolvedModel();
+      if (!m) throw new Error('Укажите модель.');
+      const body = {
+        model: m,
+        messages: [],
+        stream: true,
+        temperature: Number(temperature.value) || 0.7,
+      };
+      const sys = system.value.trim();
+      if (sys) body.messages.push({ role: 'system', content: sys });
+      body.messages.push(...messages);
+      const mt = maxTokens.value.trim();
+      if (mt) body.max_tokens = Number(mt);
+      return body;
+    }
+
+    async function streamCompletion() {
+      showError('');
+      const key = apiKey.value.trim();
+      if (!proxyMode && !key) {
+        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        return;
+      }
+      let payload;
+      try {
+        payload = buildPayload();
+      } catch (e) {
+        showError(e.message);
+        return;
+      }
+
+      sendBtn.disabled = true;
+      stopBtn.disabled = false;
+      abortController = new AbortController();
+
+      const userText = messages[messages.length - 1].content;
+      appendBubble('user', userText);
+      const { c: assistantContent } = appendBubble('assistant', '', true);
+
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (!proxyMode) {
+          headers.Authorization = 'Bearer ' + key;
+          headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
+          headers['X-Title'] = 'OpenRouter Grok Chat';
+        }
+        const res = await fetch(chatUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: abortController.signal,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = res.status + ' ' + res.statusText;
+          try {
+            const j = JSON.parse(errText);
+            if (j.error?.message) msg = j.error.message;
+          } catch (_) {}
+          throw new Error(msg);
+        }
+
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buffer = '';
+        let full = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += dec.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s || s.startsWith(':')) continue;
+            if (s === 'data: [DONE]') continue;
+            if (!s.startsWith('data: ')) continue;
+            const json = s.slice(6);
+            let chunk;
+            try {
+              chunk = JSON.parse(json);
+            } catch {
+              continue;
+            }
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              full += delta;
+              assistantContent.textContent = full;
+              thread.scrollTop = thread.scrollHeight;
+            }
+            const err = chunk.choices?.[0]?.error;
+            if (err?.message) throw new Error(err.message);
+          }
+        }
+
+        messages.push({ role: 'assistant', content: full });
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          assistantContent.textContent += '\n\n[прервано]';
+        } else {
+          showError(String(e.message || e));
+          assistantContent.textContent = '[ошибка]';
+          messages.pop();
+        }
+      } finally {
+        sendBtn.disabled = false;
+        stopBtn.disabled = true;
+        abortController = null;
+      }
+    }
+
+    function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      messages.push({ role: 'user', content: text });
+      streamCompletion();
+    }
+
+    sendBtn.addEventListener('click', send);
+    stopBtn.addEventListener('click', () => abortController?.abort());
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenRouter Grok chat proxy (app.twinlabs.ru/grok/)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/.openclaw/workspace
+ExecStart=/usr/bin/python3 /root/.openclaw/workspace/openrouter_grok_proxy.py
+Restart=on-failure
+RestartSec=5
+
+# Ключ: /root/.openclaw/agents/main/agent/auth-profiles.json (родитель workspace)
+# Либо: Environment=OPENROUTER_API_KEY=...
+# Environment=OPENCLAW_ROOT=/root/.openclaw
+
+Environment=GROK_CHAT_BIND=127.0.0.1
+Environment=GROK_CHAT_PORT=8766
+
+[Install]
+WantedBy=multi-user.target
