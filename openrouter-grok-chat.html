@@ -321,6 +321,8 @@
     const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
     const STORAGE_KEY = 'openrouter_api_key';
     const CHAT_STATE_KEY = 'openrouter_grok_ui_v6';
+    /** До рефактора v6 история лежала здесь — один раз поднимаем в чат. */
+    const LEGACY_CHAT_STATE_KEY = 'openrouter_grok_chat_state_v2';
     const MAX_STORED_MESSAGES = 80;
     const MAX_STORED_FILE_DATA_CHARS = 120000;
     const MAX_STORED_IMAGE_DATA_CHARS = 120000;
@@ -720,6 +722,51 @@
       }
     }
 
+    /**
+     * Восстановление старой единой ленты в «Чат Grok», если v6-память пуста или в чате нет сообщений.
+     * @returns {boolean} true если что-то импортировали
+     */
+    function migrateLegacyChatFromV2() {
+      if (tabMessages.chat.length > 0) return false;
+      let raw;
+      try {
+        raw = localStorage.getItem(LEGACY_CHAT_STATE_KEY);
+      } catch (_) {
+        return false;
+      }
+      if (!raw) return false;
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (_) {
+        return false;
+      }
+      let msgs = null;
+      if (Array.isArray(data)) msgs = data;
+      else if (data && Array.isArray(data.messages)) msgs = data.messages;
+      if (!msgs || !msgs.length) return false;
+      tabMessages.chat = msgs;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        if (typeof data.system === 'string') system.value = data.system;
+        if (data.model === 'custom') {
+          model.value = 'custom';
+          modelCustom.style.display = 'block';
+          modelCustom.value = data.modelCustom || '';
+        } else if (data.model) {
+          for (let i = 0; i < model.options.length; i++) {
+            if (model.options[i].value === data.model) {
+              model.selectedIndex = i;
+              break;
+            }
+          }
+        }
+        if (data.temperature != null) temperature.value = String(data.temperature);
+        if (data.maxTokens != null) maxTokens.value = String(data.maxTokens);
+        if (data.seedreamTemperature != null) seedreamTemperature.value = String(data.seedreamTemperature);
+      }
+      return true;
+    }
+
     function loadState() {
       let raw;
       try {
@@ -808,6 +855,40 @@
       }
       const out = parts.join('\n\n').trim();
       if (!out) throw new Error('В ответе нет текста или изображения.');
+      return out;
+    }
+
+    /** Чат completion: картинки в message.images (image-only модели) + опционально content. */
+    function assistantChoiceToMarkdown(choice) {
+      const msg = choice && choice.message;
+      if (!msg) throw new Error('Пустой ответ модели.');
+      const parts = [];
+      const imgs = msg.images;
+      if (Array.isArray(imgs)) {
+        for (const im of imgs) {
+          const url =
+            (im && im.image_url && im.image_url.url) ||
+            (im && im.imageUrl && im.imageUrl.url) ||
+            '';
+          if (typeof url === 'string' && url) parts.push('![image](' + url + ')');
+        }
+      }
+      const c = msg.content;
+      if (c != null && c !== '') {
+        if (typeof c === 'string') {
+          if (c.trim()) parts.push(c.trim());
+        } else if (Array.isArray(c)) {
+          for (const block of c) {
+            if (!block || typeof block !== 'object') continue;
+            if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) parts.push(block.text);
+            if (block.type === 'image_url' && block.image_url && typeof block.image_url.url === 'string') {
+              parts.push('![image](' + block.image_url.url + ')');
+            }
+          }
+        }
+      }
+      const out = parts.join('\n\n').trim();
+      if (!out) throw new Error('В ответе нет текста и изображения.');
       return out;
     }
 
@@ -994,7 +1075,8 @@
       const payload = {
         model: grokImageModelId,
         messages: [{ role: 'user', content: parts }],
-        modalities: ['image', 'text'],
+        // Grok image на OR — выход только image; иначе «No endpoints… image, text».
+        modalities: ['image'],
         stream: false,
         temperature: 1,
       };
@@ -1025,7 +1107,7 @@
           throw new Error(msg);
         }
         const data = await res.json();
-        const md = assistantContentToMarkdown(data.choices?.[0]?.message?.content);
+        const md = assistantChoiceToMarkdown(data.choices?.[0]);
         renderAssistantMarkdown(assistantContent, md);
         tabMessages.image.push({ role: 'user', content: userContentForHistory });
         tabMessages.image.push({ role: 'assistant', content: md });
@@ -1104,7 +1186,8 @@
       const body = {
         model: seedreamModelId,
         messages: [{ role: 'user', content: userContent }],
-        modalities: ['image', 'text'],
+        // Seedream / Flux-класс: только image на выходе (не Gemini) — иначе OR: «No endpoints… image, text».
+        modalities: ['image'],
         stream: false,
         temperature: Number(seedreamTemperature.value) || 1,
       };
@@ -1135,7 +1218,7 @@
           throw new Error(msg);
         }
         const data = await res.json();
-        const md = assistantContentToMarkdown(data.choices?.[0]?.message?.content);
+        const md = assistantChoiceToMarkdown(data.choices?.[0]);
         renderAssistantMarkdown(assistantContent, md);
         tabMessages.seedream.push({ role: 'user', content: userContent });
         tabMessages.seedream.push({ role: 'assistant', content: md });
@@ -1210,7 +1293,16 @@
 
     void (async function boot() {
       await initProxy();
-      if (!loadState()) setAppTab('chat');
+      const hadV6 = loadState();
+      const migrated = migrateLegacyChatFromV2();
+      if (migrated) {
+        try {
+          localStorage.removeItem(LEGACY_CHAT_STATE_KEY);
+        } catch (_) {}
+        saveState();
+      }
+      if (!hadV6 && !migrated) setAppTab('chat');
+      else if (migrated) setAppTab('chat');
     })();
   </script>
 </body>

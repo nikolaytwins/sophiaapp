@@ -71,6 +71,21 @@ def ssl_ctx() -> ssl.SSLContext:
 API_KEY = load_api_key()
 
 
+def canonical_request_path(raw_path: str) -> str:
+    """
+    Убрать префикс /grok, если nginx передаёт полный URI (proxy_pass без завершающего /).
+    Ожидаемые пути: /, /index.html, /api/config, /api/chat.
+    """
+    path = raw_path.split("?", 1)[0]
+    if path == "/grok":
+        return "/"
+    prefix = "/grok/"
+    if path.startswith(prefix):
+        rest = path[len(prefix) :]
+        return "/" + rest if rest else "/"
+    return path
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "OpenRouterGrokProxy/2.0"
 
@@ -78,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
     def do_GET(self) -> None:
-        path = self.path.split("?", 1)[0]
+        path = canonical_request_path(self.path)
         if path in ("/", "/index.html"):
             if not HTML_PATH.is_file():
                 self.send_error(500, "openrouter-grok-chat.html not found")
@@ -108,7 +123,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        path = self.path.split("?", 1)[0]
+        path = canonical_request_path(self.path)
         if path != "/api/chat":
             self.send_error(404)
             return
