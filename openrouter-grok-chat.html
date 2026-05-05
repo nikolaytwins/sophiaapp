@@ -316,7 +316,7 @@
     </div>
 
     <div id="viewSeedream" class="view">
-      <p class="note">Seedream (ByteDance) через OpenRouter. Если <strong>Provider returned error</strong> — это ответ провайдера (модерация, сбой, размер/формат фото), не баг UI; попробуйте другой промпт/фото или другую модель в <code>OPENROUTER_SEEDREAM_MODEL</code>.</p>
+      <p class="note">Seedream (ByteDance) через OpenRouter. В теле запроса передаётся <code>&quot;nsfw&quot;: true</code> (если шлюз/провайдер учитывает — иначе игнорируется). Если <strong>Provider returned error</strong> — ответ провайдера (модерация, сбой, фото); смените промпт/фото или <code>OPENROUTER_SEEDREAM_MODEL</code>.</p>
       <div class="scroll" id="scrollSeedream">
         <main id="threadSeedream"></main>
       </div>
@@ -333,8 +333,7 @@
 
     <div id="viewSeedream5" class="view">
       <p class="note">
-        Отдельная модель с сервера (<code>OPENROUTER_SEEDREAM_5_MODEL</code>). На OpenRouter отдельной страницы «5.0» может не быть —
-        тогда задайте актуальный id в env. В запрос уходит <code>&quot;nsfw&quot;: true</code> (если шлюз/провайдер это понимает; иначе поле игнорируется).
+        Отдельная модель с сервера (<code>OPENROUTER_SEEDREAM_5_MODEL</code>). На OpenRouter slug «5.0» может отличаться — уточните в каталоге. В запросе, как и у вкладки 4.0, уходит <code>&quot;nsfw&quot;: true</code> (поддержка на стороне провайдера не гарантирована).
       </p>
       <div class="scroll" id="scrollSeedream5">
         <main id="threadSeedream5"></main>
@@ -1205,9 +1204,7 @@
       }
     }
 
-    /**
-     * @param {'seedream'|'seedream5'} kind — для seedream5 в JSON добавляется nsfw: true
-     */
+    /** @param {'seedream'|'seedream5'} kind */
     async function runSeedreamTab(kind) {
       const is5 = kind === 'seedream5';
       const modelId = is5 ? seedream5ModelId : seedreamModelId;
@@ -1272,7 +1269,7 @@
         stream: false,
         temperature: Number(tempEl.value) || 1,
       };
-      if (is5) body.nsfw = true;
+      body.nsfw = true;
       normalizeOpenRouterMessages(body.messages);
 
       try {
