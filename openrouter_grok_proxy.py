@@ -16,6 +16,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 # Корень openclaw (где лежит agents/main/...). По умолчанию — родитель каталога workspace.
@@ -23,7 +24,8 @@ ROOT = Path(
     os.environ.get("OPENCLAW_ROOT") or Path(__file__).resolve().parent.parent
 ).resolve()
 AUTH_PATH = ROOT / "agents/main/agent/auth-profiles.json"
-OR_MODELS = "https://openrouter.ai/api/v1/models"
+# По умолчанию OpenRouter отдаёт только text-модели; image/Seedream не попадут в список.
+OR_MODELS = "https://openrouter.ai/api/v1/models?" + urlencode({"output_modalities": "all"})
 OR_CHAT = "https://openrouter.ai/api/v1/chat/completions"
 OR_IMAGES = "https://openrouter.ai/api/v1/images/generations"
 HTML_PATH = Path(__file__).resolve().parent / "openrouter-grok-chat.html"
