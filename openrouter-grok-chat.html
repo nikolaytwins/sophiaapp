@@ -298,7 +298,8 @@
     Режим без прокси: ключ в браузере (localStorage), запрос напрямую на OpenRouter (нужен CORS).
     С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа —
     <a href="/grok/" style="color:var(--accent);">/grok/</a>
-    · Вложения: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
+    · Чат: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
+    · «Картинки» и «Seedream»: можно прикрепить только изображения как опорное фото, затем написать промпт (текст можно оставить пустым — подставится короткая инструкция). Без фото вкладка «Картинки» шлёт запрос через REST /images/generations; с фото — через chat/completions с modalities (нужна модель, которая принимает картинку на вход).
     · История и настройки сохраняются в браузере (localStorage); очень большие вложения в истории могут быть урезаны.
   </p>
   <p class="note" id="imageAccessStatus">Проверка доступа к генерации изображений (REST)…</p>
@@ -355,6 +356,8 @@
     const seedreamAccessStatusEl = el('seedreamAccessStatus');
     const fileInput = el('fileInput');
     const attachBtn = el('attachBtn');
+    const ATTACH_LABEL_CHAT = 'Файлы';
+    const ATTACH_LABEL_PHOTO = 'Фото';
     const attachList = el('attachList');
     const clearHistoryBtn = el('clearHistory');
 
@@ -510,19 +513,24 @@
       system.disabled = isImage;
       temperature.disabled = !isChat;
       maxTokens.disabled = !isChat;
-      const noAttach = isImage || isSeedream;
-      fileInput.disabled = noAttach;
-      attachBtn.disabled = noAttach;
-      if (noAttach) {
-        stagedFiles = [];
-        renderAttachList();
+      fileInput.disabled = false;
+      attachBtn.disabled = false;
+      if (isImage || isSeedream) {
+        fileInput.setAttribute('accept', 'image/*');
+        attachBtn.textContent = ATTACH_LABEL_PHOTO;
+      } else {
+        fileInput.removeAttribute('accept');
+        attachBtn.textContent = ATTACH_LABEL_CHAT;
       }
       if (isImage) {
-        input.placeholder = 'Промпт для изображения (REST)… (Enter — отправить)';
+        input.placeholder =
+          'Промпт к изображению… Можно «Фото» — опорное, потом текст. Без фото — REST. (Enter — отправить)';
       } else if (isSeedream) {
-        input.placeholder = 'Промпт для Seedream (chat + modalities)… (Enter — отправить)';
+        input.placeholder =
+          'Промпт… Можно «Фото» — опорное, потом текст (или только фото). (Enter — отправить)';
       } else {
-        input.placeholder = 'Сообщение… (Enter — отправить, Shift+Enter — новая строка)';
+        input.placeholder =
+          'Текст и/или вложения («Файлы»): фото, PDF… (Enter — отправить, Shift+Enter — новая строка)';
       }
     }
 
@@ -662,10 +670,17 @@
       );
     }
 
+    function isImageFile(file) {
+      const mime = file.type || '';
+      if (mime.startsWith('image/')) return true;
+      const n = (file.name || '').toLowerCase();
+      return /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i.test(n);
+    }
+
     async function fileToContentPart(file) {
       const name = file.name || 'file';
       const mime = file.type || '';
-      if (mime.startsWith('image/')) {
+      if (isImageFile(file)) {
         if (file.size > MAX_BIN_BYTES) throw new Error(name + ': изображение > 25 МБ');
         const url = await readAsDataURL(file);
         return { type: 'image_url', image_url: { url } };
@@ -1173,37 +1188,77 @@
     }
 
     async function generateImage() {
-      const prompt = input.value.trim();
-      if (!prompt) return;
+      const text = input.value.trim();
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
         showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
         return;
       }
-      let payload;
-      try {
-        payload = buildImagePayload(prompt);
-      } catch (e) {
-        showError(e.message);
+      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      const imageFiles = stagedFiles.filter(isImageFile);
+      const nonImages = stagedFiles.filter((f) => !isImageFile(f));
+      if (nonImages.length) {
+        showError('С опорным фото в «Картинки» поддерживаются только файлы-изображения (без PDF и др.).');
         return;
       }
-      showError('');
+      if (!text && !imageFiles.length) return;
+
+      const useChatRef = imageFiles.length > 0;
+      let payload;
+      /** @type {string|object[]} */
+      let userContentForHistory;
+      try {
+        if (useChatRef) {
+          const parts = [];
+          if (text) parts.push({ type: 'text', text: text });
+          else
+            parts.push({
+              type: 'text',
+              text: 'Сгенерируй новое изображение по этому фото; учти стиль и композицию опоры, измени то, что уместно по промпту.',
+            });
+          for (const f of imageFiles) {
+            parts.push(await fileToContentPart(f));
+          }
+          userContentForHistory = parts;
+          payload = {
+            model: resolvedImageModel(),
+            messages: [{ role: 'user', content: parts }],
+            modalities: ['image', 'text'],
+            stream: false,
+            temperature: 1,
+          };
+          normalizeOpenRouterMessages(payload.messages);
+        } else {
+          if (!text) return;
+          userContentForHistory = text;
+          payload = buildImagePayload(text);
+        }
+      } catch (e) {
+        showError(e.message || String(e));
+        return;
+      }
+
+      stagedFiles = [];
+      renderAttachList();
       input.value = '';
+      showError('');
       sendBtn.disabled = true;
-      stopBtn.disabled = true;
-      appendBubble('user', prompt, false);
+      stopBtn.disabled = !useChatRef;
+      if (useChatRef) abortController = new AbortController();
+      appendBubble('user', formatUserForBubble(userContentForHistory), false);
       const { c: assistantContent } = appendBubble('assistant', 'Генерирую изображение...', true);
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (!proxyMode) {
           headers.Authorization = 'Bearer ' + key;
           headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
-          headers['X-Title'] = 'OpenRouter Grok Images';
+          headers['X-Title'] = useChatRef ? 'OpenRouter Images (chat+ref)' : 'OpenRouter Grok Images';
         }
-        const res = await fetch(imageUrl, {
+        const res = await fetch(useChatRef ? chatUrl : imageUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
+          signal: useChatRef ? abortController.signal : undefined,
         });
         if (!res.ok) {
           const errText = await res.text();
@@ -1217,35 +1272,61 @@
           throw new Error(msg);
         }
         const data = await res.json();
-        const images = Array.isArray(data.data) ? data.data : [];
-        if (!images.length) throw new Error('OpenRouter вернул пустой результат.');
-        const md = images
-          .map((item, idx) => {
-            if (item.url) return '![image ' + (idx + 1) + '](' + item.url + ')';
-            if (item.b64_json) return '![image ' + (idx + 1) + '](data:image/png;base64,' + item.b64_json + ')';
-            return '';
-          })
-          .filter(Boolean)
-          .join('\n\n');
-        if (!md) throw new Error('Не удалось извлечь изображение из ответа API.');
+        let md;
+        if (useChatRef) {
+          const content = data.choices?.[0]?.message?.content;
+          md = assistantContentToMarkdown(content);
+        } else {
+          const images = Array.isArray(data.data) ? data.data : [];
+          if (!images.length) throw new Error('OpenRouter вернул пустой результат.');
+          md = images
+            .map((item, idx) => {
+              if (item.url) return '![image ' + (idx + 1) + '](' + item.url + ')';
+              if (item.b64_json) return '![image ' + (idx + 1) + '](data:image/png;base64,' + item.b64_json + ')';
+              return '';
+            })
+            .filter(Boolean)
+            .join('\n\n');
+          if (!md) throw new Error('Не удалось извлечь изображение из ответа API.');
+        }
         renderAssistantMarkdown(assistantContent, md);
-        setImageAccessStatus('Генерация изображений работает для текущей конфигурации.');
-        messages.push({ role: 'user', content: prompt });
+        setImageAccessStatus(
+          useChatRef
+            ? 'Генерация с опорным фото (chat + modalities) выполнена.'
+            : 'Генерация изображений (REST) работает для текущей конфигурации.'
+        );
+        messages.push({ role: 'user', content: userContentForHistory });
         messages.push({ role: 'assistant', content: md });
         saveChatState();
       } catch (e) {
-        assistantContent.textContent = '[ошибка генерации]';
-        const errMsg = String(e.message || e);
-        showError(errMsg);
-        setImageAccessStatus('Ошибка генерации изображений: ' + errMsg, true);
+        if (e.name === 'AbortError') {
+          assistantContent.textContent = '[прервано]';
+          messages.push({ role: 'user', content: userContentForHistory });
+          messages.push({ role: 'assistant', content: '[прервано]' });
+          saveChatState();
+          if (attachBackup && attachBackup.length) {
+            stagedFiles = attachBackup;
+            renderAttachList();
+          }
+        } else {
+          assistantContent.textContent = '[ошибка генерации]';
+          const errMsg = String(e.message || e);
+          showError(errMsg);
+          setImageAccessStatus('Ошибка генерации изображений: ' + errMsg, true);
+          if (attachBackup && attachBackup.length) {
+            stagedFiles = attachBackup;
+            renderAttachList();
+          }
+        }
       } finally {
         sendBtn.disabled = false;
+        stopBtn.disabled = true;
+        abortController = null;
       }
     }
 
     async function generateSeedream() {
-      const prompt = input.value.trim();
-      if (!prompt) return;
+      const text = input.value.trim();
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
         showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
@@ -1256,12 +1337,46 @@
         showError('Укажите модель Seedream.');
         return;
       }
-      showError('');
+      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      const nonImages = stagedFiles.filter((f) => !isImageFile(f));
+      if (nonImages.length) {
+        showError('В Seedream можно прикладывать только изображения (без PDF и прочих файлов).');
+        return;
+      }
+      const imageFiles = stagedFiles.filter(isImageFile);
+      if (!text && !imageFiles.length) return;
+
+      /** @type {string|object[]} */
+      let userContent;
+      try {
+        if (imageFiles.length) {
+          const parts = [];
+          if (text) parts.push({ type: 'text', text: text });
+          else
+            parts.push({
+              type: 'text',
+              text: 'Сгенерируй изображение по этому фото; стиль и детали выбери уместно.',
+            });
+          for (const f of imageFiles) {
+            parts.push(await fileToContentPart(f));
+          }
+          userContent = parts;
+        } else {
+          userContent = text;
+        }
+      } catch (e) {
+        showError(e.message || String(e));
+        return;
+      }
+
+      stagedFiles = [];
+      renderAttachList();
       input.value = '';
+      showError('');
       sendBtn.disabled = true;
       stopBtn.disabled = false;
       abortController = new AbortController();
-      appendBubble('user', prompt, false);
+      appendBubble('user', formatUserForBubble(userContent), false);
       const { c: assistantContent } = appendBubble('assistant', 'Генерация Seedream…', true);
       try {
         const headers = { 'Content-Type': 'application/json' };
@@ -1272,11 +1387,12 @@
         }
         const body = {
           model: m,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: userContent }],
           modalities: ['image', 'text'],
           stream: false,
           temperature: Number(seedreamTemperature.value) || 1,
         };
+        normalizeOpenRouterMessages(body.messages);
         const res = await fetch(chatUrl, {
           method: 'POST',
           headers,
@@ -1299,20 +1415,28 @@
         const md = assistantContentToMarkdown(content);
         renderAssistantMarkdown(assistantContent, md);
         setSeedreamAccessStatus('Seedream: запрос выполнен успешно.');
-        messages.push({ role: 'user', content: prompt });
+        messages.push({ role: 'user', content: userContent });
         messages.push({ role: 'assistant', content: md });
         saveChatState();
       } catch (e) {
         if (e.name === 'AbortError') {
           assistantContent.textContent = '[прервано]';
-          messages.push({ role: 'user', content: prompt });
+          messages.push({ role: 'user', content: userContent });
           messages.push({ role: 'assistant', content: '[прервано]' });
           saveChatState();
+          if (attachBackup && attachBackup.length) {
+            stagedFiles = attachBackup;
+            renderAttachList();
+          }
         } else {
           assistantContent.textContent = '[ошибка Seedream]';
           const errMsg = String(e.message || e);
           showError(errMsg);
           setSeedreamAccessStatus('Ошибка Seedream: ' + errMsg, true);
+          if (attachBackup && attachBackup.length) {
+            stagedFiles = attachBackup;
+            renderAttachList();
+          }
         }
       } finally {
         sendBtn.disabled = false;
