@@ -185,17 +185,55 @@
     .msg.assistant .content.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 14px; }
     .msg.assistant .content.markdown-body th,
     .msg.assistant .content.markdown-body td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+    .msg.assistant .content.markdown-body img {
+      max-width: min(100%, 720px);
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      display: block;
+      margin: 8px 0;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      min-width: 100%;
+      margin-bottom: 4px;
+    }
+    .tab {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .tab:hover { border-color: var(--accent); }
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .header-panel { display: contents; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <header>
+    <div class="tabs" id="appTabs" style="width:100%;">
+      <button type="button" class="tab active" data-tab="chat">Чат</button>
+      <button type="button" class="tab" data-tab="image">Картинки</button>
+      <button type="button" class="tab" data-tab="seedream">Seedream</button>
+    </div>
     <div class="grow" id="apiKeyRow">
       <label for="apiKey">OpenRouter API key</label>
       <input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-..." />
     </div>
-    <div class="grow">
+    <div id="panelGrok" class="grow header-panel">
       <label for="model">Модель (актуальные id — на openrouter.ai/models, фильтр xAI)</label>
       <select id="model">
         <option value="x-ai/grok-4">x-ai/grok-4</option>
@@ -206,6 +244,39 @@
       </select>
       <input id="modelCustom" type="text" placeholder="x-ai/..." style="margin-top:8px; width:100%; display:none;" />
     </div>
+    <div id="panelImage" class="grow header-panel" style="display:none;">
+      <label for="imageModel">Image-модель (REST /images/generations)</label>
+      <select id="imageModel">
+        <option value="openai/gpt-image-1" selected>openai/gpt-image-1</option>
+        <option value="google/gemini-2.5-flash-image-preview">google/gemini-2.5-flash-image-preview</option>
+        <option value="custom">Свой id…</option>
+      </select>
+      <input id="imageModelCustom" type="text" placeholder="openai/gpt-image-1" style="margin-top:8px; width:100%; display:none;" />
+      <div id="imageControls" style="margin-top:10px;">
+        <label for="imageSize">Размер и количество</label>
+        <div style="display:flex; gap:8px; margin-top:4px;">
+          <select id="imageSize" style="flex:1;">
+            <option value="1024x1024" selected>1024x1024</option>
+            <option value="1536x1024">1536x1024</option>
+            <option value="1024x1536">1024x1536</option>
+          </select>
+          <input id="imageCount" type="number" min="1" max="4" value="1" style="width:80px;" />
+        </div>
+      </div>
+    </div>
+    <div id="panelSeedream" class="grow header-panel" style="display:none;">
+      <label for="seedreamModel">Seedream (chat + modalities, см. <a href="https://openrouter.ai/docs/guides/overview/multimodal/image-generation" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">документацию</a>)</label>
+      <select id="seedreamModel">
+        <option value="bytedance-seed/seedream-4.5" selected>bytedance-seed/seedream-4.5</option>
+        <option value="custom">Свой id…</option>
+      </select>
+      <input id="seedreamModelCustom" type="text" placeholder="bytedance-seed/seedream-4.5" style="margin-top:8px; width:100%; display:none;" />
+      <div style="margin-top:10px;">
+        <label for="seedreamTemperature">Temperature</label>
+        <input id="seedreamTemperature" type="number" step="0.1" min="0" max="2" value="1" style="width:100%; margin-top:4px;" />
+      </div>
+    </div>
+    <div id="chatControls" style="display: contents;">
     <div style="min-width:100px;">
       <label for="temperature">Temperature</label>
       <input id="temperature" type="number" step="0.1" min="0" max="2" value="0.7" style="width:100%;" />
@@ -213,6 +284,7 @@
     <div style="min-width:120px;">
       <label for="maxTokens">max_tokens (пусто = по умолчанию API)</label>
       <input id="maxTokens" type="number" min="1" placeholder="—" style="width:100%;" />
+    </div>
     </div>
     <div style="min-width:140px;">
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">История</label>
@@ -230,6 +302,8 @@
     · Вложения: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
     · История и настройки сохраняются в браузере (localStorage); очень большие вложения в истории могут быть урезаны.
   </p>
+  <p class="note" id="imageAccessStatus">Проверка доступа к генерации изображений (REST)…</p>
+  <p class="note" id="seedreamAccessStatus">Проверка доступа к Seedream…</p>
   <p id="error" class="err" hidden></p>
   <main id="thread"></main>
   <footer>
@@ -244,6 +318,7 @@
   </footer>
   <script>
     const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+    const OR_IMAGE_URL = 'https://openrouter.ai/api/v1/images/generations';
     const STORAGE_KEY = 'openrouter_api_key';
     const CHAT_STATE_KEY = 'openrouter_grok_chat_state_v2';
     const MAX_STORED_MESSAGES = 100;
@@ -255,6 +330,19 @@
     const apiKey = el('apiKey');
     const model = el('model');
     const modelCustom = el('modelCustom');
+    const appTabs = el('appTabs');
+    const panelGrok = el('panelGrok');
+    const panelImage = el('panelImage');
+    const panelSeedream = el('panelSeedream');
+    const imageModel = el('imageModel');
+    const imageModelCustom = el('imageModelCustom');
+    const imageSize = el('imageSize');
+    const imageCount = el('imageCount');
+    const imageControls = el('imageControls');
+    const seedreamModel = el('seedreamModel');
+    const seedreamModelCustom = el('seedreamModelCustom');
+    const seedreamTemperature = el('seedreamTemperature');
+    const chatControls = el('chatControls');
     const temperature = el('temperature');
     const maxTokens = el('maxTokens');
     const system = el('system');
@@ -264,6 +352,8 @@
     const stopBtn = el('stop');
     const errorEl = el('error');
     const noteEl = el('note');
+    const imageAccessStatusEl = el('imageAccessStatus');
+    const seedreamAccessStatusEl = el('seedreamAccessStatus');
     const fileInput = el('fileInput');
     const attachBtn = el('attachBtn');
     const attachList = el('attachList');
@@ -279,6 +369,22 @@
     let abortController = null;
     let proxyMode = false;
     let chatUrl = OR_URL;
+    let imageUrl = OR_IMAGE_URL;
+    /** @type {'chat'|'image'|'seedream'} */
+    let appTab = 'chat';
+
+    if (typeof DOMPurify !== 'undefined') {
+      DOMPurify.addHook('uponSanitizeAttribute', (node, d) => {
+        if (
+          node &&
+          node.nodeName === 'IMG' &&
+          d.attrName === 'src' &&
+          String(d.attrValue || '').startsWith('data:image/')
+        ) {
+          d.keepAttr = true;
+        }
+      });
+    }
 
     /** Префикс при выкладке под https://app.twinlabs.ru/grok/ */
     function apiBase() {
@@ -304,10 +410,31 @@
       modelCustom.style.display = model.value === 'custom' ? 'block' : 'none';
       debouncedSaveChatMeta();
     });
+    imageModel.addEventListener('change', () => {
+      imageModelCustom.style.display = imageModel.value === 'custom' ? 'block' : 'none';
+      debouncedSaveChatMeta();
+    });
+    seedreamModel.addEventListener('change', () => {
+      seedreamModelCustom.style.display = seedreamModel.value === 'custom' ? 'block' : 'none';
+      debouncedSaveChatMeta();
+    });
+    if (appTabs) {
+      appTabs.querySelectorAll('button[data-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const t = btn.getAttribute('data-tab');
+          if (t === 'chat' || t === 'image' || t === 'seedream') setAppTab(t);
+        });
+      });
+    }
     modelCustom.addEventListener('input', debouncedSaveChatMeta);
+    imageModelCustom.addEventListener('input', debouncedSaveChatMeta);
+    seedreamModelCustom.addEventListener('input', debouncedSaveChatMeta);
     system.addEventListener('input', debouncedSaveChatMeta);
     temperature.addEventListener('change', debouncedSaveChatMeta);
     maxTokens.addEventListener('change', debouncedSaveChatMeta);
+    imageSize.addEventListener('change', debouncedSaveChatMeta);
+    imageCount.addEventListener('change', debouncedSaveChatMeta);
+    seedreamTemperature.addEventListener('change', debouncedSaveChatMeta);
 
     function fillModelsFromApi(models, defaultId) {
       model.innerHTML = '';
@@ -326,6 +453,86 @@
       else if (models[0]) model.value = models[0].id;
     }
 
+    function fillImageModelsFromApi(models, defaultId) {
+      imageModel.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        imageModel.appendChild(opt);
+      }
+      const optC = document.createElement('option');
+      optC.value = 'custom';
+      optC.textContent = 'Свой id…';
+      imageModel.appendChild(optC);
+      if (models.some((x) => x.id === defaultId)) imageModel.value = defaultId;
+      else if (models[0]) imageModel.value = models[0].id;
+    }
+
+    function fillSeedreamModelsFromApi(models, defaultId) {
+      seedreamModel.innerHTML = '';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        seedreamModel.appendChild(opt);
+      }
+      const optC = document.createElement('option');
+      optC.value = 'custom';
+      optC.textContent = 'Свой id…';
+      seedreamModel.appendChild(optC);
+      if (models.some((x) => x.id === defaultId)) seedreamModel.value = defaultId;
+      else if (models[0]) seedreamModel.value = models[0].id;
+    }
+
+    function syncTabButtons() {
+      if (!appTabs) return;
+      appTabs.querySelectorAll('button[data-tab]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === appTab);
+      });
+    }
+
+    function setAppTab(tab) {
+      appTab = tab;
+      syncTabButtons();
+      applyTabUi();
+      debouncedSaveChatMeta();
+    }
+
+    function applyTabUi() {
+      const isChat = appTab === 'chat';
+      const isImage = appTab === 'image';
+      const isSeedream = appTab === 'seedream';
+      if (panelGrok) panelGrok.style.display = isChat ? '' : 'none';
+      if (panelImage) panelImage.style.display = isImage ? '' : 'none';
+      if (panelSeedream) panelSeedream.style.display = isSeedream ? '' : 'none';
+      if (imageControls) imageControls.style.display = isImage ? 'block' : 'none';
+      if (chatControls) chatControls.style.display = isChat ? 'contents' : 'none';
+      system.disabled = isImage;
+      temperature.disabled = !isChat;
+      maxTokens.disabled = !isChat;
+      const noAttach = isImage || isSeedream;
+      fileInput.disabled = noAttach;
+      attachBtn.disabled = noAttach;
+      if (noAttach) {
+        stagedFiles = [];
+        renderAttachList();
+      }
+      if (isImage) {
+        input.placeholder = 'Промпт для изображения (REST)… (Enter — отправить)';
+      } else if (isSeedream) {
+        input.placeholder = 'Промпт для Seedream (chat + modalities)… (Enter — отправить)';
+      } else {
+        input.placeholder = 'Сообщение… (Enter — отправить, Shift+Enter — новая строка)';
+      }
+    }
+
+    function setSeedreamAccessStatus(text, isError = false) {
+      if (!seedreamAccessStatusEl) return;
+      seedreamAccessStatusEl.textContent = text;
+      seedreamAccessStatusEl.style.color = isError ? '#f87171' : 'var(--muted)';
+    }
+
     async function initProxy() {
       try {
         const r = await fetch(API_BASE + '/api/config');
@@ -333,17 +540,53 @@
         const cfg = await r.json();
         proxyMode = true;
         chatUrl = API_BASE + '/api/chat';
+        imageUrl = API_BASE + '/api/image';
         apiKeyRow.style.display = 'none';
         fillModelsFromApi(cfg.models || [], cfg.defaultModel || 'x-ai/grok-4.20');
+        fillImageModelsFromApi(cfg.imageModels || [], cfg.defaultImageModel || 'openai/gpt-image-1');
+        fillSeedreamModelsFromApi(
+          cfg.seedreamModels || [],
+          cfg.defaultSeedreamModel || 'bytedance-seed/seedream-4.5'
+        );
+        if ((cfg.imageModels || []).length) {
+          setImageAccessStatus(
+            'Генерация изображений доступна. Найдено моделей: ' +
+              String((cfg.imageModels || []).length) +
+              '.'
+          );
+        } else {
+          setImageAccessStatus('Image-модели не обнаружены для текущего ключа OpenRouter.', true);
+        }
+        if ((cfg.seedreamModels || []).length) {
+          setSeedreamAccessStatus(
+            'Seedream в каталоге: ' + String((cfg.seedreamModels || []).length) + ' моделей.'
+          );
+        } else {
+          setSeedreamAccessStatus(
+            'Модели Seedream не найдены в каталоге для ключа (можно ввести свой id).',
+            true
+          );
+        }
         if (noteEl) {
           noteEl.textContent =
-            'Прокси: ключ на сервере (auth-profiles). Список моделей с OpenRouter. По умолчанию: ' +
+            'Прокси: ключ на сервере (auth-profiles). Список моделей с OpenRouter. По умолчанию: chat=' +
             (cfg.defaultModel || '') +
+            ', image=' +
+            (cfg.defaultImageModel || '') +
+            ', seedream=' +
+            (cfg.defaultSeedreamModel || '') +
             '.';
         }
       } catch {
         proxyMode = false;
         chatUrl = OR_URL;
+        imageUrl = OR_IMAGE_URL;
+        setImageAccessStatus(
+          'Режим без прокси: доступ к генерации изображений будет проверен при первом запросе.'
+        );
+        setSeedreamAccessStatus(
+          'Режим без прокси: Seedream будет проверен при первом запросе (нужен CORS и ключ в браузере).'
+        );
       }
     }
     void (async function boot() {
@@ -468,9 +711,49 @@
       errorEl.textContent = text;
     }
 
+    function setImageAccessStatus(text, isError = false) {
+      if (!imageAccessStatusEl) return;
+      imageAccessStatusEl.textContent = text;
+      imageAccessStatusEl.style.color = isError ? '#f87171' : 'var(--muted)';
+    }
+
     function resolvedModel() {
       if (model.value === 'custom') return modelCustom.value.trim();
       return model.value;
+    }
+
+    function resolvedImageModel() {
+      if (imageModel.value === 'custom') return imageModelCustom.value.trim();
+      return imageModel.value;
+    }
+
+    function resolvedSeedreamModel() {
+      if (seedreamModel.value === 'custom') return seedreamModelCustom.value.trim();
+      return seedreamModel.value;
+    }
+
+    /** Разбор message.content из нестримингового chat/completions (Seedream и др.). */
+    function assistantContentToMarkdown(content) {
+      if (content == null) throw new Error('Пустой ответ модели.');
+      if (typeof content === 'string') {
+        const t = content.trim();
+        if (!t) throw new Error('Пустой текст ответа.');
+        return content;
+      }
+      if (!Array.isArray(content)) {
+        return String(content);
+      }
+      const parts = [];
+      for (const part of content) {
+        if (!part || typeof part !== 'object') continue;
+        if (part.type === 'text' && typeof part.text === 'string' && part.text.trim()) parts.push(part.text);
+        if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+          parts.push('![image](' + part.image_url.url + ')');
+        }
+      }
+      const out = parts.join('\n\n').trim();
+      if (!out) throw new Error('В ответе нет текста или изображения.');
+      return out;
     }
 
     function renderAssistantMarkdown(el, md) {
@@ -523,11 +806,19 @@
 
     function saveChatState() {
       const payload = {
-        v: 2,
+        v: 4,
         messages: slimMessagesForStorage(messages.slice(-MAX_STORED_MESSAGES)),
         system: system.value,
+        appTab: appTab,
         model: model.value,
         modelCustom: modelCustom.value,
+        imageModel: imageModel.value,
+        imageModelCustom: imageModelCustom.value,
+        imageSize: imageSize.value,
+        imageCount: imageCount.value,
+        seedreamModel: seedreamModel.value,
+        seedreamModelCustom: seedreamModelCustom.value,
+        seedreamTemperature: seedreamTemperature.value,
       };
       try {
         localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(payload));
@@ -544,8 +835,16 @@
                     : { role: 'user', content: typeof m.content === 'string' ? m.content : '[сообщение с вложениями]' }
                 ),
               system: system.value,
+              appTab: appTab,
               model: model.value,
               modelCustom: modelCustom.value,
+              imageModel: imageModel.value,
+              imageModelCustom: imageModelCustom.value,
+              imageSize: imageSize.value,
+              imageCount: imageCount.value,
+              seedreamModel: seedreamModel.value,
+              seedreamModelCustom: seedreamModelCustom.value,
+              seedreamTemperature: seedreamTemperature.value,
             };
             localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(minimal));
           } catch (_) {
@@ -571,6 +870,38 @@
       }
     }
 
+    function applySavedImageModelState(saved) {
+      if (!saved || !saved.imageModel) return;
+      if (saved.imageModel === 'custom') {
+        imageModel.value = 'custom';
+        imageModelCustom.style.display = 'block';
+        imageModelCustom.value = saved.imageModelCustom || '';
+        return;
+      }
+      for (let i = 0; i < imageModel.options.length; i++) {
+        if (imageModel.options[i].value === saved.imageModel) {
+          imageModel.selectedIndex = i;
+          return;
+        }
+      }
+    }
+
+    function applySavedSeedreamModelState(saved) {
+      if (!saved || !saved.seedreamModel) return;
+      if (saved.seedreamModel === 'custom') {
+        seedreamModel.value = 'custom';
+        seedreamModelCustom.style.display = 'block';
+        seedreamModelCustom.value = saved.seedreamModelCustom || '';
+        return;
+      }
+      for (let i = 0; i < seedreamModel.options.length; i++) {
+        if (seedreamModel.options[i].value === saved.seedreamModel) {
+          seedreamModel.selectedIndex = i;
+          return;
+        }
+      }
+    }
+
     function loadChatState() {
       let raw;
       try {
@@ -590,8 +921,22 @@
       } else if (data && Array.isArray(data.messages)) {
         messages = data.messages;
         if (typeof data.system === 'string') system.value = data.system;
+        if (data.appTab === 'chat' || data.appTab === 'image' || data.appTab === 'seedream') {
+          appTab = data.appTab;
+        } else if (data.mode === 'image') {
+          appTab = 'image';
+        } else {
+          appTab = 'chat';
+        }
         applySavedModelState(data);
+        applySavedImageModelState(data);
+        applySavedSeedreamModelState(data);
+        if (typeof data.imageSize === 'string') imageSize.value = data.imageSize;
+        if (data.imageCount != null) imageCount.value = String(data.imageCount);
+        if (data.seedreamTemperature != null) seedreamTemperature.value = String(data.seedreamTemperature);
       } else return;
+      syncTabButtons();
+      applyTabUi();
       rebuildThreadFromMessages();
     }
 
@@ -646,6 +991,18 @@
       // Без plugins маршрутизатор сам использует native / дефолт — проверено запросами к API.
       normalizeOpenRouterMessages(body.messages);
       return body;
+    }
+
+    function buildImagePayload(prompt) {
+      const m = resolvedImageModel();
+      if (!m) throw new Error('Укажите image-модель.');
+      const n = Number(imageCount.value) || 1;
+      return {
+        model: m,
+        prompt,
+        n: Math.min(Math.max(n, 1), 4),
+        size: imageSize.value || '1024x1024',
+      };
     }
 
     /** Совместимость и правка полей под OpenRouter. */
@@ -777,6 +1134,14 @@
     }
 
     async function send() {
+      if (appTab === 'image') {
+        await generateImage();
+        return;
+      }
+      if (appTab === 'seedream') {
+        await generateSeedream();
+        return;
+      }
       const text = input.value.trim();
       if (!text && !stagedFiles.length) return;
       const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
@@ -806,6 +1171,155 @@
       input.value = '';
       messages.push({ role: 'user', content: userContent });
       await streamCompletion(attachBackup);
+    }
+
+    async function generateImage() {
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const key = apiKey.value.trim();
+      if (!proxyMode && !key) {
+        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        return;
+      }
+      let payload;
+      try {
+        payload = buildImagePayload(prompt);
+      } catch (e) {
+        showError(e.message);
+        return;
+      }
+      showError('');
+      input.value = '';
+      sendBtn.disabled = true;
+      stopBtn.disabled = true;
+      appendBubble('user', prompt, false);
+      const { c: assistantContent } = appendBubble('assistant', 'Генерирую изображение...', true);
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (!proxyMode) {
+          headers.Authorization = 'Bearer ' + key;
+          headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
+          headers['X-Title'] = 'OpenRouter Grok Images';
+        }
+        const res = await fetch(imageUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = res.status + ' ' + res.statusText;
+          try {
+            const j = JSON.parse(errText);
+            if (j.error?.message) msg = j.error.message;
+          } catch (_) {
+            if (errText && errText.length < 500) msg += ': ' + errText;
+          }
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const images = Array.isArray(data.data) ? data.data : [];
+        if (!images.length) throw new Error('OpenRouter вернул пустой результат.');
+        const md = images
+          .map((item, idx) => {
+            if (item.url) return '![image ' + (idx + 1) + '](' + item.url + ')';
+            if (item.b64_json) return '![image ' + (idx + 1) + '](data:image/png;base64,' + item.b64_json + ')';
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n\n');
+        if (!md) throw new Error('Не удалось извлечь изображение из ответа API.');
+        renderAssistantMarkdown(assistantContent, md);
+        setImageAccessStatus('Генерация изображений работает для текущей конфигурации.');
+        messages.push({ role: 'user', content: prompt });
+        messages.push({ role: 'assistant', content: md });
+        saveChatState();
+      } catch (e) {
+        assistantContent.textContent = '[ошибка генерации]';
+        const errMsg = String(e.message || e);
+        showError(errMsg);
+        setImageAccessStatus('Ошибка генерации изображений: ' + errMsg, true);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    async function generateSeedream() {
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const key = apiKey.value.trim();
+      if (!proxyMode && !key) {
+        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        return;
+      }
+      const m = resolvedSeedreamModel();
+      if (!m) {
+        showError('Укажите модель Seedream.');
+        return;
+      }
+      showError('');
+      input.value = '';
+      sendBtn.disabled = true;
+      stopBtn.disabled = false;
+      abortController = new AbortController();
+      appendBubble('user', prompt, false);
+      const { c: assistantContent } = appendBubble('assistant', 'Генерация Seedream…', true);
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (!proxyMode) {
+          headers.Authorization = 'Bearer ' + key;
+          headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
+          headers['X-Title'] = 'OpenRouter Seedream';
+        }
+        const body = {
+          model: m,
+          messages: [{ role: 'user', content: prompt }],
+          modalities: ['image', 'text'],
+          stream: false,
+          temperature: Number(seedreamTemperature.value) || 1,
+        };
+        const res = await fetch(chatUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: abortController.signal,
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = res.status + ' ' + res.statusText;
+          try {
+            const j = JSON.parse(errText);
+            if (j.error?.message) msg = j.error.message;
+          } catch (_) {
+            if (errText && errText.length < 500) msg += ': ' + errText;
+          }
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content;
+        const md = assistantContentToMarkdown(content);
+        renderAssistantMarkdown(assistantContent, md);
+        setSeedreamAccessStatus('Seedream: запрос выполнен успешно.');
+        messages.push({ role: 'user', content: prompt });
+        messages.push({ role: 'assistant', content: md });
+        saveChatState();
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          assistantContent.textContent = '[прервано]';
+          messages.push({ role: 'user', content: prompt });
+          messages.push({ role: 'assistant', content: '[прервано]' });
+          saveChatState();
+        } else {
+          assistantContent.textContent = '[ошибка Seedream]';
+          const errMsg = String(e.message || e);
+          showError(errMsg);
+          setSeedreamAccessStatus('Ошибка Seedream: ' + errMsg, true);
+        }
+      } finally {
+        sendBtn.disabled = false;
+        stopBtn.disabled = true;
+        abortController = null;
+      }
     }
 
     sendBtn.addEventListener('click', () => void send());
