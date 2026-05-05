@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-Локальный прокси OpenRouter для чата с Grok: ключ читается из
-agents/main/agent/auth-profiles.json (профиль openrouter:default) или
-переменной OPENROUTER_API_KEY. Список моделей подтягивается с OpenRouter.
+Локальный прокси OpenRouter для Grok: ключ из
+agents/main/agent/auth-profiles.json (openrouter:default) или OPENROUTER_API_KEY.
+
+Каталог моделей OpenRouter не тянем — только фиксированные id (чат Grok, Grok image, Seedream).
+Переопределение на сервере: OPENROUTER_GROK_IMAGE_MODEL, OPENROUTER_SEEDREAM_MODEL.
 
 Запуск: python3 openrouter_grok_proxy.py
 Открыть: http://127.0.0.1:8766/
@@ -16,22 +18,36 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-# Корень openclaw (где лежит agents/main/...). По умолчанию — родитель каталога workspace.
 ROOT = Path(
     os.environ.get("OPENCLAW_ROOT") or Path(__file__).resolve().parent.parent
 ).resolve()
 AUTH_PATH = ROOT / "agents/main/agent/auth-profiles.json"
-# По умолчанию OpenRouter отдаёт только text-модели; image/Seedream не попадут в список.
-OR_MODELS = "https://openrouter.ai/api/v1/models?" + urlencode({"output_modalities": "all"})
 OR_CHAT = "https://openrouter.ai/api/v1/chat/completions"
-OR_IMAGES = "https://openrouter.ai/api/v1/images/generations"
 HTML_PATH = Path(__file__).resolve().parent / "openrouter-grok-chat.html"
 
 HOST = os.environ.get("GROK_CHAT_BIND", "127.0.0.1")
 PORT = int(os.environ.get("GROK_CHAT_PORT", "8766"))
+
+# Короткий список текстовых Grok (чат). Без запроса к API.
+GROK_CHAT_MODELS: list[dict] = [
+    {"id": "x-ai/grok-4.20", "name": "Grok 4.20", "context_length": 2_000_000},
+    {"id": "x-ai/grok-4.3", "name": "Grok 4.3", "context_length": 2_000_000},
+    {"id": "x-ai/grok-4.1-fast", "name": "Grok 4.1 Fast", "context_length": 2_000_000},
+    {"id": "x-ai/grok-4-fast", "name": "Grok 4 Fast", "context_length": 131_072},
+    {"id": "x-ai/grok-4", "name": "Grok 4", "context_length": 131_072},
+]
+
+# Grok с выходом image через chat + modalities (см. OpenRouter multimodal image generation).
+GROK_IMAGE_MODEL = (
+    os.environ.get("OPENROUTER_GROK_IMAGE_MODEL", "x-ai/grok-4.20").strip()
+)
+SEEDREAM_MODEL = (
+    os.environ.get("OPENROUTER_SEEDREAM_MODEL", "bytedance-seed/seedream-4.5").strip()
+)
+
+DEFAULT_CHAT_MODEL = "x-ai/grok-4.20"
 
 
 def load_api_key() -> str:
@@ -52,102 +68,11 @@ def ssl_ctx() -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
-def is_image_model(model: dict) -> bool:
-    mid = str(model.get("id") or "").lower()
-    arch = model.get("architecture") or {}
-    modality = str(arch.get("modality") or "").lower()
-    in_mods = " ".join(arch.get("input_modalities") or []).lower()
-    out_mods = " ".join(arch.get("output_modalities") or []).lower()
-    params = " ".join(model.get("supported_parameters") or []).lower()
-    haystack = " ".join([mid, modality, in_mods, out_mods, params])
-    return "image" in haystack
-
-
-def is_seedream_model(model: dict) -> bool:
-    mid = str(model.get("id") or "").lower()
-    return "seedream" in mid
-
-
-def openrouter_get_models(api_key: str) -> tuple[list[dict], list[dict], list[dict]]:
-    req = Request(OR_MODELS, headers={"Authorization": f"Bearer {api_key}"})
-    with urlopen(req, context=ssl_ctx(), timeout=120) as r:
-        data = json.load(r)
-    grok_rows: list[dict] = []
-    image_rows: list[dict] = []
-    seedream_rows: list[dict] = []
-    for m in data.get("data", []):
-        mid = m.get("id") or ""
-        item = {
-            "id": mid,
-            "name": m.get("name", mid),
-            "context_length": m.get("context_length") or 0,
-        }
-        if mid.startswith("x-ai/grok"):
-            grok_rows.append(item)
-        if is_image_model(m):
-            image_rows.append(item)
-        if is_seedream_model(m):
-            seedream_rows.append(item)
-    grok_rows.sort(key=lambda x: (x["context_length"], x["id"]), reverse=True)
-    image_rows.sort(key=lambda x: x["id"])
-    seedream_rows.sort(key=lambda x: x["id"])
-    return grok_rows, image_rows, seedream_rows
-
-
-def pick_default_model(models: list[dict]) -> str:
-    ids = {m["id"] for m in models}
-    preferred = [
-        "x-ai/grok-4.20",
-        "x-ai/grok-4.3",
-        "x-ai/grok-4.1-fast",
-        "x-ai/grok-4-fast",
-        "x-ai/grok-4",
-    ]
-    for p in preferred:
-        if p in ids:
-            return p
-    return models[0]["id"] if models else "x-ai/grok-4.20"
-
-
-def pick_default_image_model(models: list[dict]) -> str:
-    ids = {m["id"] for m in models}
-    preferred = [
-        "google/gemini-2.5-flash-image-preview",
-        "openai/gpt-image-1",
-        "black-forest-labs/flux-1.1-pro",
-        "black-forest-labs/flux-1-schnell",
-    ]
-    for p in preferred:
-        if p in ids:
-            return p
-    return models[0]["id"] if models else "openai/gpt-image-1"
-
-
-def pick_default_seedream_model(models: list[dict]) -> str:
-    ids = {m["id"] for m in models}
-    preferred = [
-        "bytedance-seed/seedream-4.5",
-        "bytedance-seed/seedream-4.0",
-    ]
-    for p in preferred:
-        if p in ids:
-            return p
-    return models[0]["id"] if models else "bytedance-seed/seedream-4.5"
-
-
 API_KEY = load_api_key()
-try:
-    GROK_MODELS, IMAGE_MODELS, SEEDREAM_MODELS = openrouter_get_models(API_KEY)
-except (URLError, HTTPError, TimeoutError, OSError) as e:
-    sys.exit(f"Не удалось загрузить модели OpenRouter: {e}")
-
-DEFAULT_MODEL = pick_default_model(GROK_MODELS)
-DEFAULT_IMAGE_MODEL = pick_default_image_model(IMAGE_MODELS)
-DEFAULT_SEEDREAM_MODEL = pick_default_seedream_model(SEEDREAM_MODELS)
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "OpenRouterGrokProxy/1.0"
+    server_version = "OpenRouterGrokProxy/2.0"
 
     def log_message(self, fmt: str, *args) -> None:
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
@@ -167,14 +92,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/config":
             cfg = {
-                "defaultModel": DEFAULT_MODEL,
-                "models": GROK_MODELS,
-                "defaultImageModel": DEFAULT_IMAGE_MODEL,
-                "imageModels": IMAGE_MODELS,
-                "defaultSeedreamModel": DEFAULT_SEEDREAM_MODEL,
-                "seedreamModels": SEEDREAM_MODELS,
+                "defaultModel": DEFAULT_CHAT_MODEL,
+                "models": GROK_CHAT_MODELS,
+                "grokImageModel": GROK_IMAGE_MODEL,
+                "seedreamModel": SEEDREAM_MODEL,
                 "openrouterChat": OR_CHAT,
-                "openrouterImages": OR_IMAGES,
             }
             raw = json.dumps(cfg, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
@@ -187,7 +109,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/chat", "/api/image"):
+        if path != "/api/chat":
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -203,24 +125,17 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             self.send_error(400, "Body must be object")
             return
-        if path == "/api/chat":
-            payload.setdefault("stream", True)
-            target_url = OR_CHAT
-            title = "OpenClaw Grok Chat"
-        else:
-            payload.setdefault("n", 1)
-            target_url = OR_IMAGES
-            title = "OpenClaw Grok Images"
+        payload.setdefault("stream", True)
         out = json.dumps(payload).encode("utf-8")
         req = Request(
-            target_url,
+            OR_CHAT,
             data=out,
             method="POST",
             headers={
                 "Authorization": f"Bearer {API_KEY}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": f"http://{HOST}:{PORT}",
-                "X-Title": title,
+                "X-Title": "OpenClaw Grok",
             },
         )
         try:
@@ -244,28 +159,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             self.send_response(200)
-            ct = upstream.headers.get(
-                "Content-Type",
-                "text/event-stream" if path == "/api/chat" else "application/json",
-            )
+            ct = upstream.headers.get("Content-Type", "text/event-stream")
             self.send_header("Content-Type", ct)
-            if path == "/api/chat":
-                self.send_header("Cache-Control", "no-cache")
-                self.send_header("Connection", "close")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
             self.end_headers()
-            if path == "/api/chat":
-                while True:
-                    chunk = upstream.read(8192)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    try:
-                        self.wfile.flush()
-                    except BrokenPipeError:
-                        break
-            else:
-                body_raw = upstream.read()
-                self.wfile.write(body_raw)
+            while True:
+                chunk = upstream.read(8192)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                try:
+                    self.wfile.flush()
+                except BrokenPipeError:
+                    break
         finally:
             upstream.close()
 
@@ -276,12 +183,10 @@ class ReuseHTTPServer(HTTPServer):
 
 def main() -> None:
     httpd = ReuseHTTPServer((HOST, PORT), Handler)
-    print(f"Grok chat: http://{HOST}:{PORT}/")
-    print(f"Default chat model: {DEFAULT_MODEL} ({len(GROK_MODELS)} Grok models loaded)")
-    print(f"Default image model: {DEFAULT_IMAGE_MODEL} ({len(IMAGE_MODELS)} image models loaded)")
-    print(
-        f"Default Seedream model: {DEFAULT_SEEDREAM_MODEL} ({len(SEEDREAM_MODELS)} Seedream models loaded)"
-    )
+    print(f"Grok: http://{HOST}:{PORT}/")
+    print(f"  Chat models (fixed): {len(GROK_CHAT_MODELS)}")
+    print(f"  Grok image model: {GROK_IMAGE_MODEL}")
+    print(f"  Seedream model: {SEEDREAM_MODEL}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

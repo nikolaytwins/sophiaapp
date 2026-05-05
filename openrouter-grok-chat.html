@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenRouter — Grok чат</title>
+  <title>Grok · картинки · Seedream</title>
   <style>
     :root {
       --bg: #0d0f12;
@@ -16,23 +16,24 @@
       --assistant: #1a1f28;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
     body {
-      margin: 0;
-      min-height: 100vh;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       display: flex;
       flex-direction: column;
+      min-height: 100vh;
     }
     header {
+      flex-shrink: 0;
       padding: 12px 16px;
       border-bottom: 1px solid var(--border);
       background: var(--panel);
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      align-items: center;
+      align-items: flex-end;
     }
     header label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
     header input, header select, header textarea {
@@ -43,9 +44,50 @@
       padding: 8px 10px;
       font-size: 14px;
     }
-    header input[type="password"], header input[type="text"] { min-width: 220px; }
     .grow { flex: 1; min-width: 140px; }
-    main {
+    .tabs {
+      width: 100%;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .tab {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .tab:hover { border-color: var(--accent); }
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .hdr-pane { display: none; flex-wrap: wrap; gap: 10px; align-items: flex-end; width: 100%; }
+    .hdr-pane.is-active { display: flex; }
+    .body-stack {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .view {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .view.is-active {
+      display: flex;
+    }
+    .view > .scroll {
       flex: 1;
       overflow: auto;
       padding: 16px;
@@ -66,22 +108,33 @@
     .msg.user { background: var(--user); align-self: flex-end; max-width: 92%; }
     .msg.assistant { background: var(--assistant); border: 1px solid var(--border); align-self: flex-start; max-width: 100%; }
     .msg .role { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .msg.user .content { white-space: pre-wrap; }
+    .msg.assistant .content.markdown-body { white-space: normal; font-size: 15px; }
+    .msg.assistant .content.markdown-body > :first-child { margin-top: 0; }
+    .msg.assistant .content.markdown-body > :last-child { margin-bottom: 0; }
+    .msg.assistant .content.markdown-body p { margin: 0.45em 0; }
+    .msg.assistant .content.markdown-body a { color: var(--accent); word-break: break-all; }
+    .msg.assistant .content.markdown-body img {
+      max-width: min(100%, 720px);
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      display: block;
+      margin: 8px 0;
+    }
     footer {
+      flex-shrink: 0;
       padding: 12px 16px;
       border-top: 1px solid var(--border);
       background: var(--panel);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: stretch;
       max-width: 900px;
       margin: 0 auto;
       width: 100%;
     }
     footer textarea {
-      flex: 1;
+      width: 100%;
       min-height: 72px;
-      max-height: 400px;
+      max-height: 280px;
       resize: vertical;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -101,18 +154,6 @@
       font-size: 14px;
     }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .note {
-      font-size: 12px;
-      color: var(--muted);
-      padding: 0 16px 12px;
-      max-width: 900px;
-      margin: 0 auto;
-      width: 100%;
-      line-height: 1.45;
-    }
-    .err { color: #f87171; font-size: 13px; padding: 0 16px; max-width: 900px; margin: 0 auto; width: 100%; }
-    .footer-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
-    .footer-row textarea { flex: 1; }
     .btn-secondary {
       background: #374151;
       color: #fff;
@@ -125,7 +166,18 @@
       white-space: nowrap;
     }
     .btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
-    .attach-list { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-bottom: 4px; min-height: 0; }
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 16px 0;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+      line-height: 1.45;
+    }
+    .err { color: #f87171; font-size: 13px; padding: 8px 16px; max-width: 900px; margin: 0 auto; width: 100%; }
+    .footer-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
+    .attach-list { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-bottom: 6px; min-height: 0; }
     .attach-chip {
       font-size: 12px;
       background: #2a3140;
@@ -147,248 +199,186 @@
       padding: 0 2px;
     }
     .attach-remove:hover { color: #f87171; }
-    .msg.user .content { white-space: pre-wrap; }
-    .msg.assistant .content.markdown-body { white-space: normal; font-size: 15px; }
-    .msg.assistant .content.markdown-body > :first-child { margin-top: 0; }
-    .msg.assistant .content.markdown-body > :last-child { margin-bottom: 0; }
-    .msg.assistant .content.markdown-body h1 { font-size: 1.35rem; margin: 0.75em 0 0.4em; font-weight: 700; }
-    .msg.assistant .content.markdown-body h2 { font-size: 1.2rem; margin: 0.75em 0 0.35em; font-weight: 650; }
-    .msg.assistant .content.markdown-body h3 { font-size: 1.05rem; margin: 0.65em 0 0.3em; font-weight: 600; }
-    .msg.assistant .content.markdown-body p { margin: 0.45em 0; }
-    .msg.assistant .content.markdown-body ul,
-    .msg.assistant .content.markdown-body ol { margin: 0.4em 0; padding-left: 1.35em; }
-    .msg.assistant .content.markdown-body li { margin: 0.2em 0; }
-    .msg.assistant .content.markdown-body blockquote {
-      margin: 0.5em 0;
-      padding-left: 1em;
-      border-left: 3px solid var(--accent);
-      color: var(--muted);
-    }
-    .msg.assistant .content.markdown-body pre {
-      background: #0d0f12;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      overflow: auto;
-      font-size: 13px;
-      line-height: 1.45;
-    }
-    .msg.assistant .content.markdown-body code {
-      background: #252a33;
-      padding: 0.15em 0.4em;
-      border-radius: 4px;
-      font-size: 0.9em;
-    }
-    .msg.assistant .content.markdown-body pre code { background: transparent; padding: 0; font-size: inherit; }
-    .msg.assistant .content.markdown-body a { color: var(--accent); word-break: break-all; }
-    .msg.assistant .content.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
-    .msg.assistant .content.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 14px; }
-    .msg.assistant .content.markdown-body th,
-    .msg.assistant .content.markdown-body td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
-    .msg.assistant .content.markdown-body img {
-      max-width: min(100%, 720px);
-      height: auto;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      display: block;
-      margin: 8px 0;
-    }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      min-width: 100%;
-      margin-bottom: 4px;
-    }
-    .tab {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .tab:hover { border-color: var(--accent); }
-    .tab.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
+    .system-block { padding: 12px 16px 0; max-width: 900px; margin: 0 auto; width: 100%; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <header>
-    <div class="tabs" id="appTabs" style="width:100%;">
-      <button type="button" class="tab active" data-tab="chat">Чат</button>
-      <button type="button" class="tab" data-tab="image">Картинки</button>
+    <div class="tabs" id="appTabs">
+      <button type="button" class="tab active" data-tab="chat">Чат Grok</button>
+      <button type="button" class="tab" data-tab="image">Grok — картинки</button>
       <button type="button" class="tab" data-tab="seedream">Seedream</button>
     </div>
     <div class="grow" id="apiKeyRow">
       <label for="apiKey">OpenRouter API key</label>
       <input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-..." />
     </div>
-    <div id="panelGrok" class="grow">
-      <label for="model">Модель (актуальные id — на openrouter.ai/models, фильтр xAI)</label>
-      <select id="model">
-        <option value="x-ai/grok-4">x-ai/grok-4</option>
-        <option value="x-ai/grok-4-fast">x-ai/grok-4-fast</option>
-        <option value="x-ai/grok-4.1-fast">x-ai/grok-4.1-fast</option>
-        <option value="x-ai/grok-4.20" selected>x-ai/grok-4.20 (флагман, если доступен в каталоге)</option>
-        <option value="custom">Свой id…</option>
-      </select>
-      <input id="modelCustom" type="text" placeholder="x-ai/..." style="margin-top:8px; width:100%; display:none;" />
-    </div>
-    <div id="panelImage" class="grow" style="display:none;">
-      <label for="imageModel">Image-модель (REST /images/generations)</label>
-      <select id="imageModel">
-        <option value="openai/gpt-image-1" selected>openai/gpt-image-1</option>
-        <option value="google/gemini-2.5-flash-image-preview">google/gemini-2.5-flash-image-preview</option>
-        <option value="custom">Свой id…</option>
-      </select>
-      <input id="imageModelCustom" type="text" placeholder="openai/gpt-image-1" style="margin-top:8px; width:100%; display:none;" />
-      <div id="imageControls" style="margin-top:10px;">
-        <label for="imageSize">Размер и количество</label>
-        <div style="display:flex; gap:8px; margin-top:4px;">
-          <select id="imageSize" style="flex:1;">
-            <option value="1024x1024" selected>1024x1024</option>
-            <option value="1536x1024">1536x1024</option>
-            <option value="1024x1536">1024x1536</option>
-          </select>
-          <input id="imageCount" type="number" min="1" max="4" value="1" style="width:80px;" />
-        </div>
+    <div id="hdrChat" class="hdr-pane is-active">
+      <div class="grow">
+        <label for="model">Модель чата</label>
+        <select id="model"></select>
+        <input id="modelCustom" type="text" placeholder="x-ai/..." style="margin-top:8px; width:100%; display:none;" />
+      </div>
+      <div style="min-width:100px;">
+        <label for="temperature">Temperature</label>
+        <input id="temperature" type="number" step="0.1" min="0" max="2" value="0.7" style="width:100%;" />
+      </div>
+      <div style="min-width:120px;">
+        <label for="maxTokens">max_tokens</label>
+        <input id="maxTokens" type="number" min="1" placeholder="—" style="width:100%;" />
+      </div>
+      <div style="min-width:140px;">
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Лента</label>
+        <button type="button" id="clearChat" class="btn-secondary" style="width:100%;">Очистить чат</button>
       </div>
     </div>
-    <div id="panelSeedream" class="grow" style="display:none;">
-      <label for="seedreamModel">Seedream (chat + modalities, см. <a href="https://openrouter.ai/docs/guides/overview/multimodal/image-generation" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">документацию</a>)</label>
-      <select id="seedreamModel">
-        <option value="bytedance-seed/seedream-4.5" selected>bytedance-seed/seedream-4.5</option>
-        <option value="custom">Свой id…</option>
-      </select>
-      <input id="seedreamModelCustom" type="text" placeholder="bytedance-seed/seedream-4.5" style="margin-top:8px; width:100%; display:none;" />
-      <div style="margin-top:10px;">
+    <div id="hdrImage" class="hdr-pane">
+      <div class="grow">
+        <label>Модель (сервер)</label>
+        <div id="grokImageModelLabel" style="font-size:14px;padding:8px 0;color:var(--text);">—</div>
+      </div>
+      <div style="min-width:140px;">
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Лента</label>
+        <button type="button" id="clearImage" class="btn-secondary" style="width:100%;">Очистить ленту</button>
+      </div>
+    </div>
+    <div id="hdrSeedream" class="hdr-pane">
+      <div class="grow">
+        <label>Модель (сервер)</label>
+        <div id="seedreamModelLabel" style="font-size:14px;padding:8px 0;color:var(--text);">—</div>
+      </div>
+      <div style="min-width:120px;">
         <label for="seedreamTemperature">Temperature</label>
-        <input id="seedreamTemperature" type="number" step="0.1" min="0" max="2" value="1" style="width:100%; margin-top:4px;" />
+        <input id="seedreamTemperature" type="number" step="0.1" min="0" max="2" value="1" style="width:100%;" />
       </div>
-    </div>
-    <div id="chatControls" style="display: contents;">
-    <div style="min-width:100px;">
-      <label for="temperature">Temperature</label>
-      <input id="temperature" type="number" step="0.1" min="0" max="2" value="0.7" style="width:100%;" />
-    </div>
-    <div style="min-width:120px;">
-      <label for="maxTokens">max_tokens (пусто = по умолчанию API)</label>
-      <input id="maxTokens" type="number" min="1" placeholder="—" style="width:100%;" />
-    </div>
-    </div>
-    <div style="min-width:140px;">
-      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">История</label>
-      <button type="button" id="clearHistory" class="btn-secondary" style="width:100%;">Очистить чат</button>
+      <div style="min-width:140px;">
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Лента</label>
+        <button type="button" id="clearSeedream" class="btn-secondary" style="width:100%;">Очистить ленту</button>
+      </div>
     </div>
   </header>
-  <div style="padding:12px 16px 0; max-width:900px; margin:0 auto; width:100%;">
-    <label for="system" style="font-size:12px;color:var(--muted);">Системный промпт (опционально)</label>
-    <textarea id="system" rows="4" style="width:100%; min-height:6rem; max-height:20rem; margin-top:4px; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px; resize:vertical;"></textarea>
-  </div>
-  <p class="note" id="note">
-    Режим без прокси: ключ в браузере (localStorage), запрос напрямую на OpenRouter (нужен CORS).
-    С прокси: <code>python3 openrouter_grok_proxy.py</code> — ключ на сервере. На Twinlabs: после входа —
-    <a href="/grok/" style="color:var(--accent);">/grok/</a>
-    · Чат: несколько изображений, PDF и текстовых файлов за один запрос (модель видит все).
-    · «Картинки» и «Seedream»: можно прикрепить только изображения как опорное фото, затем написать промпт (текст можно оставить пустым — подставится короткая инструкция). Без фото вкладка «Картинки» шлёт запрос через REST /images/generations; с фото — через chat/completions с modalities (нужна модель, которая принимает картинку на вход).
-    · История и настройки сохраняются в браузере (localStorage); очень большие вложения в истории могут быть урезаны.
-  </p>
-  <p class="note" id="imageAccessStatus">Проверка доступа к генерации изображений (REST)…</p>
-  <p class="note" id="seedreamAccessStatus">Проверка доступа к Seedream…</p>
+
   <p id="error" class="err" hidden></p>
-  <main id="thread"></main>
-  <footer>
-    <input type="file" id="fileInput" multiple style="display: none" />
-    <div id="attachList" class="attach-list" hidden></div>
-    <div class="footer-row">
-      <button type="button" id="attachBtn" class="btn-secondary">Файлы</button>
-      <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
-      <button type="button" id="send">Отправить</button>
-      <button type="button" id="stop" disabled>Стоп</button>
+
+  <div class="body-stack">
+    <div id="viewChat" class="view is-active">
+      <div class="system-block">
+        <label for="system" style="font-size:12px;color:var(--muted);">Системный промпт</label>
+        <textarea id="system" rows="3" style="width:100%; margin-top:4px; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px; resize:vertical;"></textarea>
+      </div>
+      <p class="note">Текст и вложения (фото, PDF…). Прокси: ключ на сервере — <a href="/grok/" style="color:var(--accent);">/grok/</a></p>
+      <div class="scroll" id="scrollChat">
+        <main id="threadChat"></main>
+      </div>
+      <footer>
+        <input type="file" id="fileInput" multiple style="display: none" />
+        <div id="attachListChat" class="attach-list" hidden></div>
+        <div class="footer-row">
+          <button type="button" id="attachBtnChat" class="btn-secondary">Файлы</button>
+          <textarea id="inputChat" placeholder="Сообщение… Enter — отправить"></textarea>
+          <button type="button" id="sendChat">Отправить</button>
+          <button type="button" id="stopChat" disabled>Стоп</button>
+        </div>
+      </footer>
     </div>
-  </footer>
+
+    <div id="viewImage" class="view">
+      <p class="note">Генерация через Grok + modalities. «Фото» — опорное изображение, затем промпт (текст можно не писать — подставится краткая инструкция).</p>
+      <div class="scroll" id="scrollImage">
+        <main id="threadImage"></main>
+      </div>
+      <footer>
+        <div id="attachListImage" class="attach-list" hidden></div>
+        <div class="footer-row">
+          <button type="button" id="attachBtnImage" class="btn-secondary">Фото</button>
+          <textarea id="inputImage" placeholder="Промпт к картинке…"></textarea>
+          <button type="button" id="sendImage">Сгенерировать</button>
+          <button type="button" id="stopImage" disabled>Стоп</button>
+        </div>
+      </footer>
+    </div>
+
+    <div id="viewSeedream" class="view">
+      <p class="note">Seedream (ByteDance) через chat + modalities. Только изображения как опора + текст (или только фото).</p>
+      <div class="scroll" id="scrollSeedream">
+        <main id="threadSeedream"></main>
+      </div>
+      <footer>
+        <div id="attachListSeedream" class="attach-list" hidden></div>
+        <div class="footer-row">
+          <button type="button" id="attachBtnSeedream" class="btn-secondary">Фото</button>
+          <textarea id="inputSeedream" placeholder="Промпт…"></textarea>
+          <button type="button" id="sendSeedream">Сгенерировать</button>
+          <button type="button" id="stopSeedream" disabled>Стоп</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <script>
     const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
-    const OR_IMAGE_URL = 'https://openrouter.ai/api/v1/images/generations';
     const STORAGE_KEY = 'openrouter_api_key';
-    const CHAT_STATE_KEY = 'openrouter_grok_chat_state_v2';
-    const MAX_STORED_MESSAGES = 100;
+    const CHAT_STATE_KEY = 'openrouter_grok_ui_v6';
+    const MAX_STORED_MESSAGES = 80;
     const MAX_STORED_FILE_DATA_CHARS = 120000;
     const MAX_STORED_IMAGE_DATA_CHARS = 120000;
-
-    const el = (id) => document.getElementById(id);
-    const apiKeyRow = el('apiKeyRow');
-    const apiKey = el('apiKey');
-    const model = el('model');
-    const modelCustom = el('modelCustom');
-    const appTabs = el('appTabs');
-    const panelGrok = el('panelGrok');
-    const panelImage = el('panelImage');
-    const panelSeedream = el('panelSeedream');
-    const imageModel = el('imageModel');
-    const imageModelCustom = el('imageModelCustom');
-    const imageSize = el('imageSize');
-    const imageCount = el('imageCount');
-    const imageControls = el('imageControls');
-    const seedreamModel = el('seedreamModel');
-    const seedreamModelCustom = el('seedreamModelCustom');
-    const seedreamTemperature = el('seedreamTemperature');
-    const chatControls = el('chatControls');
-    const temperature = el('temperature');
-    const maxTokens = el('maxTokens');
-    const system = el('system');
-    const thread = el('thread');
-    const input = el('input');
-    const sendBtn = el('send');
-    const stopBtn = el('stop');
-    const errorEl = el('error');
-    const noteEl = el('note');
-    const imageAccessStatusEl = el('imageAccessStatus');
-    const seedreamAccessStatusEl = el('seedreamAccessStatus');
-    const fileInput = el('fileInput');
-    const attachBtn = el('attachBtn');
-    const ATTACH_LABEL_CHAT = 'Файлы';
-    const ATTACH_LABEL_PHOTO = 'Фото';
-    const attachList = el('attachList');
-    const clearHistoryBtn = el('clearHistory');
-
     const MAX_ATTACH = 15;
     const MAX_BIN_BYTES = 25 * 1024 * 1024;
     const MAX_TEXT_BYTES = 1024 * 1024;
     const BUBBLE_USER_TEXT_PREVIEW = 8000;
-    let stagedFiles = [];
 
-    let messages = [];
+    const el = (id) => document.getElementById(id);
+    const appTabs = el('appTabs');
+    const apiKeyRow = el('apiKeyRow');
+    const apiKey = el('apiKey');
+    const hdrChat = el('hdrChat');
+    const hdrImage = el('hdrImage');
+    const hdrSeedream = el('hdrSeedream');
+    const viewChat = el('viewChat');
+    const viewImage = el('viewImage');
+    const viewSeedream = el('viewSeedream');
+    const model = el('model');
+    const modelCustom = el('modelCustom');
+    const temperature = el('temperature');
+    const maxTokens = el('maxTokens');
+    const system = el('system');
+    const seedreamTemperature = el('seedreamTemperature');
+    const grokImageModelLabel = el('grokImageModelLabel');
+    const seedreamModelLabel = el('seedreamModelLabel');
+    const errorEl = el('error');
+
+    const threadChat = el('threadChat');
+    const threadImage = el('threadImage');
+    const threadSeedream = el('threadSeedream');
+    const inputChat = el('inputChat');
+    const inputImage = el('inputImage');
+    const inputSeedream = el('inputSeedream');
+    const attachListChat = el('attachListChat');
+    const attachListImage = el('attachListImage');
+    const attachListSeedream = el('attachListSeedream');
+    const fileInput = el('fileInput');
+    const sendChat = el('sendChat');
+    const sendImage = el('sendImage');
+    const sendSeedream = el('sendSeedream');
+    const stopChat = el('stopChat');
+    const stopImage = el('stopImage');
+    const stopSeedream = el('stopSeedream');
+
+    const tabMessages = { chat: [], image: [], seedream: [] };
+    const stagedByTab = { chat: [], image: [], seedream: [] };
+    /** @type {'chat'|'image'|'seedream'} */
+    let appTab = 'chat';
+    let messages = tabMessages.chat;
+    let stagedFiles = stagedByTab.chat;
+
     let abortController = null;
     let proxyMode = false;
     let chatUrl = OR_URL;
-    let imageUrl = OR_IMAGE_URL;
-    /** @type {'chat'|'image'|'seedream'} */
-    let appTab = 'chat';
+    let grokImageModelId = 'x-ai/grok-4.20';
+    let seedreamModelId = 'bytedance-seed/seedream-4.5';
 
-    if (typeof DOMPurify !== 'undefined') {
-      DOMPurify.addHook('uponSanitizeAttribute', (node, d) => {
-        if (
-          node &&
-          node.nodeName === 'IMG' &&
-          d.attrName === 'src' &&
-          String(d.attrValue || '').startsWith('data:image/')
-        ) {
-          d.keepAttr = true;
-        }
-      });
-    }
-
-    /** Префикс при выкладке под https://app.twinlabs.ru/grok/ */
     function apiBase() {
       const p = window.location.pathname;
       if (p === '/grok' || p.startsWith('/grok/')) return '/grok';
@@ -396,55 +386,39 @@
     }
     const API_BASE = apiBase();
 
+    if (typeof DOMPurify !== 'undefined') {
+      DOMPurify.addHook('uponSanitizeAttribute', (node, d) => {
+        if (node && node.nodeName === 'IMG' && d.attrName === 'src' && String(d.attrValue || '').startsWith('data:image/')) {
+          d.keepAttr = true;
+        }
+      });
+    }
+
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) apiKey.value = saved;
+    apiKey.addEventListener('change', () => localStorage.setItem(STORAGE_KEY, apiKey.value.trim()));
 
-    apiKey.addEventListener('change', () => {
-      localStorage.setItem(STORAGE_KEY, apiKey.value.trim());
-    });
-
-    function debouncedSaveChatMeta() {
-      clearTimeout(window._grokSaveMetaT);
-      window._grokSaveMetaT = setTimeout(() => saveChatState(), 500);
+    function debouncedSave() {
+      clearTimeout(window._grokSaveT);
+      window._grokSaveT = setTimeout(() => saveState(), 400);
     }
 
     model.addEventListener('change', () => {
       modelCustom.style.display = model.value === 'custom' ? 'block' : 'none';
-      debouncedSaveChatMeta();
+      debouncedSave();
     });
-    imageModel.addEventListener('change', () => {
-      imageModelCustom.style.display = imageModel.value === 'custom' ? 'block' : 'none';
-      debouncedSaveChatMeta();
-    });
-    seedreamModel.addEventListener('change', () => {
-      seedreamModelCustom.style.display = seedreamModel.value === 'custom' ? 'block' : 'none';
-      debouncedSaveChatMeta();
-    });
-    if (appTabs) {
-      appTabs.querySelectorAll('button[data-tab]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const t = btn.getAttribute('data-tab');
-          if (t === 'chat' || t === 'image' || t === 'seedream') setAppTab(t);
-        });
-      });
-    }
-    modelCustom.addEventListener('input', debouncedSaveChatMeta);
-    imageModelCustom.addEventListener('input', debouncedSaveChatMeta);
-    seedreamModelCustom.addEventListener('input', debouncedSaveChatMeta);
-    system.addEventListener('input', debouncedSaveChatMeta);
-    temperature.addEventListener('change', debouncedSaveChatMeta);
-    maxTokens.addEventListener('change', debouncedSaveChatMeta);
-    imageSize.addEventListener('change', debouncedSaveChatMeta);
-    imageCount.addEventListener('change', debouncedSaveChatMeta);
-    seedreamTemperature.addEventListener('change', debouncedSaveChatMeta);
+    modelCustom.addEventListener('input', debouncedSave);
+    system.addEventListener('input', debouncedSave);
+    temperature.addEventListener('change', debouncedSave);
+    maxTokens.addEventListener('change', debouncedSave);
+    seedreamTemperature.addEventListener('change', debouncedSave);
 
-    function fillModelsFromApi(models, defaultId) {
+    function fillChatModels(models, defaultId) {
       model.innerHTML = '';
       for (const m of models) {
         const opt = document.createElement('option');
         opt.value = m.id;
-        const ctx = m.context_length ? Math.round(m.context_length / 1000) + 'k ctx' : '';
-        opt.textContent = (m.name || m.id) + (ctx ? ' · ' + ctx : '');
+        opt.textContent = m.name || m.id;
         model.appendChild(opt);
       }
       const optC = document.createElement('option');
@@ -455,91 +429,6 @@
       else if (models[0]) model.value = models[0].id;
     }
 
-    function fillImageModelsFromApi(models, defaultId) {
-      imageModel.innerHTML = '';
-      for (const m of models) {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.name || m.id;
-        imageModel.appendChild(opt);
-      }
-      const optC = document.createElement('option');
-      optC.value = 'custom';
-      optC.textContent = 'Свой id…';
-      imageModel.appendChild(optC);
-      if (models.some((x) => x.id === defaultId)) imageModel.value = defaultId;
-      else if (models[0]) imageModel.value = models[0].id;
-    }
-
-    function fillSeedreamModelsFromApi(models, defaultId) {
-      seedreamModel.innerHTML = '';
-      for (const m of models) {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.name || m.id;
-        seedreamModel.appendChild(opt);
-      }
-      const optC = document.createElement('option');
-      optC.value = 'custom';
-      optC.textContent = 'Свой id…';
-      seedreamModel.appendChild(optC);
-      if (models.some((x) => x.id === defaultId)) seedreamModel.value = defaultId;
-      else if (models[0]) seedreamModel.value = models[0].id;
-    }
-
-    function syncTabButtons() {
-      if (!appTabs) return;
-      appTabs.querySelectorAll('button[data-tab]').forEach((b) => {
-        b.classList.toggle('active', b.getAttribute('data-tab') === appTab);
-      });
-    }
-
-    function setAppTab(tab) {
-      appTab = tab;
-      syncTabButtons();
-      applyTabUi();
-      debouncedSaveChatMeta();
-    }
-
-    function applyTabUi() {
-      const isChat = appTab === 'chat';
-      const isImage = appTab === 'image';
-      const isSeedream = appTab === 'seedream';
-      if (panelGrok) panelGrok.style.display = isChat ? '' : 'none';
-      if (panelImage) panelImage.style.display = isImage ? '' : 'none';
-      if (panelSeedream) panelSeedream.style.display = isSeedream ? '' : 'none';
-      if (imageControls) imageControls.style.display = isImage ? 'block' : 'none';
-      if (chatControls) chatControls.style.display = isChat ? 'contents' : 'none';
-      system.disabled = isImage;
-      temperature.disabled = !isChat;
-      maxTokens.disabled = !isChat;
-      fileInput.disabled = false;
-      attachBtn.disabled = false;
-      if (isImage || isSeedream) {
-        fileInput.setAttribute('accept', 'image/*');
-        attachBtn.textContent = ATTACH_LABEL_PHOTO;
-      } else {
-        fileInput.removeAttribute('accept');
-        attachBtn.textContent = ATTACH_LABEL_CHAT;
-      }
-      if (isImage) {
-        input.placeholder =
-          'Промпт к изображению… Можно «Фото» — опорное, потом текст. Без фото — REST. (Enter — отправить)';
-      } else if (isSeedream) {
-        input.placeholder =
-          'Промпт… Можно «Фото» — опорное, потом текст (или только фото). (Enter — отправить)';
-      } else {
-        input.placeholder =
-          'Текст и/или вложения («Файлы»): фото, PDF… (Enter — отправить, Shift+Enter — новая строка)';
-      }
-    }
-
-    function setSeedreamAccessStatus(text, isError = false) {
-      if (!seedreamAccessStatusEl) return;
-      seedreamAccessStatusEl.textContent = text;
-      seedreamAccessStatusEl.style.color = isError ? '#f87171' : 'var(--muted)';
-    }
-
     async function initProxy() {
       try {
         const r = await fetch(API_BASE + '/api/config');
@@ -547,67 +436,79 @@
         const cfg = await r.json();
         proxyMode = true;
         chatUrl = API_BASE + '/api/chat';
-        imageUrl = API_BASE + '/api/image';
         apiKeyRow.style.display = 'none';
-        fillModelsFromApi(cfg.models || [], cfg.defaultModel || 'x-ai/grok-4.20');
-        fillImageModelsFromApi(cfg.imageModels || [], cfg.defaultImageModel || 'openai/gpt-image-1');
-        fillSeedreamModelsFromApi(
-          cfg.seedreamModels || [],
-          cfg.defaultSeedreamModel || 'bytedance-seed/seedream-4.5'
-        );
-        if ((cfg.imageModels || []).length) {
-          setImageAccessStatus(
-            'Генерация изображений доступна. Найдено моделей: ' +
-              String((cfg.imageModels || []).length) +
-              '.'
-          );
-        } else {
-          setImageAccessStatus('Image-модели не обнаружены для текущего ключа OpenRouter.', true);
-        }
-        if ((cfg.seedreamModels || []).length) {
-          setSeedreamAccessStatus(
-            'Seedream в каталоге: ' + String((cfg.seedreamModels || []).length) + ' моделей.'
-          );
-        } else {
-          setSeedreamAccessStatus(
-            'Модели Seedream не найдены в каталоге для ключа (можно ввести свой id).',
-            true
-          );
-        }
-        if (noteEl) {
-          noteEl.textContent =
-            'Прокси: ключ на сервере (auth-profiles). Список моделей с OpenRouter. По умолчанию: chat=' +
-            (cfg.defaultModel || '') +
-            ', image=' +
-            (cfg.defaultImageModel || '') +
-            ', seedream=' +
-            (cfg.defaultSeedreamModel || '') +
-            '.';
-        }
+        fillChatModels(cfg.models || [], cfg.defaultModel || 'x-ai/grok-4.20');
+        grokImageModelId = cfg.grokImageModel || grokImageModelId;
+        seedreamModelId = cfg.seedreamModel || seedreamModelId;
+        grokImageModelLabel.textContent = grokImageModelId;
+        seedreamModelLabel.textContent = seedreamModelId;
       } catch {
         proxyMode = false;
         chatUrl = OR_URL;
-        imageUrl = OR_IMAGE_URL;
-        setImageAccessStatus(
-          'Режим без прокси: доступ к генерации изображений будет проверен при первом запросе.'
+        fillChatModels(
+          [
+            { id: 'x-ai/grok-4.20', name: 'Grok 4.20' },
+            { id: 'x-ai/grok-4.3', name: 'Grok 4.3' },
+            { id: 'x-ai/grok-4.1-fast', name: 'Grok 4.1 Fast' },
+          ],
+          'x-ai/grok-4.20'
         );
-        setSeedreamAccessStatus(
-          'Режим без прокси: Seedream будет проверен при первом запросе (нужен CORS и ключ в браузере).'
-        );
+        grokImageModelLabel.textContent = grokImageModelId + ' (локально; задайте прокси)';
+        seedreamModelLabel.textContent = seedreamModelId + ' (локально)';
       }
     }
-    void (async function boot() {
-      await initProxy();
-      loadChatState();
-    })();
+
+    function activeThread() {
+      if (appTab === 'image') return threadImage;
+      if (appTab === 'seedream') return threadSeedream;
+      return threadChat;
+    }
+    function activeAttachList() {
+      if (appTab === 'image') return attachListImage;
+      if (appTab === 'seedream') return attachListSeedream;
+      return attachListChat;
+    }
+    function syncTabButtons() {
+      appTabs.querySelectorAll('button[data-tab]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === appTab);
+      });
+    }
+
+    function setAppTab(tab) {
+      if (tab !== 'chat' && tab !== 'image' && tab !== 'seedream') return;
+      appTab = tab;
+      messages = tabMessages[appTab];
+      stagedFiles = stagedByTab[appTab];
+      syncTabButtons();
+      hdrChat.classList.toggle('is-active', tab === 'chat');
+      hdrImage.classList.toggle('is-active', tab === 'image');
+      hdrSeedream.classList.toggle('is-active', tab === 'seedream');
+      viewChat.classList.toggle('is-active', tab === 'chat');
+      viewImage.classList.toggle('is-active', tab === 'image');
+      viewSeedream.classList.toggle('is-active', tab === 'seedream');
+      if (tab === 'chat') fileInput.removeAttribute('accept');
+      else fileInput.setAttribute('accept', 'image/*');
+      rebuildThread();
+      renderAttachList();
+      showError('');
+      debouncedSave();
+    }
+
+    appTabs.querySelectorAll('button[data-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const t = btn.getAttribute('data-tab');
+        if (t === 'chat' || t === 'image' || t === 'seedream') setAppTab(t);
+      });
+    });
 
     function renderAttachList() {
-      attachList.innerHTML = '';
+      const list = activeAttachList();
+      list.innerHTML = '';
       if (!stagedFiles.length) {
-        attachList.hidden = true;
+        list.hidden = true;
         return;
       }
-      attachList.hidden = false;
+      list.hidden = false;
       stagedFiles.forEach((file) => {
         const chip = document.createElement('div');
         chip.className = 'attach-chip';
@@ -625,15 +526,25 @@
         });
         chip.appendChild(name);
         chip.appendChild(rm);
-        attachList.appendChild(chip);
+        list.appendChild(chip);
       });
     }
 
-    attachBtn.addEventListener('click', () => fileInput.click());
+    function wireAttach(btn) {
+      btn.addEventListener('click', () => fileInput.click());
+    }
+    wireAttach(el('attachBtnChat'));
+    wireAttach(el('attachBtnImage'));
+    wireAttach(el('attachBtnSeedream'));
+
     fileInput.addEventListener('change', () => {
       for (const f of fileInput.files) {
         if (stagedFiles.length >= MAX_ATTACH) {
-          showError('Не больше ' + MAX_ATTACH + ' вложений за раз.');
+          showError('Не больше ' + MAX_ATTACH + ' вложений.');
+          break;
+        }
+        if (appTab !== 'chat' && !isImageFile(f)) {
+          showError('В этом режиме только изображения.');
           break;
         }
         stagedFiles.push(f);
@@ -651,7 +562,6 @@
         r.readAsDataURL(file);
       });
     }
-
     function readAsText(file) {
       return new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -660,45 +570,36 @@
         r.readAsText(file, 'UTF-8');
       });
     }
-
     function isTextLikeFile(file) {
       const mime = file.type || '';
       if (mime.startsWith('text/')) return true;
       const n = (file.name || '').toLowerCase();
-      return /\.(txt|md|json|csv|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|vue|py|rs|go|java|kt|swift|yml|yaml|log|sh|bash|zsh|toml|ini|sql|graphql|svg)$/i.test(
-        n
-      );
+      return /\.(txt|md|json|csv|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|vue|py|rs|go|java|kt|swift|yml|yaml|log|sh|bash|zsh|toml|ini|sql|graphql|svg)$/i.test(n);
     }
-
     function isImageFile(file) {
       const mime = file.type || '';
       if (mime.startsWith('image/')) return true;
       const n = (file.name || '').toLowerCase();
       return /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i.test(n);
     }
-
     async function fileToContentPart(file) {
       const name = file.name || 'file';
-      const mime = file.type || '';
       if (isImageFile(file)) {
         if (file.size > MAX_BIN_BYTES) throw new Error(name + ': изображение > 25 МБ');
         const url = await readAsDataURL(file);
         return { type: 'image_url', image_url: { url } };
       }
-      if (mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
+      if ((file.type || '') === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
         if (file.size > MAX_BIN_BYTES) throw new Error(name + ': PDF > 25 МБ');
-        // OpenRouter OpenAPI: поле file_data (snake_case), не fileData
         const file_data = await readAsDataURL(file);
         return { type: 'file', file: { filename: name, file_data } };
       }
       if (isTextLikeFile(file)) {
-        if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 1 МБ — разбейте файл');
+        if (file.size > MAX_TEXT_BYTES) throw new Error(name + ': текст > 1 МБ');
         const body = await readAsText(file);
         return { type: 'text', text: '### Файл: `' + name + '`\n\n```\n' + body + '\n```\n' };
       }
-      throw new Error(
-        name + ': неподдерживаемый тип. Добавьте изображения, PDF или текстовые файлы (txt, md, json, код…).'
-      );
+      throw new Error(name + ': неподдерживаемый тип файла.');
     }
 
     function formatUserForBubble(content) {
@@ -709,8 +610,8 @@
       const nFile = content.filter((p) => p.type === 'file').length;
       let head = texts.join('\n').trim().slice(0, BUBBLE_USER_TEXT_PREVIEW);
       const badges = [];
-      if (nImg) badges.push(nImg + ' изображ.');
-      if (nFile) badges.push(nFile + ' PDF/файл');
+      if (nImg) badges.push(nImg + ' фото');
+      if (nFile) badges.push(nFile + ' PDF');
       if (badges.length) head = (head ? head + '\n\n' : '') + '📎 ' + badges.join(', ');
       return head || '[вложения]';
     }
@@ -725,253 +626,31 @@
       errorEl.textContent = text;
     }
 
-    function setImageAccessStatus(text, isError = false) {
-      if (!imageAccessStatusEl) return;
-      imageAccessStatusEl.textContent = text;
-      imageAccessStatusEl.style.color = isError ? '#f87171' : 'var(--muted)';
-    }
-
     function resolvedModel() {
       if (model.value === 'custom') return modelCustom.value.trim();
       return model.value;
     }
 
-    function resolvedImageModel() {
-      if (imageModel.value === 'custom') return imageModelCustom.value.trim();
-      return imageModel.value;
-    }
-
-    function resolvedSeedreamModel() {
-      if (seedreamModel.value === 'custom') return seedreamModelCustom.value.trim();
-      return seedreamModel.value;
-    }
-
-    /** Разбор message.content из нестримингового chat/completions (Seedream и др.). */
-    function assistantContentToMarkdown(content) {
-      if (content == null) throw new Error('Пустой ответ модели.');
-      if (typeof content === 'string') {
-        const t = content.trim();
-        if (!t) throw new Error('Пустой текст ответа.');
-        return content;
-      }
-      if (!Array.isArray(content)) {
-        return String(content);
-      }
-      const parts = [];
-      for (const part of content) {
-        if (!part || typeof part !== 'object') continue;
-        if (part.type === 'text' && typeof part.text === 'string' && part.text.trim()) parts.push(part.text);
-        if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
-          parts.push('![image](' + part.image_url.url + ')');
-        }
-      }
-      const out = parts.join('\n\n').trim();
-      if (!out) throw new Error('В ответе нет текста или изображения.');
-      return out;
-    }
-
-    function renderAssistantMarkdown(el, md) {
-      if (!el) return;
+    function renderAssistantMarkdown(domEl, md) {
       const raw = String(md || '');
       if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
-        el.textContent = raw;
+        domEl.textContent = raw;
         return;
       }
       try {
         marked.setOptions({ gfm: true, breaks: true });
-        const html = marked.parse(raw);
-        el.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+        domEl.innerHTML = DOMPurify.sanitize(marked.parse(raw), { USE_PROFILES: { html: true } });
       } catch (_) {
-        el.textContent = raw;
+        domEl.textContent = raw;
       }
     }
 
-    function slimMessagesForStorage(msgs) {
-      return msgs.map((m) => {
-        if (m.role !== 'user' || typeof m.content !== 'object' || !Array.isArray(m.content)) return m;
-        return {
-          role: m.role,
-          content: m.content.map((part) => {
-            if (part.type === 'file' && part.file && typeof part.file.file_data === 'string') {
-              if (part.file.file_data.length > MAX_STORED_FILE_DATA_CHARS) {
-                return {
-                  type: 'text',
-                  text:
-                    '[Вложение «' +
-                    (part.file.filename || 'file') +
-                    '» не сохранено в истории из‑за размера. При необходимости прикрепите файл снова.]',
-                };
-              }
-            }
-            if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
-              const u = part.image_url.url;
-              if (u.startsWith('data:') && u.length > MAX_STORED_IMAGE_DATA_CHARS) {
-                return {
-                  type: 'text',
-                  text: '[Изображение не сохранено в истории из‑за размера; прикрепите снова.]',
-                };
-              }
-            }
-            return part;
-          }),
-        };
-      });
-    }
-
-    function saveChatState() {
-      const payload = {
-        v: 4,
-        messages: slimMessagesForStorage(messages.slice(-MAX_STORED_MESSAGES)),
-        system: system.value,
-        appTab: appTab,
-        model: model.value,
-        modelCustom: modelCustom.value,
-        imageModel: imageModel.value,
-        imageModelCustom: imageModelCustom.value,
-        imageSize: imageSize.value,
-        imageCount: imageCount.value,
-        seedreamModel: seedreamModel.value,
-        seedreamModelCustom: seedreamModelCustom.value,
-        seedreamTemperature: seedreamTemperature.value,
-      };
-      try {
-        localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(payload));
-      } catch (e) {
-        if (e && e.name === 'QuotaExceededError') {
-          try {
-            const minimal = {
-              v: 2,
-              messages: messages
-                .slice(-30)
-                .map((m) =>
-                  m.role === 'assistant'
-                    ? m
-                    : { role: 'user', content: typeof m.content === 'string' ? m.content : '[сообщение с вложениями]' }
-                ),
-              system: system.value,
-              appTab: appTab,
-              model: model.value,
-              modelCustom: modelCustom.value,
-              imageModel: imageModel.value,
-              imageModelCustom: imageModelCustom.value,
-              imageSize: imageSize.value,
-              imageCount: imageCount.value,
-              seedreamModel: seedreamModel.value,
-              seedreamModelCustom: seedreamModelCustom.value,
-              seedreamTemperature: seedreamTemperature.value,
-            };
-            localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(minimal));
-          } catch (_) {
-            showError('Не удалось сохранить историю: переполнение хранилища браузера. Очистите чат или вложения.');
-          }
-        }
-      }
-    }
-
-    function applySavedModelState(saved) {
-      if (!saved || !saved.model) return;
-      if (saved.model === 'custom') {
-        model.value = 'custom';
-        modelCustom.style.display = 'block';
-        modelCustom.value = saved.modelCustom || '';
-        return;
-      }
-      for (let i = 0; i < model.options.length; i++) {
-        if (model.options[i].value === saved.model) {
-          model.selectedIndex = i;
-          return;
-        }
-      }
-    }
-
-    function applySavedImageModelState(saved) {
-      if (!saved || !saved.imageModel) return;
-      if (saved.imageModel === 'custom') {
-        imageModel.value = 'custom';
-        imageModelCustom.style.display = 'block';
-        imageModelCustom.value = saved.imageModelCustom || '';
-        return;
-      }
-      for (let i = 0; i < imageModel.options.length; i++) {
-        if (imageModel.options[i].value === saved.imageModel) {
-          imageModel.selectedIndex = i;
-          return;
-        }
-      }
-    }
-
-    function applySavedSeedreamModelState(saved) {
-      if (!saved || !saved.seedreamModel) return;
-      if (saved.seedreamModel === 'custom') {
-        seedreamModel.value = 'custom';
-        seedreamModelCustom.style.display = 'block';
-        seedreamModelCustom.value = saved.seedreamModelCustom || '';
-        return;
-      }
-      for (let i = 0; i < seedreamModel.options.length; i++) {
-        if (seedreamModel.options[i].value === saved.seedreamModel) {
-          seedreamModel.selectedIndex = i;
-          return;
-        }
-      }
-    }
-
-    function loadChatState() {
-      let raw;
-      try {
-        raw = localStorage.getItem(CHAT_STATE_KEY);
-      } catch (_) {
-        return;
-      }
-      if (!raw) return;
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (_) {
-        return;
-      }
-      if (Array.isArray(data)) {
-        messages = data;
-      } else if (data && Array.isArray(data.messages)) {
-        messages = data.messages;
-        if (typeof data.system === 'string') system.value = data.system;
-        if (data.appTab === 'chat' || data.appTab === 'image' || data.appTab === 'seedream') {
-          appTab = data.appTab;
-        } else if (data.mode === 'image') {
-          appTab = 'image';
-        } else {
-          appTab = 'chat';
-        }
-        applySavedModelState(data);
-        applySavedImageModelState(data);
-        applySavedSeedreamModelState(data);
-        if (typeof data.imageSize === 'string') imageSize.value = data.imageSize;
-        if (data.imageCount != null) imageCount.value = String(data.imageCount);
-        if (data.seedreamTemperature != null) seedreamTemperature.value = String(data.seedreamTemperature);
-      } else return;
-      syncTabButtons();
-      applyTabUi();
-      rebuildThreadFromMessages();
-    }
-
-    function rebuildThreadFromMessages() {
-      thread.innerHTML = '';
-      for (const m of messages) {
-        if (m.role === 'user') {
-          appendBubble('user', formatUserForBubble(m.content), false);
-        } else if (m.role === 'assistant') {
-          appendBubble('assistant', m.content || '', false);
-        }
-      }
-      thread.scrollTop = thread.scrollHeight;
-    }
-
-    function appendBubble(role, text, streaming) {
+    function appendBubble(threadEl, role, text, streaming) {
       const wrap = document.createElement('div');
       wrap.className = 'msg ' + role;
       const r = document.createElement('div');
       r.className = 'role';
-      r.textContent = role === 'user' ? 'Вы' : 'Ассистент';
+      r.textContent = role === 'user' ? 'Вы' : role === 'assistant' ? 'Модель' : role;
       const c = document.createElement('div');
       c.className = 'content' + (role === 'assistant' ? ' markdown-body' : '');
       if (role === 'assistant') {
@@ -982,44 +661,105 @@
       }
       wrap.appendChild(r);
       wrap.appendChild(c);
-      thread.appendChild(wrap);
-      thread.scrollTop = thread.scrollHeight;
+      threadEl.appendChild(wrap);
+      threadEl.parentElement.scrollTop = threadEl.parentElement.scrollHeight;
       return { wrap, c };
     }
 
-    function buildPayload() {
-      const m = resolvedModel();
-      if (!m) throw new Error('Укажите модель.');
-      const body = {
-        model: m,
-        messages: [],
-        stream: true,
-        temperature: Number(temperature.value) || 0.7,
-      };
-      const sys = system.value.trim();
-      if (sys) body.messages.push({ role: 'system', content: sys });
-      body.messages.push(...messages);
-      const mt = maxTokens.value.trim();
-      if (mt) body.max_tokens = Number(mt);
-      // Не задаём file-parser/cloudflare-ai: на OpenRouter он даёт 400 «Failed to parse» для PDF.
-      // Без plugins маршрутизатор сам использует native / дефолт — проверено запросами к API.
-      normalizeOpenRouterMessages(body.messages);
-      return body;
+    function rebuildThread() {
+      const th = activeThread();
+      th.innerHTML = '';
+      for (const m of messages) {
+        if (m.role === 'user') appendBubble(th, 'user', formatUserForBubble(m.content), false);
+        else if (m.role === 'assistant') appendBubble(th, 'assistant', m.content || '', false);
+      }
+      th.parentElement.scrollTop = th.parentElement.scrollHeight;
     }
 
-    function buildImagePayload(prompt) {
-      const m = resolvedImageModel();
-      if (!m) throw new Error('Укажите image-модель.');
-      const n = Number(imageCount.value) || 1;
-      return {
-        model: m,
-        prompt,
-        n: Math.min(Math.max(n, 1), 4),
-        size: imageSize.value || '1024x1024',
-      };
+    function slimMessagesForStorage(msgs) {
+      return msgs.map((m) => {
+        if (m.role !== 'user' || typeof m.content !== 'object' || !Array.isArray(m.content)) return m;
+        return {
+          role: m.role,
+          content: m.content.map((part) => {
+            if (part.type === 'file' && part.file && typeof part.file.file_data === 'string') {
+              if (part.file.file_data.length > MAX_STORED_FILE_DATA_CHARS) {
+                return { type: 'text', text: '[PDF не сохранён в истории из‑за размера]' };
+              }
+            }
+            if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+              const u = part.image_url.url;
+              if (u.startsWith('data:') && u.length > MAX_STORED_IMAGE_DATA_CHARS) {
+                return { type: 'text', text: '[Изображение не сохранено в истории]' };
+              }
+            }
+            return part;
+          }),
+        };
+      });
     }
 
-    /** Совместимость и правка полей под OpenRouter. */
+    function saveState() {
+      const payload = {
+        v: 6,
+        appTab,
+        messagesChat: slimMessagesForStorage(tabMessages.chat.slice(-MAX_STORED_MESSAGES)),
+        messagesImage: slimMessagesForStorage(tabMessages.image.slice(-MAX_STORED_MESSAGES)),
+        messagesSeedream: slimMessagesForStorage(tabMessages.seedream.slice(-MAX_STORED_MESSAGES)),
+        system: system.value,
+        model: model.value,
+        modelCustom: modelCustom.value,
+        seedreamTemperature: seedreamTemperature.value,
+        temperature: temperature.value,
+        maxTokens: maxTokens.value,
+      };
+      try {
+        localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        if (e && e.name === 'QuotaExceededError') showError('Переполнение localStorage — очистите ленту.');
+      }
+    }
+
+    function loadState() {
+      let raw;
+      try {
+        raw = localStorage.getItem(CHAT_STATE_KEY);
+      } catch (_) {
+        return false;
+      }
+      if (!raw) return false;
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (_) {
+        return false;
+      }
+      if (!data || data.v !== 6) return false;
+      tabMessages.chat = Array.isArray(data.messagesChat) ? data.messagesChat : [];
+      tabMessages.image = Array.isArray(data.messagesImage) ? data.messagesImage : [];
+      tabMessages.seedream = Array.isArray(data.messagesSeedream) ? data.messagesSeedream : [];
+      if (typeof data.system === 'string') system.value = data.system;
+      if (data.model === 'custom') {
+        model.value = 'custom';
+        modelCustom.style.display = 'block';
+        modelCustom.value = data.modelCustom || '';
+      } else if (data.model) {
+        for (let i = 0; i < model.options.length; i++) {
+          if (model.options[i].value === data.model) {
+            model.selectedIndex = i;
+            break;
+          }
+        }
+      }
+      if (data.seedreamTemperature != null) seedreamTemperature.value = String(data.seedreamTemperature);
+      if (data.temperature != null) temperature.value = String(data.temperature);
+      if (data.maxTokens != null) maxTokens.value = String(data.maxTokens);
+      if (data.appTab === 'chat' || data.appTab === 'image' || data.appTab === 'seedream') {
+        setAppTab(data.appTab);
+      }
+      return true;
+    }
+
     function normalizeOpenRouterMessages(msgs) {
       if (!Array.isArray(msgs)) return;
       for (const m of msgs) {
@@ -1033,35 +773,77 @@
       }
     }
 
-    async function streamCompletion(attachRestore) {
+    function buildChatPayload() {
+      const m = resolvedModel();
+      if (!m) throw new Error('Укажите модель.');
+      const body = {
+        model: m,
+        messages: [],
+        stream: true,
+        temperature: Number(temperature.value) || 0.7,
+      };
+      const sys = system.value.trim();
+      if (sys) body.messages.push({ role: 'system', content: sys });
+      body.messages.push(...tabMessages.chat);
+      const mt = maxTokens.value.trim();
+      if (mt) body.max_tokens = Number(mt);
+      normalizeOpenRouterMessages(body.messages);
+      return body;
+    }
+
+    function assistantContentToMarkdown(content) {
+      if (content == null) throw new Error('Пустой ответ модели.');
+      if (typeof content === 'string') {
+        if (!String(content).trim()) throw new Error('Пустой текст.');
+        return content;
+      }
+      if (!Array.isArray(content)) return String(content);
+      const parts = [];
+      for (const part of content) {
+        if (!part || typeof part !== 'object') continue;
+        if (part.type === 'text' && typeof part.text === 'string' && part.text.trim()) parts.push(part.text);
+        if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+          parts.push('![image](' + part.image_url.url + ')');
+        }
+      }
+      const out = parts.join('\n\n').trim();
+      if (!out) throw new Error('В ответе нет текста или изображения.');
+      return out;
+    }
+
+    async function streamChatCompletion() {
       showError('');
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
-        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        showError('Нужен API key или прокси.');
         return;
       }
       let payload;
       try {
-        payload = buildPayload();
+        payload = buildChatPayload();
       } catch (e) {
         showError(e.message);
         return;
       }
+      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      stagedFiles.length = 0;
+      renderAttachList();
+      inputChat.value = '';
 
-      sendBtn.disabled = true;
-      stopBtn.disabled = false;
+      sendChat.disabled = true;
+      stopChat.disabled = false;
       abortController = new AbortController();
 
-      const lastUser = messages[messages.length - 1];
-      appendBubble('user', formatUserForBubble(lastUser.content));
-      const { c: assistantContent } = appendBubble('assistant', '', true);
+      const lastUser = tabMessages.chat[tabMessages.chat.length - 1];
+      appendBubble(threadChat, 'user', formatUserForBubble(lastUser.content), false);
+      const { c: assistantContent } = appendBubble(threadChat, 'assistant', '', true);
 
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (!proxyMode) {
           headers.Authorization = 'Bearer ' + key;
           headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
-          headers['X-Title'] = 'OpenRouter Grok Chat';
+          headers['X-Title'] = 'Grok Chat';
         }
         const res = await fetch(chatUrl, {
           method: 'POST',
@@ -1069,25 +851,21 @@
           body: JSON.stringify(payload),
           signal: abortController.signal,
         });
-
         if (!res.ok) {
           const errText = await res.text();
           let msg = res.status + ' ' + res.statusText;
           try {
             const j = JSON.parse(errText);
             if (j.error?.message) msg = j.error.message;
-            if (j.error?.code != null) msg += ' (code ' + j.error.code + ')';
           } catch (_) {
-            if (errText && errText.length < 500) msg += ': ' + errText;
+            if (errText && errText.length < 400) msg += ': ' + errText;
           }
           throw new Error(msg);
         }
-
         const reader = res.body.getReader();
         const dec = new TextDecoder();
         let buffer = '';
         let full = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -1096,13 +874,10 @@
           buffer = lines.pop() || '';
           for (const line of lines) {
             const s = line.trim();
-            if (!s || s.startsWith(':')) continue;
-            if (s === 'data: [DONE]') continue;
-            if (!s.startsWith('data: ')) continue;
-            const json = s.slice(6);
+            if (!s || s.startsWith(':') || s === 'data: [DONE]' || !s.startsWith('data: ')) continue;
             let chunk;
             try {
-              chunk = JSON.parse(json);
+              chunk = JSON.parse(s.slice(6));
             } catch {
               continue;
             }
@@ -1114,51 +889,42 @@
             if (piece) {
               full += piece;
               assistantContent.textContent = full;
-              thread.scrollTop = thread.scrollHeight;
+              threadChat.parentElement.scrollTop = threadChat.parentElement.scrollHeight;
             }
             const err = chunk.choices?.[0]?.error;
             if (err?.message) throw new Error(err.message);
           }
         }
-
-        messages.push({ role: 'assistant', content: full });
+        tabMessages.chat.push({ role: 'assistant', content: full });
         renderAssistantMarkdown(assistantContent, full);
-        saveChatState();
+        saveState();
       } catch (e) {
         if (e.name === 'AbortError') {
-          assistantContent.textContent += '\n\n[прервано]';
-          const txt = assistantContent.textContent || '';
+          const txt = (assistantContent.textContent || '') + '\n\n[прервано]';
           renderAssistantMarkdown(assistantContent, txt);
-          messages.push({ role: 'assistant', content: txt });
-          saveChatState();
+          tabMessages.chat.push({ role: 'assistant', content: txt });
+          saveState();
         } else {
           showError(String(e.message || e));
           assistantContent.textContent = '[ошибка]';
-          messages.pop();
-          if (attachRestore && attachRestore.length) {
-            stagedFiles = attachRestore;
-            renderAttachList();
+          tabMessages.chat.pop();
+          if (attachBackup && attachBackup.length) {
+            stagedByTab.chat.length = 0;
+            stagedByTab.chat.push(...attachBackup);
+            if (appTab === 'chat') renderAttachList();
           }
+          rebuildThread();
         }
       } finally {
-        sendBtn.disabled = false;
-        stopBtn.disabled = true;
+        sendChat.disabled = false;
+        stopChat.disabled = true;
         abortController = null;
       }
     }
 
-    async function send() {
-      if (appTab === 'image') {
-        await generateImage();
-        return;
-      }
-      if (appTab === 'seedream') {
-        await generateSeedream();
-        return;
-      }
-      const text = input.value.trim();
+    async function sendChatMessage() {
+      const text = inputChat.value.trim();
       if (!text && !stagedFiles.length) return;
-      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
       let userContent;
       try {
         if (!stagedFiles.length) {
@@ -1169,96 +935,83 @@
           else
             parts.push({
               type: 'text',
-              text: 'Проанализируй все вложения: по каждому файлу — что важно; в конце — общий вывод.',
+              text: 'Проанализируй вложения: по каждому — что важно; в конце общий вывод.',
             });
-          for (const f of stagedFiles) {
-            parts.push(await fileToContentPart(f));
-          }
+          for (const f of stagedFiles) parts.push(await fileToContentPart(f));
           userContent = parts;
         }
       } catch (e) {
         showError(e.message || String(e));
         return;
       }
-      stagedFiles = [];
-      renderAttachList();
-      input.value = '';
-      messages.push({ role: 'user', content: userContent });
-      await streamCompletion(attachBackup);
+      tabMessages.chat.push({ role: 'user', content: userContent });
+      await streamChatCompletion();
     }
 
-    async function generateImage() {
-      const text = input.value.trim();
+    async function generateGrokImage() {
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
-        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        showError('Нужен API key или прокси.');
         return;
       }
-      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      const text = inputImage.value.trim();
       const imageFiles = stagedFiles.filter(isImageFile);
       const nonImages = stagedFiles.filter((f) => !isImageFile(f));
       if (nonImages.length) {
-        showError('С опорным фото в «Картинки» поддерживаются только файлы-изображения (без PDF и др.).');
+        showError('Только изображения.');
         return;
       }
       if (!text && !imageFiles.length) return;
 
-      const useChatRef = imageFiles.length > 0;
-      let payload;
-      /** @type {string|object[]} */
-      let userContentForHistory;
+      const attachBackup = [...stagedFiles];
+      const parts = [];
+      if (text) parts.push({ type: 'text', text: text });
+      else
+        parts.push({
+          type: 'text',
+          text: 'Сгенерируй изображение по приложенному фото; стиль и изменения — на твоё усмотрение.',
+        });
       try {
-        if (useChatRef) {
-          const parts = [];
-          if (text) parts.push({ type: 'text', text: text });
-          else
-            parts.push({
-              type: 'text',
-              text: 'Сгенерируй новое изображение по этому фото; учти стиль и композицию опоры, измени то, что уместно по промпту.',
-            });
-          for (const f of imageFiles) {
-            parts.push(await fileToContentPart(f));
-          }
-          userContentForHistory = parts;
-          payload = {
-            model: resolvedImageModel(),
-            messages: [{ role: 'user', content: parts }],
-            modalities: ['image', 'text'],
-            stream: false,
-            temperature: 1,
-          };
-          normalizeOpenRouterMessages(payload.messages);
-        } else {
-          if (!text) return;
-          userContentForHistory = text;
-          payload = buildImagePayload(text);
-        }
+        for (const f of imageFiles) parts.push(await fileToContentPart(f));
       } catch (e) {
         showError(e.message || String(e));
         return;
       }
 
-      stagedFiles = [];
+      stagedFiles.length = 0;
       renderAttachList();
-      input.value = '';
+      inputImage.value = '';
       showError('');
-      sendBtn.disabled = true;
-      stopBtn.disabled = !useChatRef;
-      if (useChatRef) abortController = new AbortController();
-      appendBubble('user', formatUserForBubble(userContentForHistory), false);
-      const { c: assistantContent } = appendBubble('assistant', 'Генерирую изображение...', true);
+
+      sendImage.disabled = true;
+      stopImage.disabled = false;
+      abortController = new AbortController();
+
+      const userContentForHistory = parts;
+      appendBubble(threadImage, 'user', formatUserForBubble(userContentForHistory), false);
+      const { c: assistantContent } = appendBubble(threadImage, 'assistant', 'Генерация…', true);
+
+      const payload = {
+        model: grokImageModelId,
+        messages: [{ role: 'user', content: parts }],
+        modalities: ['image', 'text'],
+        stream: false,
+        temperature: 1,
+      };
+      normalizeOpenRouterMessages(payload.messages);
+
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (!proxyMode) {
           headers.Authorization = 'Bearer ' + key;
           headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
-          headers['X-Title'] = useChatRef ? 'OpenRouter Images (chat+ref)' : 'OpenRouter Grok Images';
+          headers['X-Title'] = 'Grok Image';
         }
-        const res = await fetch(useChatRef ? chatUrl : imageUrl, {
+        const res = await fetch(chatUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
-          signal: useChatRef ? abortController.signal : undefined,
+          signal: abortController.signal,
         });
         if (!res.ok) {
           const errText = await res.text();
@@ -1267,86 +1020,55 @@
             const j = JSON.parse(errText);
             if (j.error?.message) msg = j.error.message;
           } catch (_) {
-            if (errText && errText.length < 500) msg += ': ' + errText;
+            if (errText && errText.length < 400) msg += ': ' + errText;
           }
           throw new Error(msg);
         }
         const data = await res.json();
-        let md;
-        if (useChatRef) {
-          const content = data.choices?.[0]?.message?.content;
-          md = assistantContentToMarkdown(content);
-        } else {
-          const images = Array.isArray(data.data) ? data.data : [];
-          if (!images.length) throw new Error('OpenRouter вернул пустой результат.');
-          md = images
-            .map((item, idx) => {
-              if (item.url) return '![image ' + (idx + 1) + '](' + item.url + ')';
-              if (item.b64_json) return '![image ' + (idx + 1) + '](data:image/png;base64,' + item.b64_json + ')';
-              return '';
-            })
-            .filter(Boolean)
-            .join('\n\n');
-          if (!md) throw new Error('Не удалось извлечь изображение из ответа API.');
-        }
+        const md = assistantContentToMarkdown(data.choices?.[0]?.message?.content);
         renderAssistantMarkdown(assistantContent, md);
-        setImageAccessStatus(
-          useChatRef
-            ? 'Генерация с опорным фото (chat + modalities) выполнена.'
-            : 'Генерация изображений (REST) работает для текущей конфигурации.'
-        );
-        messages.push({ role: 'user', content: userContentForHistory });
-        messages.push({ role: 'assistant', content: md });
-        saveChatState();
+        tabMessages.image.push({ role: 'user', content: userContentForHistory });
+        tabMessages.image.push({ role: 'assistant', content: md });
+        saveState();
       } catch (e) {
         if (e.name === 'AbortError') {
           assistantContent.textContent = '[прервано]';
-          messages.push({ role: 'user', content: userContentForHistory });
-          messages.push({ role: 'assistant', content: '[прервано]' });
-          saveChatState();
-          if (attachBackup && attachBackup.length) {
-            stagedFiles = attachBackup;
-            renderAttachList();
-          }
+          tabMessages.image.push({ role: 'user', content: userContentForHistory });
+          tabMessages.image.push({ role: 'assistant', content: '[прервано]' });
+          saveState();
+          stagedByTab.image.length = 0;
+          stagedByTab.image.push(...attachBackup);
+          if (appTab === 'image') renderAttachList();
         } else {
-          assistantContent.textContent = '[ошибка генерации]';
-          const errMsg = String(e.message || e);
-          showError(errMsg);
-          setImageAccessStatus('Ошибка генерации изображений: ' + errMsg, true);
-          if (attachBackup && attachBackup.length) {
-            stagedFiles = attachBackup;
-            renderAttachList();
-          }
+          assistantContent.textContent = '[ошибка]';
+          showError(String(e.message || e));
+          stagedByTab.image.length = 0;
+          stagedByTab.image.push(...attachBackup);
+          if (appTab === 'image') renderAttachList();
         }
       } finally {
-        sendBtn.disabled = false;
-        stopBtn.disabled = true;
+        sendImage.disabled = false;
+        stopImage.disabled = true;
         abortController = null;
       }
     }
 
     async function generateSeedream() {
-      const text = input.value.trim();
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
-        showError('Введите API key или откройте страницу через openrouter_grok_proxy.py.');
+        showError('Нужен API key или прокси.');
         return;
       }
-      const m = resolvedSeedreamModel();
-      if (!m) {
-        showError('Укажите модель Seedream.');
-        return;
-      }
-      const attachBackup = stagedFiles.length ? [...stagedFiles] : null;
+      const text = inputSeedream.value.trim();
+      const imageFiles = stagedFiles.filter(isImageFile);
       const nonImages = stagedFiles.filter((f) => !isImageFile(f));
       if (nonImages.length) {
-        showError('В Seedream можно прикладывать только изображения (без PDF и прочих файлов).');
+        showError('Только изображения.');
         return;
       }
-      const imageFiles = stagedFiles.filter(isImageFile);
       if (!text && !imageFiles.length) return;
 
-      /** @type {string|object[]} */
+      const attachBackup = [...stagedFiles];
       let userContent;
       try {
         if (imageFiles.length) {
@@ -1355,11 +1077,9 @@
           else
             parts.push({
               type: 'text',
-              text: 'Сгенерируй изображение по этому фото; стиль и детали выбери уместно.',
+              text: 'Сгенерируй изображение по этому фото.',
             });
-          for (const f of imageFiles) {
-            parts.push(await fileToContentPart(f));
-          }
+          for (const f of imageFiles) parts.push(await fileToContentPart(f));
           userContent = parts;
         } else {
           userContent = text;
@@ -1369,30 +1089,34 @@
         return;
       }
 
-      stagedFiles = [];
+      stagedFiles.length = 0;
       renderAttachList();
-      input.value = '';
+      inputSeedream.value = '';
       showError('');
-      sendBtn.disabled = true;
-      stopBtn.disabled = false;
+
+      sendSeedream.disabled = true;
+      stopSeedream.disabled = false;
       abortController = new AbortController();
-      appendBubble('user', formatUserForBubble(userContent), false);
-      const { c: assistantContent } = appendBubble('assistant', 'Генерация Seedream…', true);
+
+      appendBubble(threadSeedream, 'user', formatUserForBubble(userContent), false);
+      const { c: assistantContent } = appendBubble(threadSeedream, 'assistant', 'Генерация…', true);
+
+      const body = {
+        model: seedreamModelId,
+        messages: [{ role: 'user', content: userContent }],
+        modalities: ['image', 'text'],
+        stream: false,
+        temperature: Number(seedreamTemperature.value) || 1,
+      };
+      normalizeOpenRouterMessages(body.messages);
+
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (!proxyMode) {
           headers.Authorization = 'Bearer ' + key;
           headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
-          headers['X-Title'] = 'OpenRouter Seedream';
+          headers['X-Title'] = 'Seedream';
         }
-        const body = {
-          model: m,
-          messages: [{ role: 'user', content: userContent }],
-          modalities: ['image', 'text'],
-          stream: false,
-          temperature: Number(seedreamTemperature.value) || 1,
-        };
-        normalizeOpenRouterMessages(body.messages);
         const res = await fetch(chatUrl, {
           method: 'POST',
           headers,
@@ -1406,62 +1130,88 @@
             const j = JSON.parse(errText);
             if (j.error?.message) msg = j.error.message;
           } catch (_) {
-            if (errText && errText.length < 500) msg += ': ' + errText;
+            if (errText && errText.length < 400) msg += ': ' + errText;
           }
           throw new Error(msg);
         }
         const data = await res.json();
-        const content = data.choices?.[0]?.message?.content;
-        const md = assistantContentToMarkdown(content);
+        const md = assistantContentToMarkdown(data.choices?.[0]?.message?.content);
         renderAssistantMarkdown(assistantContent, md);
-        setSeedreamAccessStatus('Seedream: запрос выполнен успешно.');
-        messages.push({ role: 'user', content: userContent });
-        messages.push({ role: 'assistant', content: md });
-        saveChatState();
+        tabMessages.seedream.push({ role: 'user', content: userContent });
+        tabMessages.seedream.push({ role: 'assistant', content: md });
+        saveState();
       } catch (e) {
         if (e.name === 'AbortError') {
           assistantContent.textContent = '[прервано]';
-          messages.push({ role: 'user', content: userContent });
-          messages.push({ role: 'assistant', content: '[прервано]' });
-          saveChatState();
-          if (attachBackup && attachBackup.length) {
-            stagedFiles = attachBackup;
-            renderAttachList();
-          }
+          tabMessages.seedream.push({ role: 'user', content: userContent });
+          tabMessages.seedream.push({ role: 'assistant', content: '[прервано]' });
+          saveState();
+          stagedByTab.seedream.length = 0;
+          stagedByTab.seedream.push(...attachBackup);
+          if (appTab === 'seedream') renderAttachList();
         } else {
-          assistantContent.textContent = '[ошибка Seedream]';
-          const errMsg = String(e.message || e);
-          showError(errMsg);
-          setSeedreamAccessStatus('Ошибка Seedream: ' + errMsg, true);
-          if (attachBackup && attachBackup.length) {
-            stagedFiles = attachBackup;
-            renderAttachList();
-          }
+          assistantContent.textContent = '[ошибка]';
+          showError(String(e.message || e));
+          stagedByTab.seedream.length = 0;
+          stagedByTab.seedream.push(...attachBackup);
+          if (appTab === 'seedream') renderAttachList();
         }
       } finally {
-        sendBtn.disabled = false;
-        stopBtn.disabled = true;
+        sendSeedream.disabled = false;
+        stopSeedream.disabled = true;
         abortController = null;
       }
     }
 
-    sendBtn.addEventListener('click', () => void send());
-    stopBtn.addEventListener('click', () => abortController?.abort());
+    sendChat.addEventListener('click', () => void sendChatMessage());
+    sendImage.addEventListener('click', () => void generateGrokImage());
+    sendSeedream.addEventListener('click', () => void generateSeedream());
+    stopChat.addEventListener('click', () => abortController?.abort());
+    stopImage.addEventListener('click', () => abortController?.abort());
+    stopSeedream.addEventListener('click', () => abortController?.abort());
 
-    clearHistoryBtn.addEventListener('click', () => {
-      if (!confirm('Очистить историю диалога в этом браузере?')) return;
-      messages = [];
-      thread.innerHTML = '';
-      saveChatState();
+    function bindEnter(textarea, fn) {
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          void fn();
+        }
+      });
+    }
+    bindEnter(inputChat, sendChatMessage);
+    bindEnter(inputImage, generateGrokImage);
+    bindEnter(inputSeedream, generateSeedream);
+
+    el('clearChat').addEventListener('click', () => {
+      if (!confirm('Очистить чат?')) return;
+      tabMessages.chat.length = 0;
+      threadChat.innerHTML = '';
+      saveState();
+      showError('');
+    });
+    el('clearImage').addEventListener('click', () => {
+      if (!confirm('Очистить ленту картинок?')) return;
+      tabMessages.image.length = 0;
+      threadImage.innerHTML = '';
+      stagedByTab.image.length = 0;
+      if (appTab === 'image') renderAttachList();
+      saveState();
+      showError('');
+    });
+    el('clearSeedream').addEventListener('click', () => {
+      if (!confirm('Очистить ленту Seedream?')) return;
+      tabMessages.seedream.length = 0;
+      threadSeedream.innerHTML = '';
+      stagedByTab.seedream.length = 0;
+      if (appTab === 'seedream') renderAttachList();
+      saveState();
       showError('');
     });
 
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        void send();
-      }
-    });
+    void (async function boot() {
+      await initProxy();
+      if (!loadState()) setAppTab('chat');
+    })();
   </script>
 </body>
 </html>
