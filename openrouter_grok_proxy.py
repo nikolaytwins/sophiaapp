@@ -47,7 +47,7 @@ GROK_IMAGE_MODEL = (
     os.environ.get("OPENROUTER_GROK_IMAGE_MODEL", "google/gemini-2.5-flash-image").strip()
 )
 SEEDREAM_MODEL = (
-    os.environ.get("OPENROUTER_SEEDREAM_MODEL", "bytedance-seed/seedream-4.5").strip()
+    os.environ.get("OPENROUTER_SEEDREAM_MODEL", "bytedance-seed/seedream-4.0").strip()
 )
 
 DEFAULT_CHAT_MODEL = "x-ai/grok-4.20"

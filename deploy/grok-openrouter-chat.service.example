@@ -15,7 +15,7 @@ RestartSec=5
 # Environment=OPENCLAW_ROOT=/root/.openclaw
 # Опционально: фиксированные id без каталога OpenRouter
 # Environment=OPENROUTER_GROK_IMAGE_MODEL=google/gemini-2.5-flash-image
-# Environment=OPENROUTER_SEEDREAM_MODEL=bytedance-seed/seedream-4.5
+# Environment=OPENROUTER_SEEDREAM_MODEL=bytedance-seed/seedream-4.0
 
 Environment=GROK_CHAT_BIND=127.0.0.1
 Environment=GROK_CHAT_PORT=8766
