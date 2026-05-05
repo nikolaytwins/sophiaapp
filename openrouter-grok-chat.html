@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Grok · картинки · Seedream</title>
+  <title>Grok чат · OR-картинки · Seedream</title>
   <style>
     :root {
       --bg: #0d0f12;
@@ -208,7 +208,7 @@
   <header>
     <div class="tabs" id="appTabs">
       <button type="button" class="tab active" data-tab="chat">Чат Grok</button>
-      <button type="button" class="tab" data-tab="image">Grok — картинки</button>
+      <button type="button" class="tab" data-tab="image">Картинки (OR)</button>
       <button type="button" class="tab" data-tab="seedream">Seedream</button>
     </div>
     <div class="grow" id="apiKeyRow">
@@ -285,7 +285,7 @@
     </div>
 
     <div id="viewImage" class="view">
-      <p class="note">Генерация через Grok + modalities. «Фото» — опорное изображение, затем промпт (текст можно не писать — подставится краткая инструкция).</p>
+      <p class="note">Генерация через OpenRouter (по умолчанию <strong>Gemini 2.5 Flash Image</strong>). У <code>x-ai/grok-*</code> на OpenRouter нет выхода «картинка» — маршрут не находится. «Фото» — опорное изображение + промпт (текст можно не писать).</p>
       <div class="scroll" id="scrollImage">
         <main id="threadImage"></main>
       </div>
@@ -301,7 +301,7 @@
     </div>
 
     <div id="viewSeedream" class="view">
-      <p class="note">Seedream (ByteDance) через chat + modalities. Только изображения как опора + текст (или только фото).</p>
+      <p class="note">Seedream (ByteDance) через OpenRouter. Если <strong>Provider returned error</strong> — это ответ провайдера (модерация, сбой, размер/формат фото), не баг UI; попробуйте другой промпт/фото или другую модель в <code>OPENROUTER_SEEDREAM_MODEL</code>.</p>
       <div class="scroll" id="scrollSeedream">
         <main id="threadSeedream"></main>
       </div>
@@ -378,7 +378,7 @@
     let abortController = null;
     let proxyMode = false;
     let chatUrl = OR_URL;
-    let grokImageModelId = 'x-ai/grok-4.20';
+    let grokImageModelId = 'google/gemini-2.5-flash-image';
     let seedreamModelId = 'bytedance-seed/seedream-4.5';
 
     function apiBase() {
@@ -820,6 +820,15 @@
       }
     }
 
+    /** См. OpenRouter image generation: Gemini — image+text; Flux/Seedream-класс — только image. */
+    function outputModalitiesForImageModel(modelId) {
+      const id = String(modelId || '').toLowerCase();
+      if (id.includes('gemini') && (id.includes('image') || id.includes('flash-image'))) {
+        return ['image', 'text'];
+      }
+      return ['image'];
+    }
+
     function buildChatPayload() {
       const m = resolvedModel();
       if (!m) throw new Error('Укажите модель.');
@@ -1075,8 +1084,7 @@
       const payload = {
         model: grokImageModelId,
         messages: [{ role: 'user', content: parts }],
-        // Grok image на OR — выход только image; иначе «No endpoints… image, text».
-        modalities: ['image'],
+        modalities: outputModalitiesForImageModel(grokImageModelId),
         stream: false,
         temperature: 1,
       };

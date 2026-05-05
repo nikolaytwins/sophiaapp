@@ -3,8 +3,11 @@
 Локальный прокси OpenRouter для Grok: ключ из
 agents/main/agent/auth-profiles.json (openrouter:default) или OPENROUTER_API_KEY.
 
-Каталог моделей OpenRouter не тянем — только фиксированные id (чат Grok, Grok image, Seedream).
+Каталог моделей OpenRouter не тянем — только фиксированные id (чат Grok, картинки, Seedream).
 Переопределение на сервере: OPENROUTER_GROK_IMAGE_MODEL, OPENROUTER_SEEDREAM_MODEL.
+
+Важно: x-ai/grok-* на OpenRouter не маршрутизируется как image-generation (нет output modality image).
+Дефолт картинок — Gemini Image; для Flux и т.п. задайте OPENROUTER_GROK_IMAGE_MODEL.
 
 Запуск: python3 openrouter_grok_proxy.py
 Открыть: http://127.0.0.1:8766/
@@ -39,9 +42,9 @@ GROK_CHAT_MODELS: list[dict] = [
     {"id": "x-ai/grok-4", "name": "Grok 4", "context_length": 131_072},
 ]
 
-# Grok с выходом image через chat + modalities (см. OpenRouter multimodal image generation).
+# Генерация картинок через chat + modalities (см. OpenRouter image generation). Не x-ai/grok — у них на OR нет image output.
 GROK_IMAGE_MODEL = (
-    os.environ.get("OPENROUTER_GROK_IMAGE_MODEL", "x-ai/grok-4.20").strip()
+    os.environ.get("OPENROUTER_GROK_IMAGE_MODEL", "google/gemini-2.5-flash-image").strip()
 )
 SEEDREAM_MODEL = (
     os.environ.get("OPENROUTER_SEEDREAM_MODEL", "bytedance-seed/seedream-4.5").strip()
@@ -101,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
             body = HTML_PATH.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -116,6 +121,7 @@ class Handler(BaseHTTPRequestHandler):
             raw = json.dumps(cfg, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)
