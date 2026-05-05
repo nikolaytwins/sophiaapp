@@ -4,7 +4,8 @@
 agents/main/agent/auth-profiles.json (openrouter:default) или OPENROUTER_API_KEY.
 
 Каталог моделей OpenRouter не тянем — только фиксированные id (чат Grok, картинки, Seedream).
-Переопределение на сервере: OPENROUTER_GROK_IMAGE_MODEL, OPENROUTER_SEEDREAM_MODEL.
+Переопределение на сервере: OPENROUTER_GROK_IMAGE_MODEL, OPENROUTER_SEEDREAM_MODEL,
+OPENROUTER_SEEDREAM_5_MODEL (вкладка Seedream 5; id может отличаться, пока нет в каталоге OR).
 
 Важно: x-ai/grok-* на OpenRouter не маршрутизируется как image-generation (нет output modality image).
 Дефолт картинок — Gemini Image; для Flux и т.п. задайте OPENROUTER_GROK_IMAGE_MODEL.
@@ -48,6 +49,10 @@ GROK_IMAGE_MODEL = (
 )
 SEEDREAM_MODEL = (
     os.environ.get("OPENROUTER_SEEDREAM_MODEL", "bytedance-seed/seedream-4.0").strip()
+)
+# Отдельная вкладка UI: запросы с nsfw: true. Slug уточняйте на openrouter.ai — 5.0 может называться иначе.
+SEEDREAM_5_MODEL = (
+    os.environ.get("OPENROUTER_SEEDREAM_5_MODEL", "bytedance-seed/seedream-5.0").strip()
 )
 
 DEFAULT_CHAT_MODEL = "x-ai/grok-4.20"
@@ -116,6 +121,7 @@ class Handler(BaseHTTPRequestHandler):
                 "models": GROK_CHAT_MODELS,
                 "grokImageModel": GROK_IMAGE_MODEL,
                 "seedreamModel": SEEDREAM_MODEL,
+                "seedream5Model": SEEDREAM_5_MODEL,
                 "openrouterChat": OR_CHAT,
             }
             raw = json.dumps(cfg, ensure_ascii=False).encode("utf-8")
@@ -208,6 +214,7 @@ def main() -> None:
     print(f"  Chat models (fixed): {len(GROK_CHAT_MODELS)}")
     print(f"  Grok image model: {GROK_IMAGE_MODEL}")
     print(f"  Seedream model: {SEEDREAM_MODEL}")
+    print(f"  Seedream 5 tab model: {SEEDREAM_5_MODEL}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

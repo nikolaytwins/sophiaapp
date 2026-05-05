@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Grok чат · OR-картинки · Seedream</title>
+  <title>Grok чат · OR-картинки · Seedream 4 / 5</title>
   <style>
     :root {
       --bg: #0d0f12;
@@ -210,6 +210,7 @@
       <button type="button" class="tab active" data-tab="chat">Чат Grok</button>
       <button type="button" class="tab" data-tab="image">Картинки (OR)</button>
       <button type="button" class="tab" data-tab="seedream">Seedream 4.0</button>
+      <button type="button" class="tab" data-tab="seedream5">Seedream 5</button>
     </div>
     <div class="grow" id="apiKeyRow">
       <label for="apiKey">OpenRouter API key</label>
@@ -256,6 +257,20 @@
       <div style="min-width:140px;">
         <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Лента</label>
         <button type="button" id="clearSeedream" class="btn-secondary" style="width:100%;">Очистить ленту</button>
+      </div>
+    </div>
+    <div id="hdrSeedream5" class="hdr-pane">
+      <div class="grow">
+        <label>Модель (сервер)</label>
+        <div id="seedream5ModelLabel" style="font-size:14px;padding:8px 0;color:var(--text);">—</div>
+      </div>
+      <div style="min-width:120px;">
+        <label for="seedream5Temperature">Temperature</label>
+        <input id="seedream5Temperature" type="number" step="0.1" min="0" max="2" value="1" style="width:100%;" />
+      </div>
+      <div style="min-width:140px;">
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Лента</label>
+        <button type="button" id="clearSeedream5" class="btn-secondary" style="width:100%;">Очистить ленту</button>
       </div>
     </div>
   </header>
@@ -315,6 +330,25 @@
         </div>
       </footer>
     </div>
+
+    <div id="viewSeedream5" class="view">
+      <p class="note">
+        Отдельная модель с сервера (<code>OPENROUTER_SEEDREAM_5_MODEL</code>). На OpenRouter отдельной страницы «5.0» может не быть —
+        тогда задайте актуальный id в env. В запрос уходит <code>&quot;nsfw&quot;: true</code> (если шлюз/провайдер это понимает; иначе поле игнорируется).
+      </p>
+      <div class="scroll" id="scrollSeedream5">
+        <main id="threadSeedream5"></main>
+      </div>
+      <footer>
+        <div id="attachListSeedream5" class="attach-list" hidden></div>
+        <div class="footer-row">
+          <button type="button" id="attachBtnSeedream5" class="btn-secondary">Фото</button>
+          <textarea id="inputSeedream5" placeholder="Промпт…"></textarea>
+          <button type="button" id="sendSeedream5">Сгенерировать</button>
+          <button type="button" id="stopSeedream5" disabled>Стоп</button>
+        </div>
+      </footer>
+    </div>
   </div>
 
   <script>
@@ -338,39 +372,48 @@
     const hdrChat = el('hdrChat');
     const hdrImage = el('hdrImage');
     const hdrSeedream = el('hdrSeedream');
+    const hdrSeedream5 = el('hdrSeedream5');
     const viewChat = el('viewChat');
     const viewImage = el('viewImage');
     const viewSeedream = el('viewSeedream');
+    const viewSeedream5 = el('viewSeedream5');
     const model = el('model');
     const modelCustom = el('modelCustom');
     const temperature = el('temperature');
     const maxTokens = el('maxTokens');
     const system = el('system');
     const seedreamTemperature = el('seedreamTemperature');
+    const seedream5Temperature = el('seedream5Temperature');
     const grokImageModelLabel = el('grokImageModelLabel');
     const seedreamModelLabel = el('seedreamModelLabel');
+    const seedream5ModelLabel = el('seedream5ModelLabel');
     const errorEl = el('error');
 
     const threadChat = el('threadChat');
     const threadImage = el('threadImage');
     const threadSeedream = el('threadSeedream');
+    const threadSeedream5 = el('threadSeedream5');
     const inputChat = el('inputChat');
     const inputImage = el('inputImage');
     const inputSeedream = el('inputSeedream');
+    const inputSeedream5 = el('inputSeedream5');
     const attachListChat = el('attachListChat');
     const attachListImage = el('attachListImage');
     const attachListSeedream = el('attachListSeedream');
+    const attachListSeedream5 = el('attachListSeedream5');
     const fileInput = el('fileInput');
     const sendChat = el('sendChat');
     const sendImage = el('sendImage');
     const sendSeedream = el('sendSeedream');
+    const sendSeedream5 = el('sendSeedream5');
     const stopChat = el('stopChat');
     const stopImage = el('stopImage');
     const stopSeedream = el('stopSeedream');
+    const stopSeedream5 = el('stopSeedream5');
 
-    const tabMessages = { chat: [], image: [], seedream: [] };
-    const stagedByTab = { chat: [], image: [], seedream: [] };
-    /** @type {'chat'|'image'|'seedream'} */
+    const tabMessages = { chat: [], image: [], seedream: [], seedream5: [] };
+    const stagedByTab = { chat: [], image: [], seedream: [], seedream5: [] };
+    /** @type {'chat'|'image'|'seedream'|'seedream5'} */
     let appTab = 'chat';
     let messages = tabMessages.chat;
     let stagedFiles = stagedByTab.chat;
@@ -380,6 +423,7 @@
     let chatUrl = OR_URL;
     let grokImageModelId = 'google/gemini-2.5-flash-image';
     let seedreamModelId = 'bytedance-seed/seedream-4.0';
+    let seedream5ModelId = 'bytedance-seed/seedream-5.0';
 
     function apiBase() {
       const p = window.location.pathname;
@@ -414,6 +458,7 @@
     temperature.addEventListener('change', debouncedSave);
     maxTokens.addEventListener('change', debouncedSave);
     seedreamTemperature.addEventListener('change', debouncedSave);
+    seedream5Temperature.addEventListener('change', debouncedSave);
 
     function fillChatModels(models, defaultId) {
       model.innerHTML = '';
@@ -442,8 +487,10 @@
         fillChatModels(cfg.models || [], cfg.defaultModel || 'x-ai/grok-4.20');
         grokImageModelId = cfg.grokImageModel || grokImageModelId;
         seedreamModelId = cfg.seedreamModel || seedreamModelId;
+        seedream5ModelId = cfg.seedream5Model || seedream5ModelId;
         grokImageModelLabel.textContent = grokImageModelId;
         seedreamModelLabel.textContent = seedreamModelId;
+        seedream5ModelLabel.textContent = seedream5ModelId;
       } catch {
         proxyMode = false;
         chatUrl = OR_URL;
@@ -457,17 +504,20 @@
         );
         grokImageModelLabel.textContent = grokImageModelId + ' (локально; задайте прокси)';
         seedreamModelLabel.textContent = seedreamModelId + ' (локально)';
+        seedream5ModelLabel.textContent = seedream5ModelId + ' (локально)';
       }
     }
 
     function activeThread() {
       if (appTab === 'image') return threadImage;
       if (appTab === 'seedream') return threadSeedream;
+      if (appTab === 'seedream5') return threadSeedream5;
       return threadChat;
     }
     function activeAttachList() {
       if (appTab === 'image') return attachListImage;
       if (appTab === 'seedream') return attachListSeedream;
+      if (appTab === 'seedream5') return attachListSeedream5;
       return attachListChat;
     }
     function syncTabButtons() {
@@ -477,7 +527,7 @@
     }
 
     function setAppTab(tab) {
-      if (tab !== 'chat' && tab !== 'image' && tab !== 'seedream') return;
+      if (tab !== 'chat' && tab !== 'image' && tab !== 'seedream' && tab !== 'seedream5') return;
       appTab = tab;
       messages = tabMessages[appTab];
       stagedFiles = stagedByTab[appTab];
@@ -485,9 +535,11 @@
       hdrChat.classList.toggle('is-active', tab === 'chat');
       hdrImage.classList.toggle('is-active', tab === 'image');
       hdrSeedream.classList.toggle('is-active', tab === 'seedream');
+      hdrSeedream5.classList.toggle('is-active', tab === 'seedream5');
       viewChat.classList.toggle('is-active', tab === 'chat');
       viewImage.classList.toggle('is-active', tab === 'image');
       viewSeedream.classList.toggle('is-active', tab === 'seedream');
+      viewSeedream5.classList.toggle('is-active', tab === 'seedream5');
       if (tab === 'chat') fileInput.removeAttribute('accept');
       else fileInput.setAttribute('accept', 'image/*');
       rebuildThread();
@@ -499,7 +551,7 @@
     appTabs.querySelectorAll('button[data-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const t = btn.getAttribute('data-tab');
-        if (t === 'chat' || t === 'image' || t === 'seedream') setAppTab(t);
+        if (t === 'chat' || t === 'image' || t === 'seedream' || t === 'seedream5') setAppTab(t);
       });
     });
 
@@ -538,6 +590,7 @@
     wireAttach(el('attachBtnChat'));
     wireAttach(el('attachBtnImage'));
     wireAttach(el('attachBtnSeedream'));
+    wireAttach(el('attachBtnSeedream5'));
 
     fileInput.addEventListener('change', () => {
       for (const f of fileInput.files) {
@@ -708,10 +761,12 @@
         messagesChat: slimMessagesForStorage(tabMessages.chat.slice(-MAX_STORED_MESSAGES)),
         messagesImage: slimMessagesForStorage(tabMessages.image.slice(-MAX_STORED_MESSAGES)),
         messagesSeedream: slimMessagesForStorage(tabMessages.seedream.slice(-MAX_STORED_MESSAGES)),
+        messagesSeedream5: slimMessagesForStorage(tabMessages.seedream5.slice(-MAX_STORED_MESSAGES)),
         system: system.value,
         model: model.value,
         modelCustom: modelCustom.value,
         seedreamTemperature: seedreamTemperature.value,
+        seedream5Temperature: seedream5Temperature.value,
         temperature: temperature.value,
         maxTokens: maxTokens.value,
       };
@@ -785,6 +840,7 @@
       tabMessages.chat = Array.isArray(data.messagesChat) ? data.messagesChat : [];
       tabMessages.image = Array.isArray(data.messagesImage) ? data.messagesImage : [];
       tabMessages.seedream = Array.isArray(data.messagesSeedream) ? data.messagesSeedream : [];
+      tabMessages.seedream5 = Array.isArray(data.messagesSeedream5) ? data.messagesSeedream5 : [];
       if (typeof data.system === 'string') system.value = data.system;
       if (data.model === 'custom') {
         model.value = 'custom';
@@ -799,9 +855,15 @@
         }
       }
       if (data.seedreamTemperature != null) seedreamTemperature.value = String(data.seedreamTemperature);
+      if (data.seedream5Temperature != null) seedream5Temperature.value = String(data.seedream5Temperature);
       if (data.temperature != null) temperature.value = String(data.temperature);
       if (data.maxTokens != null) maxTokens.value = String(data.maxTokens);
-      if (data.appTab === 'chat' || data.appTab === 'image' || data.appTab === 'seedream') {
+      if (
+        data.appTab === 'chat' ||
+        data.appTab === 'image' ||
+        data.appTab === 'seedream' ||
+        data.appTab === 'seedream5'
+      ) {
         setAppTab(data.appTab);
       }
       return true;
@@ -1143,13 +1205,25 @@
       }
     }
 
-    async function generateSeedream() {
+    /**
+     * @param {'seedream'|'seedream5'} kind — для seedream5 в JSON добавляется nsfw: true
+     */
+    async function runSeedreamTab(kind) {
+      const is5 = kind === 'seedream5';
+      const modelId = is5 ? seedream5ModelId : seedreamModelId;
+      const threadEl = is5 ? threadSeedream5 : threadSeedream;
+      const inputEl = is5 ? inputSeedream5 : inputSeedream;
+      const sendBtn = is5 ? sendSeedream5 : sendSeedream;
+      const stopBtn = is5 ? stopSeedream5 : stopSeedream;
+      const tempEl = is5 ? seedream5Temperature : seedreamTemperature;
+      const xTitle = is5 ? 'Seedream 5' : 'Seedream';
+
       const key = apiKey.value.trim();
       if (!proxyMode && !key) {
         showError('Нужен API key или прокси.');
         return;
       }
-      const text = inputSeedream.value.trim();
+      const text = inputEl.value.trim();
       const imageFiles = stagedFiles.filter(isImageFile);
       const nonImages = stagedFiles.filter((f) => !isImageFile(f));
       if (nonImages.length) {
@@ -1181,24 +1255,24 @@
 
       stagedFiles.length = 0;
       renderAttachList();
-      inputSeedream.value = '';
+      inputEl.value = '';
       showError('');
 
-      sendSeedream.disabled = true;
-      stopSeedream.disabled = false;
+      sendBtn.disabled = true;
+      stopBtn.disabled = false;
       abortController = new AbortController();
 
-      appendBubble(threadSeedream, 'user', formatUserForBubble(userContent), false);
-      const { c: assistantContent } = appendBubble(threadSeedream, 'assistant', 'Генерация…', true);
+      appendBubble(threadEl, 'user', formatUserForBubble(userContent), false);
+      const { c: assistantContent } = appendBubble(threadEl, 'assistant', 'Генерация…', true);
 
       const body = {
-        model: seedreamModelId,
+        model: modelId,
         messages: [{ role: 'user', content: userContent }],
-        // Seedream / Flux-класс: только image на выходе (не Gemini) — иначе OR: «No endpoints… image, text».
         modalities: ['image'],
         stream: false,
-        temperature: Number(seedreamTemperature.value) || 1,
+        temperature: Number(tempEl.value) || 1,
       };
+      if (is5) body.nsfw = true;
       normalizeOpenRouterMessages(body.messages);
 
       try {
@@ -1206,7 +1280,7 @@
         if (!proxyMode) {
           headers.Authorization = 'Bearer ' + key;
           headers['HTTP-Referer'] = window.location.origin || 'http://localhost';
-          headers['X-Title'] = 'Seedream';
+          headers['X-Title'] = xTitle;
         }
         const res = await fetch(chatUrl, {
           method: 'POST',
@@ -1228,38 +1302,48 @@
         const data = await res.json();
         const md = assistantChoiceToMarkdown(data.choices?.[0]);
         renderAssistantMarkdown(assistantContent, md);
-        tabMessages.seedream.push({ role: 'user', content: userContent });
-        tabMessages.seedream.push({ role: 'assistant', content: md });
+        tabMessages[kind].push({ role: 'user', content: userContent });
+        tabMessages[kind].push({ role: 'assistant', content: md });
         saveState();
       } catch (e) {
         if (e.name === 'AbortError') {
           assistantContent.textContent = '[прервано]';
-          tabMessages.seedream.push({ role: 'user', content: userContent });
-          tabMessages.seedream.push({ role: 'assistant', content: '[прервано]' });
+          tabMessages[kind].push({ role: 'user', content: userContent });
+          tabMessages[kind].push({ role: 'assistant', content: '[прервано]' });
           saveState();
-          stagedByTab.seedream.length = 0;
-          stagedByTab.seedream.push(...attachBackup);
-          if (appTab === 'seedream') renderAttachList();
+          stagedByTab[kind].length = 0;
+          stagedByTab[kind].push(...attachBackup);
+          if (appTab === kind) renderAttachList();
         } else {
           assistantContent.textContent = '[ошибка]';
           showError(String(e.message || e));
-          stagedByTab.seedream.length = 0;
-          stagedByTab.seedream.push(...attachBackup);
-          if (appTab === 'seedream') renderAttachList();
+          stagedByTab[kind].length = 0;
+          stagedByTab[kind].push(...attachBackup);
+          if (appTab === kind) renderAttachList();
         }
       } finally {
-        sendSeedream.disabled = false;
-        stopSeedream.disabled = true;
+        sendBtn.disabled = false;
+        stopBtn.disabled = true;
         abortController = null;
       }
+    }
+
+    async function generateSeedream() {
+      return runSeedreamTab('seedream');
+    }
+
+    async function generateSeedream5() {
+      return runSeedreamTab('seedream5');
     }
 
     sendChat.addEventListener('click', () => void sendChatMessage());
     sendImage.addEventListener('click', () => void generateGrokImage());
     sendSeedream.addEventListener('click', () => void generateSeedream());
+    sendSeedream5.addEventListener('click', () => void generateSeedream5());
     stopChat.addEventListener('click', () => abortController?.abort());
     stopImage.addEventListener('click', () => abortController?.abort());
     stopSeedream.addEventListener('click', () => abortController?.abort());
+    stopSeedream5.addEventListener('click', () => abortController?.abort());
 
     function bindEnter(textarea, fn) {
       textarea.addEventListener('keydown', (e) => {
@@ -1272,6 +1356,7 @@
     bindEnter(inputChat, sendChatMessage);
     bindEnter(inputImage, generateGrokImage);
     bindEnter(inputSeedream, generateSeedream);
+    bindEnter(inputSeedream5, generateSeedream5);
 
     el('clearChat').addEventListener('click', () => {
       if (!confirm('Очистить чат?')) return;
@@ -1295,6 +1380,15 @@
       threadSeedream.innerHTML = '';
       stagedByTab.seedream.length = 0;
       if (appTab === 'seedream') renderAttachList();
+      saveState();
+      showError('');
+    });
+    el('clearSeedream5').addEventListener('click', () => {
+      if (!confirm('Очистить ленту Seedream 5?')) return;
+      tabMessages.seedream5.length = 0;
+      threadSeedream5.innerHTML = '';
+      stagedByTab.seedream5.length = 0;
+      if (appTab === 'seedream5') renderAttachList();
       saveState();
       showError('');
     });
