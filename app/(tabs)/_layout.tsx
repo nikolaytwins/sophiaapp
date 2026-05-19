@@ -15,6 +15,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="day" options={{ title: 'День' }} />
         <Tabs.Screen name="calendar" options={{ title: 'Календарь' }} />
         <Tabs.Screen name="strategy" options={{ title: 'Стратегия' }} />
+        <Tabs.Screen name="life-system" options={{ title: 'Система' }} />
         <Tabs.Screen name="goals" options={{ title: 'Цели' }} />
         <Tabs.Screen name="tasks" options={{ title: 'Задачи' }} />
         <Tabs.Screen name="inbox" options={{ title: 'Входящие', href: null }} />

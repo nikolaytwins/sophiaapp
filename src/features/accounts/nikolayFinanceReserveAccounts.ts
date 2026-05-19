@@ -4,16 +4,18 @@ import { accountBucketFromType } from '@/features/finance/financeApi';
 /** Счета из группы «резервы / накопления» с Китаем и подушкой в названии (как цели, но это счета). */
 export function pickNikolayMoneyReserveAccounts(
   accounts: FinanceAccount[]
-): { china: FinanceAccount | null; cushion: FinanceAccount | null } {
+): { china: FinanceAccount | null; cushion: FinanceAccount | null; growth: FinanceAccount | null } {
   const reserve = accounts.filter((a) => accountBucketFromType(a.type) === 'reserve');
   let china: FinanceAccount | null = null;
   let cushion: FinanceAccount | null = null;
+  let growth: FinanceAccount | null = null;
   for (const a of reserve) {
     const t = a.name.toLowerCase();
     if (!china && t.includes('китай')) china = a;
     else if (!cushion && t.includes('подуш')) cushion = a;
+    else if (!growth && (t.includes('рост') || t.includes('хотел') || t.includes('wish'))) growth = a;
   }
-  return { china, cushion };
+  return { china, cushion, growth };
 }
 
 /** Цель накопления в ₽ в заметках счёта: отдельная строка `target:300000`. */
@@ -36,5 +38,5 @@ export function mergeNotesWithGoalTarget(prevNotes: string | null | undefined, t
 }
 
 export function defaultNikolayReserveTargetRub(variant: 'china' | 'cushion'): number {
-  return variant === 'china' ? 300_000 : 700_000;
+  return variant === 'china' ? 300_000 : 1_200_000;
 }

@@ -333,9 +333,17 @@ export type StrategyNewSynastryDef = {
 export type StrategySideGoalSeedDef = {
   id: string;
   title: string;
+  description?: string;
   /** Для шкалы: рубли, подписчики или 1 = «ещё / сделано». */
   defaultTarget: number;
   defaultCurrent?: number;
+  isHorizon?: boolean;
+  isNearestPinned?: boolean;
+  dateMode?: 'none' | 'single' | 'range';
+  dateSingle?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  progressKind?: 'numeric' | 'checkbox';
 };
 
 export type StrategyGoalsTabDef = {

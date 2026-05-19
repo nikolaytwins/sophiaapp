@@ -1,12 +1,13 @@
 import type { Href } from 'expo-router';
 
 /** Порядок вкладок нижнего / бокового меню (синхронно с CustomTabBar). */
-export const TAB_BAR_ROUTE_ORDER = ['day', 'calendar', 'strategy', 'goals', 'tasks', 'finance', 'habits'] as const;
+export const TAB_BAR_ROUTE_ORDER = ['day', 'calendar', 'strategy', 'life-system', 'goals', 'tasks', 'finance', 'habits'] as const;
 
 export const TAB_HREF: Record<string, Href> = {
   day: '/day',
   calendar: '/calendar' as Href,
   strategy: '/strategy' as Href,
+  'life-system': '/life-system' as Href,
   goals: '/goals' as Href,
   tasks: '/tasks' as Href,
   inbox: '/inbox' as Href,
@@ -18,6 +19,7 @@ export const TAB_LABELS: Record<string, string> = {
   day: 'День',
   calendar: 'Календарь',
   strategy: 'Стратегия',
+  'life-system': 'Система',
   goals: 'Цели',
   tasks: 'Задачи',
   inbox: 'Входящие',
@@ -29,6 +31,7 @@ export const TAB_ICONS: Record<string, string> = {
   day: 'sunny-outline',
   calendar: 'calendar-outline',
   strategy: 'navigate-circle-outline',
+  'life-system': 'grid-outline',
   goals: 'trophy-outline',
   tasks: 'list-outline',
   inbox: 'file-tray-stacked-outline',

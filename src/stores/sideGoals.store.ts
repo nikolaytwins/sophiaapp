@@ -79,6 +79,45 @@ function normalizeGoal(raw: unknown): SideGoalPersisted | null {
   return out;
 }
 
+function seedToSideGoal(x: StrategySideGoalSeedDef): SideGoalPersisted {
+  const progressKind = x.progressKind === 'checkbox' ? 'checkbox' : 'numeric';
+  const target = Math.max(1, Math.round(x.defaultTarget));
+  let current = Math.max(0, Math.round(x.defaultCurrent ?? 0));
+  if (progressKind === 'checkbox') {
+    return {
+      id: x.id,
+      title: x.title,
+      description: (x.description ?? '').trim(),
+      current: current >= 1 ? 1 : 0,
+      target: 1,
+      progressKind,
+      photoUris: [],
+      isHorizon: x.isHorizon ?? false,
+      isNearestPinned: x.isNearestPinned ?? false,
+      dateMode: x.dateMode ?? 'none',
+      dateSingle: x.dateSingle ?? null,
+      dateFrom: x.dateFrom ?? null,
+      dateTo: x.dateTo ?? null,
+    };
+  }
+  current = Math.min(current, target);
+  return {
+    id: x.id,
+    title: x.title,
+    description: (x.description ?? '').trim(),
+    current,
+    target,
+    progressKind,
+    photoUris: [],
+    isHorizon: x.isHorizon ?? false,
+    isNearestPinned: x.isNearestPinned ?? false,
+    dateMode: x.dateMode ?? 'none',
+    dateSingle: x.dateSingle ?? null,
+    dateFrom: x.dateFrom ?? null,
+    dateTo: x.dateTo ?? null,
+  };
+}
+
 export function normalizeSideGoalsPayload(raw: unknown): SideGoalsSyncPayload {
   if (!raw || typeof raw !== 'object') return { goals: [], updatedAt: '' };
   const o = raw as Record<string, unknown>;
@@ -95,6 +134,8 @@ type State = {
   /** ISO время последнего локального изменения (для merge с облаком). */
   payloadUpdatedAt: string;
   seedFromSeedsIfEmpty: (seeds: StrategySideGoalSeedDef[]) => void;
+  /** Добавляет цели из seeds, если id ещё нет (не трогает существующие). */
+  ensureSideGoalsFromSeeds: (seeds: StrategySideGoalSeedDef[]) => void;
   /** Новая цель на доске (id генерируется внутри). */
   addSideGoal: (
     defaults?: Partial<
@@ -168,23 +209,17 @@ export const useSideGoalsStore = create<State>()(
         set((s) => {
           if (s.goals.length > 0) return s;
           return {
-            goals: seeds.map((x) => ({
-              id: x.id,
-              title: x.title,
-              description: '',
-              current: Math.max(0, Math.round(x.defaultCurrent ?? 0)),
-              target: Math.max(1, Math.round(x.defaultTarget)),
-              progressKind: 'numeric' as const,
-              photoUris: [],
-              isHorizon: false,
-              isNearestPinned: false,
-              dateMode: 'none' as const,
-              dateSingle: null,
-              dateFrom: null,
-              dateTo: null,
-            })),
+            goals: seeds.map(seedToSideGoal),
             payloadUpdatedAt: touchNow(),
           };
+        }),
+
+      ensureSideGoalsFromSeeds: (seeds) =>
+        set((s) => {
+          const have = new Set(s.goals.map((g) => g.id));
+          const added = seeds.filter((x) => !have.has(x.id)).map(seedToSideGoal);
+          if (added.length === 0) return s;
+          return { goals: [...s.goals, ...added], payloadUpdatedAt: touchNow() };
         }),
 
       addSideGoal: (defaults) => {

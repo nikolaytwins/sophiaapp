@@ -35,6 +35,7 @@ import {
 } from '@/features/goals/sideGoals.logic';
 import { loadFinanceOverview } from '@/features/finance/financeApi';
 import { FINANCE_QUERY_KEY } from '@/features/finance/queryKeys';
+import { LIFE_SYSTEM_SIDE_GOAL_SEEDS } from '@/features/life-system/lifeSystem.config';
 import { strategyPageConfig, type StrategyGoalsTabDef } from '@/features/strategy/strategy.config';
 import { getSupabase } from '@/lib/supabase';
 import { uploadSideGoalPhotoToSupabase } from '@/services/sideGoalsPhotoUpload';
@@ -1353,6 +1354,7 @@ export function PersonalTargetsScreen() {
   const [boardTab, setBoardTab] = useState<SideGoalBoardTab>('all');
   const activeSprint = useSprintStore((s) => s.sprints.find((x) => x.status === 'active') ?? null);
   const seedFromSeedsIfEmpty = useSideGoalsStore((s) => s.seedFromSeedsIfEmpty);
+  const ensureSideGoalsFromSeeds = useSideGoalsStore((s) => s.ensureSideGoalsFromSeeds);
 
   const { china, cushion } = useMemo(
     () => pickNikolayMoneyProgressGoals(activeSprint?.goals ?? []),
@@ -1382,8 +1384,9 @@ export function PersonalTargetsScreen() {
     void (async () => {
       await ensureSideGoalsHydrated();
       seedFromSeedsIfEmpty(strategyPageConfig.goalsTab.sideGoalSeeds);
+      ensureSideGoalsFromSeeds(LIFE_SYSTEM_SIDE_GOAL_SEEDS);
     })();
-  }, [seedFromSeedsIfEmpty]);
+  }, [ensureSideGoalsFromSeeds, seedFromSeedsIfEmpty]);
 
   useEffect(() => {
     const sb = getSupabase();
