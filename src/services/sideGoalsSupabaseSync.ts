@@ -1,4 +1,7 @@
 import { useSupabaseConfigured } from '@/config/env';
+import { bootstrapSideGoalsAfterCloudPull } from '@/services/sideGoalsBootstrap';
+import { mergeSideGoalsPayload, sideGoalsPayloadsEqual } from '@/services/sideGoalsMerge';
+import { recoverSideGoalPhotosFromStorage } from '@/services/sideGoalsPhotoRecovery';
 import { normalizeSideGoalsPayload, type SideGoalsSyncPayload } from '@/stores/sideGoals.store';
 import { getSupabase } from '@/lib/supabase';
 import { ensureSideGoalsHydrated, useSideGoalsStore } from '@/stores/sideGoals.store';
@@ -7,6 +10,7 @@ const DEBOUNCE_MS = 850;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let syncingFromCloud = false;
+let initialSyncDone = false;
 
 async function requireSession() {
   const sb = getSupabase();
@@ -21,22 +25,27 @@ function isPayloadEmpty(p: SideGoalsSyncPayload): boolean {
   return (p.goals?.length ?? 0) === 0;
 }
 
+async function fetchRemotePayload(userId: string): Promise<SideGoalsSyncPayload> {
+  const sb = getSupabase()!;
+  const { data, error } = await sb
+    .from('side_goals_sync_state')
+    .select('payload')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.warn('[side goals sync] fetch:', error.message);
+    return { goals: [], updatedAt: '' };
+  }
+  return normalizeSideGoalsPayload(data?.payload);
+}
+
 export async function pullSideGoalsFromCloud(): Promise<void> {
   if (!useSupabaseConfigured) return;
   const session = await requireSession();
   if (!session) return;
 
-  const sb = getSupabase()!;
   const userId = session.user.id;
-
-  const { data, error } = await sb.from('side_goals_sync_state').select('payload').eq('user_id', userId).maybeSingle();
-
-  if (error) {
-    console.warn('[side goals sync] pull:', error.message);
-    return;
-  }
-
-  const remote = normalizeSideGoalsPayload(data?.payload);
+  const remote = await fetchRemotePayload(userId);
   await ensureSideGoalsHydrated();
   const local = useSideGoalsStore.getState().exportPayload();
 
@@ -46,17 +55,39 @@ export async function pullSideGoalsFromCloud(): Promise<void> {
       await pushSideGoalsToCloud();
       return;
     }
-    if (!isPayloadEmpty(remote)) {
-      const remoteT = Date.parse(remote.updatedAt);
-      const localT = Date.parse(local.updatedAt);
-      const remoteNewer = Number.isFinite(remoteT) && (!Number.isFinite(localT) || remoteT > localT);
-      const remoteRicher = (remote.goals?.length ?? 0) > (local.goals?.length ?? 0);
-      if (remoteNewer || remoteRicher) {
-        useSideGoalsStore.getState().replaceFromCloud(remote);
+
+    if (!isPayloadEmpty(remote) || !isPayloadEmpty(local)) {
+      let merged = mergeSideGoalsPayload(local, remote);
+      const { goals: withPhotos, restoredCount } = await recoverSideGoalPhotosFromStorage(userId, merged.goals);
+      if (restoredCount > 0) {
+        merged = { ...merged, goals: withPhotos, updatedAt: new Date().toISOString() };
+      }
+
+      if (!sideGoalsPayloadsEqual(merged, local)) {
+        useSideGoalsStore.getState().replaceFromCloud(merged);
+      }
+
+      if (!sideGoalsPayloadsEqual(merged, remote)) {
+        await upsertPayload(userId, merged);
       }
     }
   } finally {
     syncingFromCloud = false;
+  }
+}
+
+async function upsertPayload(userId: string, payload: SideGoalsSyncPayload): Promise<void> {
+  const sb = getSupabase()!;
+  const { error } = await sb.from('side_goals_sync_state').upsert(
+    {
+      user_id: userId,
+      payload,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' }
+  );
+  if (error) {
+    console.warn('[side goals sync] upsert:', error.message);
   }
 }
 
@@ -65,24 +96,28 @@ export async function pushSideGoalsToCloud(): Promise<void> {
   const session = await requireSession();
   if (!session) return;
 
-  const sb = getSupabase()!;
-  const payload = useSideGoalsStore.getState().exportPayload();
-  const { error } = await sb.from('side_goals_sync_state').upsert(
-    {
-      user_id: session.user.id,
-      payload,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' }
-  );
+  const userId = session.user.id;
+  const local = useSideGoalsStore.getState().exportPayload();
+  const remote = await fetchRemotePayload(userId);
+  const merged = mergeSideGoalsPayload(local, remote);
 
-  if (error) {
-    console.warn('[side goals sync] push:', error.message);
+  if (!sideGoalsPayloadsEqual(merged, local)) {
+    syncingFromCloud = true;
+    try {
+      useSideGoalsStore.getState().replaceFromCloud(merged);
+    } finally {
+      syncingFromCloud = false;
+    }
+  }
+
+  if (!sideGoalsPayloadsEqual(merged, remote)) {
+    await upsertPayload(userId, merged);
   }
 }
 
 function schedulePush(): void {
   if (syncingFromCloud) return;
+  if (!initialSyncDone) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -106,8 +141,18 @@ export function startSideGoalsSupabaseSync(): () => void {
   void (async () => {
     await ensureSideGoalsHydrated();
     if (cancelled) return;
-    await pullSideGoalsFromCloud();
+
+    const session = await requireSession();
+    if (session && !cancelled) {
+      await pullSideGoalsFromCloud();
+      if (!cancelled) {
+        await bootstrapSideGoalsAfterCloudPull(session.user.id);
+        await pushSideGoalsToCloud();
+      }
+    }
+
     if (cancelled) return;
+    initialSyncDone = true;
 
     storeUnsub = useSideGoalsStore.subscribe((state, prev) => {
       if (state.goals === prev.goals && state.payloadUpdatedAt === prev.payloadUpdatedAt) return;
@@ -120,6 +165,7 @@ export function startSideGoalsSupabaseSync(): () => void {
     data: { subscription: authSub },
   } = sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') {
+      initialSyncDone = false;
       if (pushTimer) {
         clearTimeout(pushTimer);
         pushTimer = null;
@@ -127,12 +173,20 @@ export function startSideGoalsSupabaseSync(): () => void {
       return;
     }
     if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-      void pullSideGoalsFromCloud();
+      void (async () => {
+        const s = await requireSession();
+        if (!s) return;
+        await pullSideGoalsFromCloud();
+        await bootstrapSideGoalsAfterCloudPull(s.user.id);
+        initialSyncDone = true;
+        await pushSideGoalsToCloud();
+      })();
     }
   });
 
   return () => {
     cancelled = true;
+    initialSyncDone = false;
     authSub.unsubscribe();
     storeUnsub?.();
     if (pushTimer) {

@@ -85,7 +85,6 @@ export function LifeSystemScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const sectionY = useRef<Record<string, number>>({});
 
-  const ensureSeeds = useSideGoalsStore((s) => s.ensureSideGoalsFromSeeds);
   const {
     nearestGoals,
     horizonGoals,
@@ -99,10 +98,6 @@ export function LifeSystemScreen() {
   } = useLifeSystemData();
 
   const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    ensureSeeds(LIFE_SYSTEM_SIDE_GOAL_SEEDS);
-  }, [ensureSeeds]);
 
   useEffect(() => {
     void (async () => {
