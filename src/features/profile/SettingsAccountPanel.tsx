@@ -35,7 +35,7 @@ export function SettingsAccountPanel() {
   const { colors, typography, spacing, radius, isLight } = useAppTheme();
   const router = useRouter();
   const supabaseOn = useSupabaseConfigured;
-  const { user, isAuthed, displayName, email, loading: authLoading, refresh } = useSupabaseAuthSession();
+  const { user, isAuthed, displayName, email, loading: authLoading, error: authError, refresh } = useSupabaseAuthSession();
 
   const [nameDraft, setNameDraft] = useState('');
   const [emailDraft, setEmailDraft] = useState('');
@@ -147,6 +147,14 @@ export function SettingsAccountPanel() {
       <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
         Добавь EXPO_PUBLIC_SUPABASE_URL и EXPO_PUBLIC_SUPABASE_ANON_KEY в окружение — тогда войдёшь через экран «Облако» и аккаунт
         синхронизируется.
+      </Text>
+    );
+  }
+
+  if (authError) {
+    return (
+      <Text style={[typography.body, { color: colors.textMuted, lineHeight: 22 }]}>
+        {authError}. Проверь Supabase URL/ключ в деплое и Redirect URL: https://app.twinlabs.ru/sophia/auth/callback
       </Text>
     );
   }
